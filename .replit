@@ -21,3 +21,8 @@ timeoutMs = 20000
 
 [nix]
 channel = "stable-25_05"
+
+[userenv]
+
+[userenv.development]
+GLOBUS_ADMIN_CLERK_IDS = "user_3Kh6wyO6bPqf1JcXaWPxo2CkOkd"
