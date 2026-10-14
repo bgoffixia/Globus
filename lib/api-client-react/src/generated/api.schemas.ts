@@ -44,6 +44,7 @@ export const TransactionType = {
   transfer_in: 'transfer_in',
   transfer_out: 'transfer_out',
   external_transfer: 'external_transfer',
+  external_transfer_in: 'external_transfer_in',
   deposit_request: 'deposit_request',
   withdrawal_request: 'withdrawal_request',
   exchange_request: 'exchange_request',
@@ -180,6 +181,29 @@ export interface ExternalTransferInput {
      * @maxLength 80
      */
   destinationCountry: string;
+  currency: CurrencyCode;
+  /** @pattern ^[0-9]{1,12}(\.[0-9]{1,2})?$ */
+  amount: string;
+  /** @maxLength 140 */
+  description?: string;
+  /**
+     * @minLength 16
+     * @maxLength 100
+     */
+  idempotencyKey: string;
+}
+
+export interface IncomingExternalTransferInput {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  sourceName: string;
+  /**
+     * @minLength 2
+     * @maxLength 80
+     */
+  sourceCountry: string;
   currency: CurrencyCode;
   /** @pattern ^[0-9]{1,12}(\.[0-9]{1,2})?$ */
   amount: string;

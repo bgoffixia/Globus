@@ -29,6 +29,7 @@ export * from './errorResponse';
 export * from './externalTransferInput';
 export * from './forbiddenResponse';
 export * from './healthStatus';
+export * from './incomingExternalTransferInput';
 export * from './listAdminLedgerParams';
 export * from './listAdminUsersParams';
 export * from './listBankTransactionsParams';

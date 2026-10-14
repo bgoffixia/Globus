@@ -15,6 +15,7 @@ export const TransactionType = {
   transfer_in: 'transfer_in',
   transfer_out: 'transfer_out',
   external_transfer: 'external_transfer',
+  external_transfer_in: 'external_transfer_in',
   deposit_request: 'deposit_request',
   withdrawal_request: 'withdrawal_request',
   exchange_request: 'exchange_request',

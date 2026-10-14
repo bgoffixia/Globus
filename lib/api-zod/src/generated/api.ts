@@ -59,7 +59,7 @@ export const GetBankDashboardResponse = zod.object({
   "recentTransactions": zod.array(zod.object({
   "id": zod.string(),
   "reference": zod.string(),
-  "type": zod.enum(['simulation_credit', 'admin_funding', 'transfer_in', 'transfer_out', 'external_transfer', 'deposit_request', 'withdrawal_request', 'exchange_request']),
+  "type": zod.enum(['simulation_credit', 'admin_funding', 'transfer_in', 'transfer_out', 'external_transfer', 'external_transfer_in', 'deposit_request', 'withdrawal_request', 'exchange_request']),
   "status": zod.enum(['completed', 'pending', 'failed', 'reversed']),
   "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
   "amount": zod.string(),
@@ -108,7 +108,7 @@ export const ListBankTransactionsQueryParams = zod.object({
 export const ListBankTransactionsResponseItem = zod.object({
   "id": zod.string(),
   "reference": zod.string(),
-  "type": zod.enum(['simulation_credit', 'admin_funding', 'transfer_in', 'transfer_out', 'external_transfer', 'deposit_request', 'withdrawal_request', 'exchange_request']),
+  "type": zod.enum(['simulation_credit', 'admin_funding', 'transfer_in', 'transfer_out', 'external_transfer', 'external_transfer_in', 'deposit_request', 'withdrawal_request', 'exchange_request']),
   "status": zod.enum(['completed', 'pending', 'failed', 'reversed']),
   "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
   "amount": zod.string(),
@@ -179,7 +179,7 @@ export const CreateBankTransferBody = zod.object({
 export const CreateBankTransferResponse = zod.object({
   "id": zod.string(),
   "reference": zod.string(),
-  "type": zod.enum(['simulation_credit', 'admin_funding', 'transfer_in', 'transfer_out', 'external_transfer', 'deposit_request', 'withdrawal_request', 'exchange_request']),
+  "type": zod.enum(['simulation_credit', 'admin_funding', 'transfer_in', 'transfer_out', 'external_transfer', 'external_transfer_in', 'deposit_request', 'withdrawal_request', 'exchange_request']),
   "status": zod.enum(['completed', 'pending', 'failed', 'reversed']),
   "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
   "amount": zod.string(),
@@ -219,7 +219,47 @@ export const CreateExternalTransferBody = zod.object({
 export const CreateExternalTransferResponse = zod.object({
   "id": zod.string(),
   "reference": zod.string(),
-  "type": zod.enum(['simulation_credit', 'admin_funding', 'transfer_in', 'transfer_out', 'external_transfer', 'deposit_request', 'withdrawal_request', 'exchange_request']),
+  "type": zod.enum(['simulation_credit', 'admin_funding', 'transfer_in', 'transfer_out', 'external_transfer', 'external_transfer_in', 'deposit_request', 'withdrawal_request', 'exchange_request']),
+  "status": zod.enum(['completed', 'pending', 'failed', 'reversed']),
+  "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
+  "amount": zod.string(),
+  "fee": zod.string(),
+  "counterparty": zod.string().nullable(),
+  "description": zod.string(),
+  "mode": zod.enum(['simulation']),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Simulate an incoming transfer from an external source
+ */
+export const createIncomingExternalTransferBodySourceNameMax = 120;
+
+export const createIncomingExternalTransferBodySourceCountryMin = 2;
+export const createIncomingExternalTransferBodySourceCountryMax = 80;
+
+export const createIncomingExternalTransferBodyAmountRegExp = new RegExp('^[0-9]{1,12}(\\.[0-9]{1,2})?$');
+export const createIncomingExternalTransferBodyDescriptionMax = 140;
+
+export const createIncomingExternalTransferBodyIdempotencyKeyMin = 16;
+export const createIncomingExternalTransferBodyIdempotencyKeyMax = 100;
+
+
+
+export const CreateIncomingExternalTransferBody = zod.object({
+  "sourceName": zod.string().min(1).max(createIncomingExternalTransferBodySourceNameMax),
+  "sourceCountry": zod.string().min(createIncomingExternalTransferBodySourceCountryMin).max(createIncomingExternalTransferBodySourceCountryMax),
+  "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
+  "amount": zod.string().regex(createIncomingExternalTransferBodyAmountRegExp),
+  "description": zod.string().max(createIncomingExternalTransferBodyDescriptionMax).optional(),
+  "idempotencyKey": zod.string().min(createIncomingExternalTransferBodyIdempotencyKeyMin).max(createIncomingExternalTransferBodyIdempotencyKeyMax)
+})
+
+export const CreateIncomingExternalTransferResponse = zod.object({
+  "id": zod.string(),
+  "reference": zod.string(),
+  "type": zod.enum(['simulation_credit', 'admin_funding', 'transfer_in', 'transfer_out', 'external_transfer', 'external_transfer_in', 'deposit_request', 'withdrawal_request', 'exchange_request']),
   "status": zod.enum(['completed', 'pending', 'failed', 'reversed']),
   "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
   "amount": zod.string(),
@@ -374,7 +414,7 @@ export const CreateAdminFundingBody = zod.object({
 export const CreateAdminFundingResponse = zod.object({
   "id": zod.string(),
   "reference": zod.string(),
-  "type": zod.enum(['simulation_credit', 'admin_funding', 'transfer_in', 'transfer_out', 'external_transfer', 'deposit_request', 'withdrawal_request', 'exchange_request']),
+  "type": zod.enum(['simulation_credit', 'admin_funding', 'transfer_in', 'transfer_out', 'external_transfer', 'external_transfer_in', 'deposit_request', 'withdrawal_request', 'exchange_request']),
   "status": zod.enum(['completed', 'pending', 'failed', 'reversed']),
   "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
   "amount": zod.string(),
@@ -402,7 +442,7 @@ export const ListAdminLedgerQueryParams = zod.object({
 export const ListAdminLedgerResponseItem = zod.object({
   "id": zod.string(),
   "reference": zod.string(),
-  "type": zod.enum(['simulation_credit', 'admin_funding', 'transfer_in', 'transfer_out', 'external_transfer', 'deposit_request', 'withdrawal_request', 'exchange_request']),
+  "type": zod.enum(['simulation_credit', 'admin_funding', 'transfer_in', 'transfer_out', 'external_transfer', 'external_transfer_in', 'deposit_request', 'withdrawal_request', 'exchange_request']),
   "status": zod.enum(['completed', 'pending', 'failed', 'reversed']),
   "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
   "amount": zod.string(),

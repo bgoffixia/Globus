@@ -11,7 +11,9 @@ import {
   CreateBankTransferResponse,
   CreateExternalTransferBody,
   CreateExternalTransferResponse,
+  CreateIncomingExternalTransferBody,
   CreateSimulationRequestBody,
+  CreateIncomingExternalTransferResponse,
   CreateSimulationRequestResponse,
   GetBankDashboardResponse,
   GetBankProfileResponse,
@@ -484,6 +486,128 @@ router.post("/bank/external-transfers", async (req, res): Promise<void> => {
 
   res.status(201).json(
     CreateExternalTransferResponse.parse(
+      toBankTransaction(transfer.transaction, userId),
+    ),
+  );
+});
+
+router.post("/bank/incoming-external-transfers", async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId;
+  if (!userId) {
+    res.status(401).json({ error: "Sign in to access your Globus account." });
+    return;
+  }
+
+  const parsed = CreateIncomingExternalTransferBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const sourceName = parsed.data.sourceName.trim();
+  const sourceCountry = parsed.data.sourceCountry.trim();
+  if (!sourceName || sourceCountry.length < 2) {
+    res.status(400).json({ error: "Enter the source name and country." });
+    return;
+  }
+
+  const user = await getOrCreateBankUser(userId);
+  if (user.accountStatus !== "active") {
+    res.status(409).json({ error: "This account is currently restricted." });
+    return;
+  }
+  if (!user.acceptedTermsAt) {
+    res.status(409).json({ error: "Complete account setup before simulating a transfer." });
+    return;
+  }
+
+  let amountMinor: bigint;
+  try {
+    amountMinor = parseAmountToMinor(parsed.data.amount);
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Enter a valid transfer amount.",
+    });
+    return;
+  }
+  if (amountMinor <= 0n) {
+    res.status(400).json({ error: "The transfer amount must be greater than zero." });
+    return;
+  }
+
+  const transfer = await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtext(${parsed.data.idempotencyKey})::bigint)`,
+    );
+    const [duplicate] = await tx
+      .select()
+      .from(bankTransactionsTable)
+      .where(eq(bankTransactionsTable.idempotencyKey, parsed.data.idempotencyKey))
+      .limit(1);
+    if (duplicate) {
+      return duplicate.initiatedByUserId === userId &&
+        duplicate.type === "external_transfer_in"
+        ? { transaction: duplicate }
+        : { error: "That request reference is already in use." };
+    }
+
+    const wallet = await userWallet(tx, userId, parsed.data.currency);
+    if (!wallet) {
+      return { error: "A wallet for the selected currency is unavailable." };
+    }
+    await tx
+      .select({ id: bankWalletsTable.id })
+      .from(bankWalletsTable)
+      .where(eq(bankWalletsTable.id, wallet.id))
+      .for("update");
+
+    const [transaction] = await tx
+      .insert(bankTransactionsTable)
+      .values({
+        reference: createReference(),
+        idempotencyKey: parsed.data.idempotencyKey,
+        initiatedByUserId: userId,
+        toUserId: userId,
+        toWalletId: wallet.id,
+        type: "external_transfer_in",
+        status: "completed",
+        currency: parsed.data.currency,
+        amountMinor,
+        feeMinor: 0n,
+        counterparty: `${sourceName} · ${sourceCountry} (simulated source)`,
+        description: parsed.data.description?.trim() || "Simulated incoming external transfer",
+        mode: "simulation",
+      })
+      .returning();
+
+    await tx.insert(bankLedgerEntriesTable).values([
+      {
+        transactionId: transaction.id,
+        accountCode: `simulation:external-source:${parsed.data.currency}`,
+        currency: parsed.data.currency,
+        side: "debit",
+        amountMinor,
+      },
+      {
+        transactionId: transaction.id,
+        walletId: wallet.id,
+        accountCode: `wallet:${wallet.id}`,
+        currency: parsed.data.currency,
+        side: "credit",
+        amountMinor,
+      },
+    ]);
+
+    return { transaction };
+  });
+
+  if ("error" in transfer) {
+    res.status(409).json({ error: transfer.error });
+    return;
+  }
+
+  res.status(201).json(
+    CreateIncomingExternalTransferResponse.parse(
       toBankTransaction(transfer.transaction, userId),
     ),
   );

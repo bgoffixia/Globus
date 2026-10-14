@@ -179,6 +179,7 @@ export function toBankTransaction(
     | "transfer_in"
     | "transfer_out"
     | "external_transfer"
+    | "external_transfer_in"
     | "deposit_request"
     | "withdrawal_request"
     | "exchange_request";

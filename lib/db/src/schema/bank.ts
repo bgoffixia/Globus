@@ -23,6 +23,7 @@ export const bankTransactionTypeEnum = pgEnum("bank_transaction_type", [
   "simulation_credit",
   "admin_funding",
   "external_transfer",
+  "external_transfer_in",
   "sandbox_credit",
   "transfer",
   "deposit_request",

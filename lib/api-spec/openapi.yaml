@@ -183,6 +183,30 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "409":
           $ref: "#/components/responses/Conflict"
+  /bank/incoming-external-transfers:
+    post:
+      operationId: createIncomingExternalTransfer
+      tags: [bank]
+      summary: Simulate an incoming transfer from an external source
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IncomingExternalTransferInput"
+      responses:
+        "201":
+          description: Posted simulated incoming external transfer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BankTransaction"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
   /bank/simulation-requests:
     post:
       operationId: createSimulationRequest
@@ -422,7 +446,7 @@ components:
       enum: [completed, pending, failed, reversed]
     TransactionType:
       type: string
-      enum: [simulation_credit, admin_funding, transfer_in, transfer_out, external_transfer, deposit_request, withdrawal_request, exchange_request]
+      enum: [simulation_credit, admin_funding, transfer_in, transfer_out, external_transfer, external_transfer_in, deposit_request, withdrawal_request, exchange_request]
     Wallet:
       type: object
       properties:
@@ -502,6 +526,16 @@ components:
         description: { type: string, maxLength: 140 }
         idempotencyKey: { type: string, minLength: 16, maxLength: 100 }
       required: [recipientName, destinationCountry, currency, amount, idempotencyKey]
+    IncomingExternalTransferInput:
+      type: object
+      properties:
+        sourceName: { type: string, minLength: 1, maxLength: 120 }
+        sourceCountry: { type: string, minLength: 2, maxLength: 80 }
+        currency: { $ref: "#/components/schemas/CurrencyCode" }
+        amount: { type: string, pattern: "^[0-9]{1,12}(\\.[0-9]{1,2})?$" }
+        description: { type: string, maxLength: 140 }
+        idempotencyKey: { type: string, minLength: 16, maxLength: 100 }
+      required: [sourceName, sourceCountry, currency, amount, idempotencyKey]
     SimulationRequestInput:
       type: object
       properties:

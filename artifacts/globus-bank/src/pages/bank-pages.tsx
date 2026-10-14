@@ -36,6 +36,7 @@ import {
   useCreateAdminFunding,
   useCreateBankTransfer,
   useCreateExternalTransfer,
+  useCreateIncomingExternalTransfer,
   useCreateSimulationRequest,
   useGetAdminAccess,
   useGetAdminSummary,
@@ -171,7 +172,7 @@ export function HomePage() {
         </div>
         <div className="grid gap-8 sm:grid-cols-2">
           <FeatureBlock number="01" title="See the whole picture" copy="Review individual currency wallets, pending amounts and recent transactions in one focused workspace." />
-          <FeatureBlock number="02" title="Practice with purpose" copy="Simulate a transfer to another member or an external recipient, with the ledger effect clearly shown." />
+          <FeatureBlock number="02" title="Practice with purpose" copy="Simulate member transfers, external sends and incoming transfers from a labeled external source, with each ledger effect clearly shown." />
           <FeatureBlock number="03" title="Understand the limits" copy="Adding funds, withdrawals and currency exchanges record a request. They do not move money while providers are unconfigured." />
           <FeatureBlock number="04" title="Keep a clean record" copy="Every simulated transaction has a reference, status and timestamp for straightforward review." />
         </div>
@@ -457,9 +458,46 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' |
 }
 
 export function ReceivePage() {
+  const queryClient = useQueryClient();
   const profile = useGetBankProfile({ query: { queryKey: getGetBankProfileQueryKey() } });
+  const walletsQuery = useListBankWallets({ query: { queryKey: getListBankWalletsQueryKey() } });
+  const incomingTransfer = useCreateIncomingExternalTransfer();
   const [copied, setCopied] = useState(false);
+  const [sourceName, setSourceName] = useState('');
+  const [sourceCountry, setSourceCountry] = useState('');
+  const [currency, setCurrency] = useState<Currency>('USD');
+  const [amount, setAmount] = useState('');
+  const [description, setDescription] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+  const [success, setSuccess] = useState<BankTransaction | null>(null);
   const identifier = profile.data?.id ?? '';
+  const submitIncomingTransfer = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setErrorMessage('');
+    setSuccess(null);
+    incomingTransfer.mutate({
+      data: {
+        sourceName: sourceName.trim(),
+        sourceCountry: sourceCountry.trim(),
+        currency,
+        amount,
+        ...(description.trim() ? { description: description.trim() } : {}),
+        idempotencyKey: crypto.randomUUID(),
+      },
+    }, {
+      onSuccess: transaction => {
+        setSuccess(transaction);
+        setSourceName('');
+        setSourceCountry('');
+        setAmount('');
+        setDescription('');
+        queryClient.invalidateQueries({ queryKey: getGetBankDashboardQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getListBankTransactionsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getListBankWalletsQueryKey() });
+      },
+      onError: error => setErrorMessage(error instanceof Error ? error.message : 'The simulated incoming transfer could not be recorded. Please try again.'),
+    });
+  };
   const copyIdentifier = async () => {
     try {
       await navigator.clipboard.writeText(identifier);
@@ -488,6 +526,36 @@ export function ReceivePage() {
           </section>
         </div>
       )}
+      <section className="mt-8 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <form onSubmit={submitIncomingTransfer} className="rounded-[22px] border border-[#e1e8ee] bg-white p-5 sm:p-8">
+          <PageHeading eyebrow="Simulation only" title="Record an incoming transfer" subtitle="Add a fictional external transfer to your simulated wallet history." />
+          <div className="my-6 flex gap-3 rounded-xl border border-[#d9e9e9] bg-[#f0f8f8] p-4 text-[11px] leading-5 text-[#497b80]">
+            <ShieldCheck size={17} className="mt-0.5 shrink-0" />
+            <span><b className="text-[#2d646a]">No external account is involved</b><br />Source name and country are labels only. This credits only your simulated Globus wallet; no bank or payment provider is contacted.</span>
+          </div>
+          <div className="space-y-5">
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Field label="Source name"><input required maxLength={120} value={sourceName} onChange={event => setSourceName(event.target.value)} placeholder="Sender or organization" className={inputClass} /></Field>
+              <Field label="Source country"><input required minLength={2} maxLength={80} value={sourceCountry} onChange={event => setSourceCountry(event.target.value)} placeholder="Country or region" className={inputClass} /></Field>
+            </div>
+            <p className="-mt-3 text-[10px] leading-4 text-[#8391a0]">Do not enter account numbers, routing details or payment credentials.</p>
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Field label="Currency"><select value={currency} onChange={event => setCurrency(event.target.value as Currency)} className={inputClass}>{currencies.map(item => <option key={item} value={item}>{item} · {currencyNames[item]}</option>)}</select></Field>
+              <Field label="Amount"><input required inputMode="decimal" pattern="[0-9]+(\.[0-9]{1,2})?" min="0.01" value={amount} onChange={event => setAmount(event.target.value)} placeholder="0.00" className={inputClass} /><span className="mt-1.5 block text-[10px] text-[#8391a0]">This will increase your simulated {currency} balance.</span></Field>
+            </div>
+            <Field label="Note (optional)"><input maxLength={140} value={description} onChange={event => setDescription(event.target.value)} placeholder="What is this simulated transfer for?" className={inputClass} /></Field>
+          </div>
+          {(errorMessage || incomingTransfer.isError) && <p role="alert" className="mt-5 rounded-lg bg-[#fff1ef] px-4 py-3 text-[11px] text-[#a24940]">{errorMessage || 'Please check the transfer details and try again.'}</p>}
+          {success && <div role="status" className="mt-5 rounded-xl border border-[#cfe5db] bg-[#f1f8f4] p-4 text-[12px] text-[#417461]"><p className="font-bold">Simulated incoming transfer recorded</p><p className="mt-1">Reference {success.reference} · {humanize(success.status)}</p><p className="mt-1">Only your simulated wallet was credited. No external account was contacted.</p></div>}
+          <button disabled={incomingTransfer.isPending || !sourceName.trim() || sourceCountry.trim().length < 2 || !amount || Number(amount) <= 0} className="mt-7 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#142f51] text-[12px] font-bold text-white transition hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">{incomingTransfer.isPending ? 'Recording simulation…' : 'Simulate incoming transfer'} <ArrowDownLeft size={15} /></button>
+        </form>
+        <aside className="rounded-[22px] bg-[#eaf0f4] p-6">
+          <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[#638092]">Wallet credit</p>
+          <h2 className="bank-display mt-3 text-[23px] font-semibold leading-tight text-[#213a55]">Choose the currency wallet to receive the simulated amount.</h2>
+          <div className="mt-5 space-y-3">{walletsQuery.isLoading ? <ListSkeleton /> : walletsQuery.isError ? <InlineError text="Wallet balances are unavailable." retry={() => walletsQuery.refetch()} /> : (walletsQuery.data ?? []).filter(wallet => wallet.currency === currency).map(wallet => <WalletMini key={wallet.id} wallet={wallet} />)}</div>
+          <p className="mt-5 text-[10px] leading-5 text-[#60748a]">The transaction is recorded with balanced simulated ledger entries and appears as an incoming credit in your activity.</p>
+        </aside>
+      </section>
     </>
   );
 }
@@ -664,13 +732,51 @@ function WalletMini({ wallet }: { wallet: Wallet }) {
 
 function TransactionList({ transactions }: { transactions: BankTransaction[] }) {
   return <div>{transactions.map(transaction => {
-    const isIncoming = transaction.type === 'transfer_in' || transaction.type === 'simulation_credit';
+    const isIncoming = transaction.type === 'transfer_in' || transaction.type === 'external_transfer_in' || transaction.type === 'simulation_credit';
     return <div key={transaction.id} className="flex items-center gap-3 border-b border-[#edf0f2] px-5 py-4 last:border-0 sm:gap-4 sm:px-7">
       <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${isIncoming ? 'bg-[#edf7f3] text-[#4d8c72]' : 'bg-[#f0f4f7] text-[#658097]'}`}>{isIncoming ? <ArrowDownLeft size={16} /> : <ArrowUpRight size={16} />}</span>
       <div className="min-w-0 flex-1"><p className="truncate text-[11px] font-semibold text-[#334a63]">{transaction.description || humanize(transaction.type)}</p><p className="mt-1 truncate text-[9px] text-[#8996a4]">{transaction.counterparty || 'Simulation ledger'} · {formatDate(transaction.createdAt)} · {transaction.mode}</p></div>
       <div className="shrink-0 text-right"><p className={`text-[11px] font-bold ${isIncoming ? 'text-[#417f69]' : 'text-[#3c5269]'}`}>{isIncoming ? '+' : '−'}{formatMoney(Number(transaction.amount), transaction.currency)}</p><p className={`mt-1 text-[9px] capitalize ${transaction.status === 'completed' ? 'text-[#4f8c75]' : 'text-[#9b8050]'}`}>{humanize(transaction.status)}</p></div>
     </div>;
   })}</div>;
+}
+
+function ReceiptDialog({ transaction, onClose }: { transaction: BankTransaction; onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-[#10243c]/55 p-4 backdrop-blur-sm"
+      onMouseDown={event => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <section
+        aria-labelledby="receipt-title"
+        aria-modal="true"
+        className="w-full max-w-md rounded-[22px] bg-white p-6 shadow-2xl sm:p-8"
+        role="dialog"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[#518c91]">Simulation receipt</p>
+            <h2 id="receipt-title" className="bank-display mt-2 text-[24px] font-semibold text-[#203851]">{humanize(transaction.type)}</h2>
+          </div>
+          <button type="button" aria-label="Close receipt" onClick={onClose} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-[#718196] hover:bg-[#f1f4f6]"><X size={17} /></button>
+        </div>
+        <p className="mt-5 border-b border-dashed border-[#dfe6eb] pb-5 text-[28px] font-semibold tracking-[-.04em] text-[#203851]">{formatMoney(Number(transaction.amount), transaction.currency)}</p>
+        <dl className="mt-5 space-y-4 text-[11px]">
+          <div className="flex justify-between gap-4"><dt className="text-[#8492a1]">Reference</dt><dd className="break-all text-right font-mono font-semibold text-[#40566e]">{transaction.reference}</dd></div>
+          <div className="flex justify-between gap-4"><dt className="text-[#8492a1]">Description</dt><dd className="text-right font-semibold text-[#40566e]">{transaction.description || humanize(transaction.type)}</dd></div>
+          <div className="flex justify-between gap-4"><dt className="text-[#8492a1]">Source or recipient</dt><dd className="text-right font-semibold text-[#40566e]">{transaction.counterparty || 'Simulation ledger'}</dd></div>
+          <div className="flex justify-between gap-4"><dt className="text-[#8492a1]">Recorded</dt><dd className="text-right font-semibold text-[#40566e]">{formatDate(transaction.createdAt)}</dd></div>
+          <div className="flex justify-between gap-4"><dt className="text-[#8492a1]">Status</dt><dd className="text-right font-semibold capitalize text-[#40566e]">{humanize(transaction.status)}</dd></div>
+        </dl>
+        <div className="mt-6 flex items-center justify-between border-t border-[#edf0f2] pt-5">
+          <span className="text-[9px] font-bold uppercase tracking-[.13em] text-[#56837f]">Simulation only</span>
+          <button type="button" onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-lg bg-[#142f51] px-4 py-2.5 text-[10px] font-bold text-white hover:bg-[#1b4269]"><Printer size={14} /> Print</button>
+        </div>
+      </section>
+    </div>
+  );
 }
 
 function StatusLine({ label, value, positive }: { label: string; value: string; positive: boolean }) {
