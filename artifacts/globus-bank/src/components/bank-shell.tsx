@@ -15,6 +15,10 @@ import {
 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { useClerk, useUser } from '@clerk/react';
+import {
+  getGetAdminAccessQueryKey,
+  useGetAdminAccess,
+} from '@workspace/api-client-react';
 
 const primaryLinks = [
   { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
@@ -35,6 +39,9 @@ export function BankShell({ children }: { children: ReactNode }) {
   const [mobileMenu, setMobileMenu] = useState(false);
   const { user } = useUser();
   const { signOut } = useClerk();
+  const adminAccess = useGetAdminAccess({
+    query: { queryKey: getGetAdminAccessQueryKey(), retry: false },
+  });
   const initials = (user?.firstName?.[0] ?? user?.primaryEmailAddress?.emailAddress?.[0] ?? 'G').toUpperCase();
 
   return (
@@ -72,15 +79,19 @@ export function BankShell({ children }: { children: ReactNode }) {
               <CircleHelp size={17} strokeWidth={1.8} />
               Help centre
             </Link>
-            <Link href="/admin" onClick={() => setMobileMenu(false)} className="mt-1 flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] text-slate-300 transition hover:bg-white/[0.07] hover:text-white">
-              <ShieldCheck size={17} strokeWidth={1.8} />
-              Operations
-            </Link>
+            {adminAccess.data?.allowed && (
+              <Link href="/admin" onClick={() => setMobileMenu(false)} className="mt-1 flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] text-slate-300 transition hover:bg-white/[0.07] hover:text-white">
+                <ShieldCheck size={17} strokeWidth={1.8} />
+                Operations
+              </Link>
+            )}
           </div>
         </nav>
         <div className="border-t border-white/10 p-4">
           <div className="flex items-center gap-3 rounded-xl px-2 py-2">
-            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#d6eaf0] text-xs font-bold text-[#163753]">{initials}</div>
+            <div className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full bg-[#d6eaf0] text-xs font-bold text-[#163753]">
+              {user?.imageUrl ? <img src={user.imageUrl} alt="" className="h-full w-full object-cover" /> : initials}
+            </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs font-semibold text-white">{user?.fullName ?? 'Globus member'}</p>
               <p className="truncate text-[10px] text-slate-400">{user?.primaryEmailAddress?.emailAddress}</p>
@@ -102,7 +113,9 @@ export function BankShell({ children }: { children: ReactNode }) {
           </div>
           <div className="flex items-center gap-3">
             <span className="hidden rounded-full border border-[#d6e8e9] bg-[#eff8f8] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-[#377d83] sm:inline-flex">Simulation mode</span>
-            <div className="grid h-9 w-9 place-items-center rounded-full border border-[#dbe3eb] bg-white text-xs font-bold text-[#27445e]">{initials}</div>
+            <div className="grid h-9 w-9 place-items-center overflow-hidden rounded-full border border-[#dbe3eb] bg-white text-xs font-bold text-[#27445e]">
+              {user?.imageUrl ? <img src={user.imageUrl} alt="" className="h-full w-full object-cover" /> : initials}
+            </div>
           </div>
         </header>
         <main className="page-enter mx-auto w-full max-w-[1440px] px-5 py-7 sm:px-8 sm:py-9 lg:px-10">{children}</main>

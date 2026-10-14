@@ -5,6 +5,7 @@ import {
   ArrowRight,
   ArrowUpRight,
   BadgeCheck,
+  Camera,
   Check,
   ChevronRight,
   CircleHelp,
@@ -22,6 +23,7 @@ import {
   X,
 } from 'lucide-react';
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useUser } from '@clerk/react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   getGetAdminAccessQueryKey,
@@ -196,6 +198,9 @@ export function HomePage() {
 
 export function DashboardPage() {
   const query = useGetBankDashboard({ query: { queryKey: getGetBankDashboardQueryKey() } });
+  const adminAccess = useGetAdminAccess({
+    query: { queryKey: getGetAdminAccessQueryKey(), retry: false },
+  });
   const dash = query.data;
   const referenceBalance = dash ? dash.wallets.find(wallet => wallet.currency === dash.referenceCurrency) : undefined;
   if (query.isLoading) return <PageSkeleton />;
@@ -244,6 +249,7 @@ export function DashboardPage() {
             <ActionTile href="/receive" icon={<ArrowDownLeft size={16} />} label="Receive" />
             <ActionTile href="/add-money" icon={<WalletCards size={16} />} label="Add money" />
             <ActionTile href="/exchange" icon={<ArrowLeftRight size={16} />} label="Exchange" />
+            {adminAccess.data?.allowed && <ActionTile href="/admin" icon={<ShieldCheck size={16} />} label="Admin panel" />}
           </div>
         </section>
       </div>
@@ -304,6 +310,7 @@ export function SendPage() {
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [success, setSuccess] = useState<BankTransaction | null>(null);
+  const [receipt, setReceipt] = useState<BankTransaction | null>(null);
   const [receipt, setReceipt] = useState<BankTransaction | null>(null);
   const [message, setMessage] = useState('');
   const available = Number(walletsQuery.data?.find(item => item.currency === currency)?.available ?? 0);
@@ -546,7 +553,7 @@ export function ReceivePage() {
             <Field label="Note (optional)"><input maxLength={140} value={description} onChange={event => setDescription(event.target.value)} placeholder="What is this simulated transfer for?" className={inputClass} /></Field>
           </div>
           {(errorMessage || incomingTransfer.isError) && <p role="alert" className="mt-5 rounded-lg bg-[#fff1ef] px-4 py-3 text-[11px] text-[#a24940]">{errorMessage || 'Please check the transfer details and try again.'}</p>}
-          {success && <div role="status" className="mt-5 rounded-xl border border-[#cfe5db] bg-[#f1f8f4] p-4 text-[12px] text-[#417461]"><p className="font-bold">Simulated incoming transfer recorded</p><p className="mt-1">Reference {success.reference} · {humanize(success.status)}</p><p className="mt-1">Only your simulated wallet was credited. No external account was contacted.</p></div>}
+          {success && <div role="status" className="mt-5 rounded-xl border border-[#cfe5db] bg-[#f1f8f4] p-4 text-[12px] text-[#417461]"><p className="font-bold">Simulated incoming transfer recorded</p><p className="mt-1">Reference {success.reference} · {humanize(success.status)}</p><p className="mt-1">Only your simulated wallet was credited. No external account was contacted.</p><button type="button" onClick={() => setReceipt(success)} className="mt-3 inline-flex items-center gap-2 rounded-lg border border-[#bfd8cc] bg-white px-3 py-2 text-[10px] font-bold text-[#3d725d] hover:bg-[#f7fbf8]"><FileText size={14} /> View receipt</button></div>}
           <button disabled={incomingTransfer.isPending || !sourceName.trim() || sourceCountry.trim().length < 2 || !amount || Number(amount) <= 0} className="mt-7 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#142f51] text-[12px] font-bold text-white transition hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">{incomingTransfer.isPending ? 'Recording simulation…' : 'Simulate incoming transfer'} <ArrowDownLeft size={15} /></button>
         </form>
         <aside className="rounded-[22px] bg-[#eaf0f4] p-6">
@@ -556,6 +563,7 @@ export function ReceivePage() {
           <p className="mt-5 text-[10px] leading-5 text-[#60748a]">The transaction is recorded with balanced simulated ledger entries and appears as an incoming credit in your activity.</p>
         </aside>
       </section>
+      {receipt && <ReceiptDialog transaction={receipt} onClose={() => setReceipt(null)} />}
     </>
   );
 }
@@ -564,7 +572,11 @@ export function SettingsPage() {
   const queryClient = useQueryClient();
   const query = useGetBankProfile({ query: { queryKey: getGetBankProfileQueryKey() } });
   const update = useUpdateBankProfile();
+  const { user } = useUser();
   const [note, setNote] = useState('');
+  const [photoMessage, setPhotoMessage] = useState('');
+  const [photoError, setPhotoError] = useState('');
+  const [photoPending, setPhotoPending] = useState(false);
   const profile = query.data;
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -594,6 +606,35 @@ export function SettingsPage() {
       onError: error => setNote(error instanceof Error ? error.message : 'Profile could not be saved. Please try again.'),
     });
   };
+  const uploadProfilePhoto = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = '';
+    if (!file) return;
+    setPhotoMessage('');
+    setPhotoError('');
+    if (!user) {
+      setPhotoError('Your signed-in profile is unavailable. Refresh and try again.');
+      return;
+    }
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setPhotoError('Choose a JPG, PNG or WebP image.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setPhotoError('Choose an image smaller than 5 MB.');
+      return;
+    }
+    setPhotoPending(true);
+    try {
+      await user.setProfileImage({ file });
+      await user.reload();
+      setPhotoMessage('Profile photo updated.');
+    } catch (error) {
+      setPhotoError(error instanceof Error ? error.message : 'The profile photo could not be updated.');
+    } finally {
+      setPhotoPending(false);
+    }
+  };
   if (query.isLoading) return <PageSkeleton />;
   if (query.isError) return <Failure title="Profile settings are unavailable" retry={() => query.refetch()} />;
   return (
@@ -613,6 +654,27 @@ export function SettingsPage() {
           <button disabled={!accepted || update.isPending} className="mt-6 h-11 rounded-xl bg-[#142f51] px-5 text-[11px] font-bold text-white hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-45">{update.isPending ? 'Saving profile…' : 'Save profile'}</button>
         </form>
         <section className="rounded-[22px] border border-[#e1e8ee] bg-white p-6">
+          <div className="mb-6 border-b border-[#edf0f2] pb-6">
+            <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#71869a]">Profile photo</p>
+            <div className="mt-4 flex items-center gap-4">
+              <div className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-full border border-[#dbe5ea] bg-[#eef5f6] text-lg font-bold text-[#387b82]">
+                {user?.imageUrl
+                  ? <img src={user.imageUrl} alt="Your profile" className="h-full w-full object-cover" />
+                  : (user?.firstName?.[0] ?? profile?.email?.[0] ?? 'G').toUpperCase()}
+              </div>
+              <div>
+                <label htmlFor="profile-photo-upload" className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border border-[#dfe7eb] px-3.5 py-2.5 text-[10px] font-bold text-[#3f5c75] hover:bg-[#f5f8f9] ${photoPending ? 'pointer-events-none opacity-50' : ''}`}>
+                  <Camera size={14} />
+                  {photoPending ? 'Uploading…' : 'Change photo'}
+                </label>
+                <input id="profile-photo-upload" type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={uploadProfilePhoto} disabled={photoPending} />
+                <p className="mt-2 text-[9px] text-[#8794a2]">JPG, PNG or WebP · up to 5 MB</p>
+              </div>
+            </div>
+            <p className="mt-3 text-[10px] leading-4 text-[#708196]">Your photo is managed with your secure sign-in profile and appears across Globus.</p>
+            {photoMessage && <p role="status" className="mt-3 rounded-lg bg-[#f0f8f4] px-3 py-2 text-[10px] text-[#41755f]">{photoMessage}</p>}
+            {photoError && <p role="alert" className="mt-3 rounded-lg bg-[#fff1ef] px-3 py-2 text-[10px] text-[#a24940]">{photoError}</p>}
+          </div>
           <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#71869a]">Account status</p>
           <div className="mt-5 space-y-4"><StatusLine label="Account" value={humanize(profile?.accountStatus)} positive={profile?.accountStatus === 'active'} /><StatusLine label="Verification" value={humanize(profile?.verificationStatus)} positive={profile?.verificationStatus === 'approved'} /></div>
           <div className="mt-6 border-t border-[#edf0f2] pt-5"><p className="text-[10px] text-[#8995a2]">Member since</p><p className="mt-1 text-[12px] font-semibold text-[#324962]">{formatDate(profile?.createdAt)}</p><p className="mt-4 text-[10px] leading-5 text-[#8895a3]">Globus is a simulation-only software platform and is not a licensed bank. Account status does not represent identity verification by a financial institution.</p></div>
@@ -785,12 +847,7 @@ function TransactionList({ transactions }: { transactions: BankTransaction[] }) 
   return <>
     <div>{transactions.map(transaction => {
       const isIncoming = transaction.type === 'transfer_in' || transaction.type === 'external_transfer_in' || transaction.type === 'simulation_credit' || transaction.type === 'admin_funding';
-      const canPrintReceipt = transaction.status === 'completed' && (
-        transaction.type === 'transfer_out' ||
-        transaction.type === 'transfer_in' ||
-        transaction.type === 'external_transfer' ||
-        transaction.type === 'external_transfer_in'
-      );
+      const canPrintReceipt = transaction.status === 'completed';
       return <div key={transaction.id} className="flex items-center gap-3 border-b border-[#edf0f2] px-5 py-4 last:border-0 sm:gap-4 sm:px-7">
         <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${isIncoming ? 'bg-[#edf7f3] text-[#4d8c72]' : 'bg-[#f0f4f7] text-[#658097]'}`}>{isIncoming ? <ArrowDownLeft size={16} /> : <ArrowUpRight size={16} />}</span>
         <div className="min-w-0 flex-1"><p className="truncate text-[11px] font-semibold text-[#334a63]">{transaction.description || humanize(transaction.type)}</p><p className="mt-1 truncate text-[9px] text-[#8996a4]">{transaction.counterparty || 'Simulation ledger'} · {formatDate(transaction.createdAt)} · {transaction.mode}</p></div>
