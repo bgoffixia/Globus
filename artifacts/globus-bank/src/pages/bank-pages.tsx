@@ -22,7 +22,7 @@ import {
   WalletCards,
   X,
 } from 'lucide-react';
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
 import { useUser } from '@clerk/react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -311,7 +311,6 @@ export function SendPage() {
   const [description, setDescription] = useState('');
   const [success, setSuccess] = useState<BankTransaction | null>(null);
   const [receipt, setReceipt] = useState<BankTransaction | null>(null);
-  const [receipt, setReceipt] = useState<BankTransaction | null>(null);
   const [message, setMessage] = useState('');
   const available = Number(walletsQuery.data?.find(item => item.currency === currency)?.available ?? 0);
   const pending = memberTransfer.isPending || externalTransfer.isPending;
@@ -477,6 +476,7 @@ export function ReceivePage() {
   const [description, setDescription] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [success, setSuccess] = useState<BankTransaction | null>(null);
+  const [receipt, setReceipt] = useState<BankTransaction | null>(null);
   const identifier = profile.data?.id ?? '';
   const submitIncomingTransfer = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -606,7 +606,7 @@ export function SettingsPage() {
       onError: error => setNote(error instanceof Error ? error.message : 'Profile could not be saved. Please try again.'),
     });
   };
-  const uploadProfilePhoto = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const uploadProfilePhoto = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
     event.currentTarget.value = '';
     if (!file) return;
