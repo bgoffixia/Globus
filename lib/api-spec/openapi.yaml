@@ -387,7 +387,7 @@ components:
       enum: [completed, pending, failed, reversed]
     TransactionType:
       type: string
-      enum: [simulation_credit, sandbox_credit, transfer_in, transfer_out, external_transfer, deposit_request, withdrawal_request, exchange_request]
+      enum: [simulation_credit, transfer_in, transfer_out, external_transfer, deposit_request, withdrawal_request, exchange_request]
     Wallet:
       type: object
       properties:

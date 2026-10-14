@@ -87,9 +87,9 @@ router.get("/bank/admin/summary", requireAdmin, async (_req, res): Promise<void>
     GetAdminSummaryResponse.parse({
       registeredUsers: userCount[0]?.value ?? 0,
       activeWallets: walletCount[0]?.value ?? 0,
-      pendingSandboxRequests: requestCount[0]?.value ?? 0,
+      pendingProviderRequests: requestCount[0]?.value ?? 0,
       ledgerTransactions: transactionCount[0]?.value ?? 0,
-      sandboxMode: true,
+      simulationMode: true,
       providerStatus: "not_configured",
     }),
   );

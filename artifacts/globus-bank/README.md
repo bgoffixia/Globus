@@ -1,17 +1,17 @@
 # Globus Bank
 
-Globus Bank is a sandbox-first multi-currency wallet experience. It is software for exploring account and ledger workflows—not a licensed bank, custodian, payment institution, or source of real financial balances.
+Globus Bank is a simulation-only multi-currency wallet experience. It is software for exploring account and ledger workflows—not a licensed bank, custodian, payment institution, or source of real financial balances.
 
 ## Current capabilities
 
 - Clerk email sign-in and sign-up, with a server-side Globus profile.
 - USD, EUR, GBP, NGN, CAD and AUD wallets backed by a double-entry ledger.
-- Development-only sandbox credit and member-to-member sandbox transfers.
+- Simulated starting value and member-to-member or external-recipient transfers.
 - Transaction search, user profile settings, and recorded provider-setup requests.
 - Server-authorized operations summary, account status actions, and ledger review.
 - Public about, help, fees, privacy, terms and contact pages.
 
-Deposits, withdrawals and currency exchanges are **not connected to a provider**. Their forms record a pending setup request only. They do not move funds or change a wallet balance. The contact page does not invent a support email address.
+Member and external-recipient transfers update fictional ledger records only. External recipient name and country are labels; no bank details are collected, and no outside account is credited. Deposits, withdrawals and currency exchanges are **not connected to a provider**; their forms record simulated requests only.
 
 ## Run and configure
 
@@ -26,11 +26,11 @@ pnpm --filter @workspace/globus-bank run typecheck
 
 Replit-managed Clerk provisions `CLERK_SECRET_KEY`, `CLERK_PUBLISHABLE_KEY` and `VITE_CLERK_PUBLISHABLE_KEY`. Do not copy their values into source files, chat, or `.env.example`. The production Clerk proxy URL is platform-managed.
 
-### Sandbox behavior
+### Simulation behavior
 
-During development, a new account receives a one-time USD sandbox ledger credit of USD 2,500.00, explicitly described in the product as simulated value with no cash value. It exists only to exercise the internal transfer flow. The credit and all test transfers use balanced ledger entries and idempotency keys.
+Each new account receives a one-time USD 2,500.00 simulated ledger credit. It is fictional and has no cash value. The credit and simulated transfers use balanced ledger entries and idempotency keys.
 
-When the API runs in production, it does not seed sandbox value and returns an unavailable response for sandbox transfers. It has no live financial provider adapter. Provider request records remain pending and never post ledger entries.
+Simulated transfers are available in the published app and only alter fictional ledger entries. The app has no live financial provider adapter, and no simulated transaction contacts or credits an external account. Provider request records remain pending and never post to a real payment network.
 
 ### Administrator access
 

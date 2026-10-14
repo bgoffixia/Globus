@@ -13,14 +13,15 @@ The API is served under `/api`. Banking routes require a valid Clerk session coo
 | PUT | `/bank/profile` | Save profile details and terms acceptance |
 | GET | `/bank/transactions` | Filter by currency/status/search and limit |
 
-## Sandbox actions
+## Simulated actions
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| POST | `/bank/transfers` | Atomic, idempotent sandbox transfer to a registered Globus member |
-| POST | `/bank/sandbox-requests` | Record a pending deposit, withdrawal or exchange request |
+| POST | `/bank/transfers` | Atomic, idempotent simulated transfer to a registered Globus member |
+| POST | `/bank/external-transfers` | Atomic, simulated transfer to an external recipient name and country |
+| POST | `/bank/simulation-requests` | Record a simulated deposit, withdrawal or exchange request |
 
-A transfer creates balanced debit and credit ledger entries in development. It is blocked in production. Provider requests stay `pending_provider_setup`; they do not debit, reserve or credit wallet funds.
+A transfer creates balanced debit and credit ledger entries. An external recipient is represented by a simulation-clearing ledger account; no bank details are collected and no external account is contacted or credited. Provider requests stay `pending_provider_setup`; they do not debit, reserve or credit wallet funds.
 
 ## Administration
 

@@ -134,7 +134,7 @@ function SignInPage() {
             <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#142f51] text-[14px] text-[#d2b562]">G</span>
             globus
           </Link>
-          <p className="mt-3 text-[11px] text-[#748498]">Your multi-currency sandbox workspace</p>
+          <p className="mt-3 text-[11px] text-[#748498]">Your multi-currency simulation workspace</p>
         </div>
         <SignIn routing="path" path={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} />
       </div>

@@ -59,7 +59,7 @@ export const GetBankDashboardResponse = zod.object({
   "recentTransactions": zod.array(zod.object({
   "id": zod.string(),
   "reference": zod.string(),
-  "type": zod.enum(['simulation_credit', 'sandbox_credit', 'transfer_in', 'transfer_out', 'external_transfer', 'deposit_request', 'withdrawal_request', 'exchange_request']),
+  "type": zod.enum(['simulation_credit', 'transfer_in', 'transfer_out', 'external_transfer', 'deposit_request', 'withdrawal_request', 'exchange_request']),
   "status": zod.enum(['completed', 'pending', 'failed', 'reversed']),
   "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
   "amount": zod.string(),
@@ -108,7 +108,7 @@ export const ListBankTransactionsQueryParams = zod.object({
 export const ListBankTransactionsResponseItem = zod.object({
   "id": zod.string(),
   "reference": zod.string(),
-  "type": zod.enum(['simulation_credit', 'sandbox_credit', 'transfer_in', 'transfer_out', 'external_transfer', 'deposit_request', 'withdrawal_request', 'exchange_request']),
+  "type": zod.enum(['simulation_credit', 'transfer_in', 'transfer_out', 'external_transfer', 'deposit_request', 'withdrawal_request', 'exchange_request']),
   "status": zod.enum(['completed', 'pending', 'failed', 'reversed']),
   "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
   "amount": zod.string(),
@@ -179,7 +179,7 @@ export const CreateBankTransferBody = zod.object({
 export const CreateBankTransferResponse = zod.object({
   "id": zod.string(),
   "reference": zod.string(),
-  "type": zod.enum(['simulation_credit', 'sandbox_credit', 'transfer_in', 'transfer_out', 'external_transfer', 'deposit_request', 'withdrawal_request', 'exchange_request']),
+  "type": zod.enum(['simulation_credit', 'transfer_in', 'transfer_out', 'external_transfer', 'deposit_request', 'withdrawal_request', 'exchange_request']),
   "status": zod.enum(['completed', 'pending', 'failed', 'reversed']),
   "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
   "amount": zod.string(),
@@ -219,7 +219,7 @@ export const CreateExternalTransferBody = zod.object({
 export const CreateExternalTransferResponse = zod.object({
   "id": zod.string(),
   "reference": zod.string(),
-  "type": zod.enum(['simulation_credit', 'sandbox_credit', 'transfer_in', 'transfer_out', 'external_transfer', 'deposit_request', 'withdrawal_request', 'exchange_request']),
+  "type": zod.enum(['simulation_credit', 'transfer_in', 'transfer_out', 'external_transfer', 'deposit_request', 'withdrawal_request', 'exchange_request']),
   "status": zod.enum(['completed', 'pending', 'failed', 'reversed']),
   "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
   "amount": zod.string(),
@@ -361,7 +361,7 @@ export const ListAdminLedgerQueryParams = zod.object({
 export const ListAdminLedgerResponseItem = zod.object({
   "id": zod.string(),
   "reference": zod.string(),
-  "type": zod.enum(['simulation_credit', 'sandbox_credit', 'transfer_in', 'transfer_out', 'external_transfer', 'deposit_request', 'withdrawal_request', 'exchange_request']),
+  "type": zod.enum(['simulation_credit', 'transfer_in', 'transfer_out', 'external_transfer', 'deposit_request', 'withdrawal_request', 'exchange_request']),
   "status": zod.enum(['completed', 'pending', 'failed', 'reversed']),
   "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
   "amount": zod.string(),

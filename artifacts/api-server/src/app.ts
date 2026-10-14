@@ -20,7 +20,7 @@ const financialActionLimiter = rateLimit({
   standardHeaders: "draft-8",
   legacyHeaders: false,
   message: {
-    error: "Too many sandbox financial requests. Try again in a few minutes.",
+    error: "Too many simulated transaction requests. Try again in a few minutes.",
   },
 });
 
@@ -82,7 +82,8 @@ app.use("/api", (req, res, next) => {
   res.status(403).json({ error: "Cross-origin request blocked." });
 });
 app.use("/api/bank/transfers", financialActionLimiter);
-app.use("/api/bank/sandbox-requests", financialActionLimiter);
+app.use("/api/bank/external-transfers", financialActionLimiter);
+app.use("/api/bank/simulation-requests", financialActionLimiter);
 app.use("/api", router);
 
 export default app;

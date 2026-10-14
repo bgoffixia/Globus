@@ -9,8 +9,10 @@ import {
 import {
   CreateBankTransferBody,
   CreateBankTransferResponse,
-  CreateSandboxRequestBody,
-  CreateSandboxRequestResponse,
+  CreateExternalTransferBody,
+  CreateExternalTransferResponse,
+  CreateSimulationRequestBody,
+  CreateSimulationRequestResponse,
   GetBankDashboardResponse,
   GetBankProfileResponse,
   ListBankTransactionsQueryParams,
@@ -109,7 +111,7 @@ router.get("/bank/dashboard", async (req, res): Promise<void> => {
       wallets,
       recentTransactions,
       referenceCurrency: "USD",
-      sandboxMode: true,
+      simulationMode: true,
     }),
   );
 });
@@ -213,14 +215,6 @@ router.post("/bank/transfers", async (req, res): Promise<void> => {
     res.status(409).json({ error: "Complete account setup before sending money." });
     return;
   }
-  if (process.env.NODE_ENV === "production") {
-    res.status(503).json({
-      error:
-        "Sandbox transfers are disabled in production until a verified financial provider is configured.",
-    });
-    return;
-  }
-
   const existing = await getTransactionByIdempotencyKey(
     parsed.data.idempotencyKey,
   );
@@ -312,7 +306,7 @@ router.post("/bank/transfers", async (req, res): Promise<void> => {
 
     const available = await balanceForWallet(tx, senderWallet.id);
     if (available < amountMinor) {
-      return { error: "There are not enough available sandbox funds." };
+    return { error: "There are not enough simulated funds available." };
     }
 
     const [transaction] = await tx
@@ -331,8 +325,8 @@ router.post("/bank/transfers", async (req, res): Promise<void> => {
         amountMinor,
         feeMinor: 0n,
         counterparty: receiver.email,
-        description: parsed.data.description?.trim() || "Sandbox transfer",
-        mode: "sandbox",
+        description: parsed.data.description?.trim() || "Simulated member transfer",
+        mode: "simulation",
       })
       .returning();
 
@@ -370,14 +364,139 @@ router.post("/bank/transfers", async (req, res): Promise<void> => {
   );
 });
 
-router.post("/bank/sandbox-requests", async (req, res): Promise<void> => {
+router.post("/bank/external-transfers", async (req, res): Promise<void> => {
   const userId = getAuth(req).userId;
   if (!userId) {
     res.status(401).json({ error: "Sign in to access your Globus account." });
     return;
   }
 
-  const parsed = CreateSandboxRequestBody.safeParse(req.body);
+  const parsed = CreateExternalTransferBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const recipientName = parsed.data.recipientName.trim();
+  const destinationCountry = parsed.data.destinationCountry.trim();
+  if (!recipientName || !destinationCountry) {
+    res.status(400).json({ error: "Enter the recipient name and destination country." });
+    return;
+  }
+
+  const sender = await getOrCreateBankUser(userId);
+  if (sender.accountStatus !== "active") {
+    res.status(409).json({ error: "This account is currently restricted." });
+    return;
+  }
+  if (!sender.acceptedTermsAt) {
+    res.status(409).json({ error: "Complete account setup before simulating a transfer." });
+    return;
+  }
+
+  let amountMinor: bigint;
+  try {
+    amountMinor = parseAmountToMinor(parsed.data.amount);
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Enter a valid transfer amount.",
+    });
+    return;
+  }
+  if (amountMinor <= 0n) {
+    res.status(400).json({ error: "The transfer amount must be greater than zero." });
+    return;
+  }
+
+  const transfer = await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtext(${parsed.data.idempotencyKey})::bigint)`,
+    );
+    const [duplicate] = await tx
+      .select()
+      .from(bankTransactionsTable)
+      .where(eq(bankTransactionsTable.idempotencyKey, parsed.data.idempotencyKey))
+      .limit(1);
+    if (duplicate) {
+      return duplicate.initiatedByUserId === userId
+        ? { transaction: duplicate }
+        : { error: "That request reference is already in use." };
+    }
+
+    const wallet = await userWallet(tx, userId, parsed.data.currency);
+    if (!wallet) {
+      return { error: "A wallet for the selected currency is unavailable." };
+    }
+    await tx
+      .select({ id: bankWalletsTable.id })
+      .from(bankWalletsTable)
+      .where(eq(bankWalletsTable.id, wallet.id))
+      .for("update");
+
+    if ((await balanceForWallet(tx, wallet.id)) < amountMinor) {
+      return { error: "There are not enough simulated funds available." };
+    }
+
+    const [transaction] = await tx
+      .insert(bankTransactionsTable)
+      .values({
+        reference: createReference(),
+        idempotencyKey: parsed.data.idempotencyKey,
+        initiatedByUserId: userId,
+        fromUserId: userId,
+        fromWalletId: wallet.id,
+        type: "external_transfer",
+        status: "completed",
+        currency: parsed.data.currency,
+        amountMinor,
+        feeMinor: 0n,
+        counterparty: `${recipientName} · ${destinationCountry}`,
+        description: parsed.data.description?.trim() || "Simulated external transfer",
+        mode: "simulation",
+      })
+      .returning();
+
+    await tx.insert(bankLedgerEntriesTable).values([
+      {
+        transactionId: transaction.id,
+        walletId: wallet.id,
+        accountCode: `wallet:${wallet.id}`,
+        currency: parsed.data.currency,
+        side: "debit",
+        amountMinor,
+      },
+      {
+        transactionId: transaction.id,
+        accountCode: `simulation:external-clearing:${parsed.data.currency}`,
+        currency: parsed.data.currency,
+        side: "credit",
+        amountMinor,
+      },
+    ]);
+
+    return { transaction };
+  });
+
+  if ("error" in transfer) {
+    res.status(409).json({ error: transfer.error });
+    return;
+  }
+
+  res.status(201).json(
+    CreateExternalTransferResponse.parse(
+      toBankTransaction(transfer.transaction, userId),
+    ),
+  );
+});
+
+router.post("/bank/simulation-requests", async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId;
+  if (!userId) {
+    res.status(401).json({ error: "Sign in to access your Globus account." });
+    return;
+  }
+
+  const parsed = CreateSimulationRequestBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
@@ -399,7 +518,7 @@ router.post("/bank/sandbox-requests", async (req, res): Promise<void> => {
       parsed.data.destinationCurrency === parsed.data.currency)
   ) {
     res.status(400).json({
-      error: "Choose a different destination currency for the sandbox quote.",
+      error: "Choose a different destination currency for the simulated quote.",
     });
     return;
   }
@@ -432,7 +551,7 @@ router.post("/bank/sandbox-requests", async (req, res): Promise<void> => {
       return;
     }
     res.status(201).json(
-      CreateSandboxRequestResponse.parse({
+      CreateSimulationRequestResponse.parse({
         id: existing[0].id,
         reference: existing[0].reference,
         type: existing[0].type,
@@ -441,7 +560,7 @@ router.post("/bank/sandbox-requests", async (req, res): Promise<void> => {
         amount: formatMinorAmount(existing[0].amountMinor),
         status: existing[0].status,
         message:
-          "This sandbox request is recorded only. A verified provider must be connected before funds can move.",
+          "This simulated request is recorded only. No provider is connected and no funds move.",
         createdAt: existing[0].createdAt.toISOString(),
       }),
     );
@@ -484,7 +603,7 @@ router.post("/bank/sandbox-requests", async (req, res): Promise<void> => {
         amountMinor,
         counterparty: null,
         description: `${parsed.data.type} request awaiting provider setup`,
-        mode: "sandbox",
+        mode: "simulation",
       })
       .returning();
 
@@ -511,7 +630,7 @@ router.post("/bank/sandbox-requests", async (req, res): Promise<void> => {
   }
 
   res.status(201).json(
-    CreateSandboxRequestResponse.parse({
+    CreateSimulationRequestResponse.parse({
       id: request.sandboxRequest.id,
       reference: request.sandboxRequest.reference,
       type: request.sandboxRequest.type,
@@ -520,7 +639,7 @@ router.post("/bank/sandbox-requests", async (req, res): Promise<void> => {
       amount: formatMinorAmount(request.sandboxRequest.amountMinor),
       status: request.sandboxRequest.status,
       message:
-        "This sandbox request is recorded only. A verified provider must be connected before funds can move.",
+        "This simulated request is recorded only. No provider is connected and no funds move.",
       createdAt: request.sandboxRequest.createdAt.toISOString(),
     }),
   );

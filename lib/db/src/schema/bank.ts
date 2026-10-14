@@ -20,6 +20,8 @@ export const bankCurrencyEnum = pgEnum("bank_currency_code", [
 ]);
 
 export const bankTransactionTypeEnum = pgEnum("bank_transaction_type", [
+  "simulation_credit",
+  "external_transfer",
   "sandbox_credit",
   "transfer",
   "deposit_request",
@@ -102,7 +104,7 @@ export const bankTransactionsTable = pgTable(
       .default(sql`0`),
     counterparty: text("counterparty"),
     description: text("description").notNull().default(""),
-    mode: text("mode").notNull().default("sandbox"),
+    mode: text("mode").notNull().default("simulation"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

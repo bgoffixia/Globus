@@ -1,6 +1,6 @@
 # Globus Bank
 
-A sandbox-first multi-currency wallet experience for exploring ledger-backed account activity without implying that test records are real money or that Globus is a licensed bank.
+A simulation-only multi-currency wallet experience for exploring ledger-backed account activity without implying that simulated transactions are real money or that Globus is a licensed bank.
 
 ## Run & Operate
 
@@ -31,14 +31,14 @@ A sandbox-first multi-currency wallet experience for exploring ledger-backed acc
 ## Architecture decisions
 
 - Clerk handles sign-in; the API creates a Globus profile and currency wallets on first account access.
-- Sandbox account value is ledger-posted only in development. Sandbox transfers are blocked when `NODE_ENV=production`.
+- Starting simulated value and transfers are fictional in every environment; the product labels them as simulations.
 - Deposits, withdrawals and exchanges create provider-setup requests only; they never change wallet balances.
 - Administrator API access is controlled by the server-side `GLOBUS_ADMIN_CLERK_IDS` allowlist.
 - Money values are stored in integer minor units, and balances are derived from double-entry ledger entries.
 
 ## Product
 
-Public Globus information pages, Clerk sign-in, a multi-currency account dashboard, wallet and transaction views, member-to-member sandbox transfers, recorded provider-setup requests, account settings, and an allowlisted operations area.
+Public Globus information pages, Clerk sign-in, a multi-currency account dashboard, wallet and transaction views, simulated member and external-recipient transfers, recorded provider-setup requests, account settings, and an allowlisted operations area.
 
 ## User preferences
 

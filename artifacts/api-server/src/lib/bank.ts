@@ -13,7 +13,7 @@ import {
 export const currencies = ["USD", "EUR", "GBP", "NGN", "CAD", "AUD"] as const;
 export type BankCurrency = (typeof currencies)[number];
 
-const welcomeSandboxAmount = 250_000n;
+const welcomeSimulationAmount = 250_000n;
 
 export function parseAmountToMinor(amount: string): bigint {
   const match = /^(\d{1,12})(?:\.(\d{1,2}))?$/.exec(amount);
@@ -90,47 +90,45 @@ export async function ensureBankUser(clerkUserId: string) {
       )
       .limit(1);
 
-    if (process.env.NODE_ENV !== "production") {
-      const [welcomeTransaction] = await tx
-        .insert(bankTransactionsTable)
-        .values({
-          reference: createReference(),
-          idempotencyKey: `sandbox-welcome:${clerkUserId}`,
-          initiatedByUserId: clerkUserId,
-          toUserId: clerkUserId,
-          toWalletId: usdWallet.id,
-          type: "sandbox_credit",
-          status: "completed",
-          currency: "USD",
-          amountMinor: welcomeSandboxAmount,
-          counterparty: "Globus sandbox ledger",
-          description: "Initial sandbox balance — simulated funds, no cash value.",
-          mode: "sandbox",
-        })
-        .onConflictDoNothing({
-          target: bankTransactionsTable.idempotencyKey,
-        })
-        .returning();
+    const [welcomeTransaction] = await tx
+      .insert(bankTransactionsTable)
+      .values({
+        reference: createReference(),
+        idempotencyKey: `sandbox-welcome:${clerkUserId}`,
+        initiatedByUserId: clerkUserId,
+        toUserId: clerkUserId,
+        toWalletId: usdWallet.id,
+        type: "simulation_credit",
+        status: "completed",
+        currency: "USD",
+        amountMinor: welcomeSimulationAmount,
+        counterparty: "Simulation ledger",
+        description: "Starting simulated balance — no real funds.",
+        mode: "simulation",
+      })
+      .onConflictDoNothing({
+        target: bankTransactionsTable.idempotencyKey,
+      })
+      .returning();
 
-      if (welcomeTransaction) {
-        await tx.insert(bankLedgerEntriesTable).values([
-          {
-            transactionId: welcomeTransaction.id,
-            accountCode: "system:sandbox-clearing:USD",
-            currency: "USD",
-            side: "debit",
-            amountMinor: welcomeSandboxAmount,
-          },
-          {
-            transactionId: welcomeTransaction.id,
-            walletId: usdWallet.id,
-            accountCode: `wallet:${usdWallet.id}`,
-            currency: "USD",
-            side: "credit",
-            amountMinor: welcomeSandboxAmount,
-          },
-        ]);
-      }
+    if (welcomeTransaction) {
+      await tx.insert(bankLedgerEntriesTable).values([
+        {
+          transactionId: welcomeTransaction.id,
+          accountCode: "simulation:clearing:USD",
+          currency: "USD",
+          side: "debit",
+          amountMinor: welcomeSimulationAmount,
+        },
+        {
+          transactionId: welcomeTransaction.id,
+          walletId: usdWallet.id,
+          accountCode: `wallet:${usdWallet.id}`,
+          currency: "USD",
+          side: "credit",
+          amountMinor: welcomeSimulationAmount,
+        },
+      ]);
     }
 
     return user;
@@ -176,18 +174,28 @@ export function toBankTransaction(
   viewerUserId: string,
 ) {
   let type:
-    | "sandbox_credit"
+    | "simulation_credit"
     | "transfer_in"
     | "transfer_out"
+    | "external_transfer"
     | "deposit_request"
     | "withdrawal_request"
     | "exchange_request";
 
   if (transaction.type === "transfer") {
     type = transaction.toUserId === viewerUserId ? "transfer_in" : "transfer_out";
+  } else if (transaction.type === "sandbox_credit") {
+    type = "simulation_credit";
   } else {
     type = transaction.type;
   }
+
+  const description =
+    transaction.type === "sandbox_credit"
+      ? "Starting simulated balance — no real funds."
+      : transaction.description === "Sandbox transfer"
+        ? "Simulated member transfer"
+        : transaction.description;
 
   return {
     id: transaction.id,
@@ -197,9 +205,12 @@ export function toBankTransaction(
     currency: transaction.currency as BankCurrency,
     amount: formatMinorAmount(transaction.amountMinor),
     fee: formatMinorAmount(transaction.feeMinor),
-    counterparty: transaction.counterparty,
-    description: transaction.description,
-    mode: "sandbox" as const,
+    counterparty:
+      transaction.counterparty === "Globus sandbox ledger"
+        ? "Simulation ledger"
+        : transaction.counterparty,
+    description,
+    mode: "simulation" as const,
     createdAt: transaction.createdAt.toISOString(),
   };
 }

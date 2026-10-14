@@ -28,7 +28,7 @@ This command replaces matching objects in the selected target. Verify the target
 2. Check that each completed ledger transaction has equal total debits and credits per currency.
 3. Reconcile wallet balances from posted ledger entries; do not edit balances directly.
 4. Review the newest audit records and provider reconciliation exceptions.
-5. Keep the app in sandbox mode until account access, balances and audit history are verified.
+5. Keep the app in simulation-only mode until account access, balances and audit history are verified.
 6. Record recovery time, target and outcome in the operational log.
 
 Provider reconciliation and production recovery runbooks are not configured yet because no financial provider is connected.
