@@ -28,15 +28,20 @@ import { useUser } from '@clerk/react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   getGetAdminAccessQueryKey,
+  getGetAdminIdentityDocumentContentUrl,
   getGetAdminSummaryQueryKey,
   getGetBankDashboardQueryKey,
   getGetBankProfileQueryKey,
   getHealthCheckQueryKey,
   getListAdminLedgerQueryKey,
+  getListAdminIdentityDocumentsQueryKey,
   getListAdminUsersQueryKey,
+  getListMyIdentityDocumentsQueryKey,
   getListBankTransactionsQueryKey,
   getListBankWalletsQueryKey,
   useCreateAdminFunding,
+  useCreateIdentityDocumentUploadUrl,
+  useCompleteIdentityDocumentUpload,
   useCreateBankTransfer,
   useCreateExternalTransfer,
   useCreateIncomingExternalTransfer,
@@ -48,13 +53,18 @@ import {
   useGetBankProfile,
   useHealthCheck,
   useListAdminLedger,
+  useListAdminIdentityDocuments,
   useListAdminUsers,
+  useListMyIdentityDocuments,
   useListBankTransactions,
   useListBankWallets,
   useUpdateAdminUserStatus,
+  useUpdateAdminUserVerification,
   useUpdateBankProfile,
+  useDeleteMyIdentityDocument,
+  useSubmitIdentityDocuments,
 } from '@workspace/api-client-react';
-import type { AdminUser, BankTransaction, Wallet } from '@workspace/api-client-react';
+import type { AdminUser, BankTransaction, IdentityDocument, Wallet } from '@workspace/api-client-react';
 
 const currencies = ['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD'] as const;
 type Currency = typeof currencies[number];
@@ -582,12 +592,26 @@ export function ReceivePage() {
 export function SettingsPage() {
   const queryClient = useQueryClient();
   const query = useGetBankProfile({ query: { queryKey: getGetBankProfileQueryKey() } });
+  const documentsQuery = useListMyIdentityDocuments({
+    query: {
+      queryKey: getListMyIdentityDocumentsQueryKey(),
+      enabled: !!query.data,
+    },
+  });
   const update = useUpdateBankProfile();
+  const createIdentityUpload = useCreateIdentityDocumentUploadUrl();
+  const completeIdentityUpload = useCompleteIdentityDocumentUpload();
+  const deleteIdentityDocument = useDeleteMyIdentityDocument();
+  const submitIdentityDocuments = useSubmitIdentityDocuments();
   const { user } = useUser();
   const [note, setNote] = useState('');
   const [photoMessage, setPhotoMessage] = useState('');
   const [photoError, setPhotoError] = useState('');
   const [photoPending, setPhotoPending] = useState(false);
+  const [identityMessage, setIdentityMessage] = useState('');
+  const [identityError, setIdentityError] = useState('');
+  const [identityUploadPending, setIdentityUploadPending] = useState(false);
+  const [identityConsent, setIdentityConsent] = useState(false);
   const profile = query.data;
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -646,11 +670,102 @@ export function SettingsPage() {
       setPhotoPending(false);
     }
   };
+  const uploadIdentityDocuments = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.currentTarget.files ?? []);
+    event.currentTarget.value = '';
+    if (files.length === 0) return;
+    setIdentityError('');
+    setIdentityMessage('');
+    const existingCount = documentsQuery.data?.length ?? 0;
+    if (existingCount + files.length > 5) {
+      setIdentityError('You can keep up to five identity documents for one review.');
+      return;
+    }
+    const allowedTypes = new Set(['application/pdf', 'image/jpeg', 'image/png']);
+    const invalidFile = files.find(
+      file =>
+        !allowedTypes.has(file.type) ||
+        file.size < 8 ||
+        file.size > 10 * 1024 * 1024,
+    );
+    if (invalidFile) {
+      setIdentityError('Choose PDF, JPG or PNG files between 8 bytes and 10 MB each.');
+      return;
+    }
+    setIdentityUploadPending(true);
+    try {
+      for (const file of files) {
+        const upload = await createIdentityUpload.mutateAsync({
+          data: {
+            contentType: file.type as IdentityDocument['contentType'],
+            sizeBytes: file.size,
+          },
+        });
+        try {
+          const response = await fetch(upload.uploadUrl, {
+            method: 'PUT',
+            headers: { 'Content-Type': file.type },
+            body: file,
+          });
+          if (!response.ok) {
+            throw new Error('The file could not be uploaded. Please try again.');
+          }
+          await completeIdentityUpload.mutateAsync({
+            documentId: upload.documentId,
+          });
+        } catch (error) {
+          try {
+            await deleteIdentityDocument.mutateAsync({
+              documentId: upload.documentId,
+            });
+          } catch {
+            // Keep the original upload error; an incomplete row can be removed from the list.
+          }
+          throw error;
+        }
+      }
+      setIdentityMessage(`${files.length} document${files.length === 1 ? '' : 's'} uploaded. Submit them when you are ready.`);
+      await queryClient.invalidateQueries({ queryKey: getListMyIdentityDocumentsQueryKey() });
+    } catch (error) {
+      setIdentityError(error instanceof Error ? error.message : 'The identity documents could not be uploaded.');
+      await queryClient.invalidateQueries({ queryKey: getListMyIdentityDocumentsQueryKey() });
+    } finally {
+      setIdentityUploadPending(false);
+    }
+  };
+  const removeIdentityDocument = async (documentId: string) => {
+    setIdentityError('');
+    setIdentityMessage('');
+    try {
+      await deleteIdentityDocument.mutateAsync({ documentId });
+      await queryClient.invalidateQueries({ queryKey: getListMyIdentityDocumentsQueryKey() });
+      setIdentityMessage('Identity document removed.');
+    } catch (error) {
+      setIdentityError(error instanceof Error ? error.message : 'The identity document could not be removed.');
+    }
+  };
+  const submitForIdentityReview = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIdentityError('');
+    setIdentityMessage('');
+    try {
+      await submitIdentityDocuments.mutateAsync({ data: { confirmed: true } });
+      setIdentityConsent(false);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: getGetBankProfileQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetBankDashboardQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getListMyIdentityDocumentsQueryKey() }),
+      ]);
+      setIdentityMessage('Your documents were submitted for review.');
+    } catch (error) {
+      setIdentityError(error instanceof Error ? error.message : 'Your documents could not be submitted for review.');
+    }
+  };
   if (query.isLoading) return <PageSkeleton />;
   if (query.isError) return <Failure title="Profile settings are unavailable" retry={() => query.refetch()} />;
   return (
     <>
-      <PageHeading eyebrow="Account settings" title="Your profile" subtitle="Manage your details and review your account status." />
+      <PageHeading eyebrow="Account settings" title="Your profile" subtitle="Manage your details, submit identity documents, and review your account status." />
       <div className="mt-7 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
         <form onSubmit={submit} className="rounded-[22px] border border-[#e1e8ee] bg-white p-5 sm:p-8">
           <div className="grid gap-5 sm:grid-cols-2">
@@ -688,9 +803,56 @@ export function SettingsPage() {
           </div>
           <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#71869a]">Account status</p>
           <div className="mt-5 space-y-4"><StatusLine label="Account" value={humanize(profile?.accountStatus)} positive={profile?.accountStatus === 'active'} /><StatusLine label="Verification" value={humanize(profile?.verificationStatus)} positive={profile?.verificationStatus === 'approved'} /></div>
-          <div className="mt-6 border-t border-[#edf0f2] pt-5"><p className="text-[10px] text-[#8995a2]">Member since</p><p className="mt-1 text-[12px] font-semibold text-[#324962]">{formatDate(profile?.createdAt)}</p><p className="mt-4 text-[10px] leading-5 text-[#8895a3]">Globus is a simulation-only software platform and is not a licensed bank. Account status does not represent identity verification by a financial institution.</p></div>
+          <div className="mt-6 border-t border-[#edf0f2] pt-5"><p className="text-[10px] text-[#8995a2]">Member since</p><p className="mt-1 text-[12px] font-semibold text-[#324962]">{formatDate(profile?.createdAt)}</p><p className="mt-4 text-[10px] leading-5 text-[#8895a3]">Globus is a simulation-only platform, not a licensed bank. Its identity review is an internal software status, not verification by a financial institution.</p></div>
         </section>
       </div>
+      <section className="mt-6 rounded-[22px] border border-[#e1e8ee] bg-white p-5 sm:p-7">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#55868b]">Private identity review</p>
+            <h2 className="mt-1 text-[15px] font-bold text-[#29425c]">Submit identity documents</h2>
+            <p className="mt-2 max-w-2xl text-[11px] leading-5 text-[#718296]">Upload up to five PDF, JPG or PNG files, 10 MB each. Only you and authorized Globus admins can access them. Files are deleted after approval or rejection; the review status and audit record remain.</p>
+          </div>
+          <span className="shrink-0 rounded-lg border border-[#d9e8e9] bg-[#f2f8f8] px-3 py-2 text-[10px] font-bold text-[#4e777a]">{humanize(profile?.verificationStatus)}</span>
+        </div>
+        {profile?.verificationNote && <p className="mt-4 rounded-lg border border-[#e4e9ed] bg-[#f8fafb] px-4 py-3 text-[11px] leading-5 text-[#52677c]"><b>Message from the reviewer:</b> {profile.verificationNote}</p>}
+        {identityMessage && <p role="status" className="mt-4 rounded-lg border border-[#cfe5db] bg-[#f1f8f4] px-4 py-3 text-[11px] text-[#417461]">{identityMessage}</p>}
+        {identityError && <p role="alert" className="mt-4 rounded-lg bg-[#fff1ef] px-4 py-3 text-[11px] text-[#a24940]">{identityError}</p>}
+        <div className="mt-5">
+          {documentsQuery.isLoading ? <ListSkeleton /> : documentsQuery.isError ? <InlineError text="Your identity documents are unavailable." retry={() => documentsQuery.refetch()} /> : documentsQuery.data?.length ? (
+            <ul className="space-y-2">
+              {documentsQuery.data.map((document, index) => (
+                <li key={document.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#e7edf0] px-4 py-3">
+                  <div>
+                    <p className="text-[11px] font-semibold text-[#344b64]">Document {index + 1} · {document.contentType === 'application/pdf' ? 'PDF' : document.contentType === 'image/png' ? 'PNG image' : 'JPG image'}</p>
+                    <p className="mt-1 text-[10px] text-[#8492a0]">{(document.sizeBytes / 1024 / 1024).toFixed(2)} MB · {humanize(document.status)}{document.uploadedAt ? ` · ${formatDate(document.uploadedAt)}` : ''}</p>
+                  </div>
+                  {profile?.verificationStatus !== 'pending' && profile?.verificationStatus !== 'approved' && <button type="button" disabled={deleteIdentityDocument.isPending || identityUploadPending} onClick={() => removeIdentityDocument(document.id)} className="rounded-lg border border-[#dfe6eb] px-3 py-2 text-[10px] font-bold text-[#546b80] hover:bg-[#f5f8f9] disabled:opacity-50">Remove</button>}
+                </li>
+              ))}
+            </ul>
+          ) : <p className="rounded-xl border border-dashed border-[#dfe6eb] px-4 py-5 text-center text-[11px] text-[#8794a2]">No identity documents uploaded.</p>}
+        </div>
+        {profile?.verificationStatus !== 'pending' && profile?.verificationStatus !== 'approved' && (
+          <>
+            <label htmlFor="identity-document-upload" className={`mt-5 inline-flex cursor-pointer items-center gap-2 rounded-lg border border-[#dfe7eb] px-4 py-3 text-[10px] font-bold text-[#3f5c75] hover:bg-[#f5f8f9] ${identityUploadPending ? 'pointer-events-none opacity-50' : ''}`}>
+              <FileText size={14} />
+              {identityUploadPending ? 'Uploading documents…' : 'Choose PDF, JPG or PNG files'}
+            </label>
+            <input id="identity-document-upload" type="file" multiple accept="application/pdf,image/jpeg,image/png" className="sr-only" onChange={uploadIdentityDocuments} disabled={identityUploadPending} />
+            <p className="mt-2 text-[10px] text-[#8794a2]">Do not upload documents for another person. The review is for Globus simulation purposes only.</p>
+            <form onSubmit={submitForIdentityReview} className="mt-5 border-t border-[#edf0f2] pt-5">
+              <label className="flex items-start gap-3 text-[11px] leading-5 text-[#65798e]">
+                <input type="checkbox" required checked={identityConsent} onChange={event => setIdentityConsent(event.target.checked)} className="mt-1 accent-[#387e84]" />
+                <span>I confirm these documents belong to me and allow authorized Globus admins to review them for this simulation.</span>
+              </label>
+              <button disabled={!identityConsent || submitIdentityDocuments.isPending || identityUploadPending || !(documentsQuery.data ?? []).some(document => document.status === 'uploaded') || (documentsQuery.data ?? []).some(document => document.status === 'uploading')} className="mt-4 h-11 rounded-xl bg-[#142f51] px-5 text-[11px] font-bold text-white hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-45">
+                {submitIdentityDocuments.isPending ? 'Submitting for review…' : profile?.verificationStatus === 'additional_information_required' ? 'Resubmit for review' : 'Submit for review'}
+              </button>
+            </form>
+          </>
+        )}
+      </section>
     </>
   );
 }
@@ -710,11 +872,26 @@ export function AdminPage() {
   const [fundingError, setFundingError] = useState('');
   const [fundingSuccess, setFundingSuccess] = useState<BankTransaction | null>(null);
   const [deleteError, setDeleteError] = useState('');
+  const [identityTarget, setIdentityTarget] = useState<AdminUser | null>(null);
+  const [reviewDecision, setReviewDecision] = useState<
+    'approved' | 'rejected' | 'additional_information_required'
+  >('approved');
+  const [reviewReason, setReviewReason] = useState('');
+  const [reviewMessage, setReviewMessage] = useState('');
+  const [reviewError, setReviewError] = useState('');
+  const [reviewFeedback, setReviewFeedback] = useState('');
   const params = useMemo(() => ({ ...(search.trim() ? { search: search.trim() } : {}), limit: 100 }), [search]);
   const users = useListAdminUsers(params, { query: { queryKey: getListAdminUsersQueryKey(params), enabled: !!access.data?.allowed } });
+  const reviewDocuments = useListAdminIdentityDocuments(identityTarget?.id ?? '', {
+    query: {
+      queryKey: getListAdminIdentityDocumentsQueryKey(identityTarget?.id ?? ''),
+      enabled: !!identityTarget,
+    },
+  });
   const ledgerParams = { limit: 100 };
   const ledger = useListAdminLedger(ledgerParams, { query: { queryKey: getListAdminLedgerQueryKey(ledgerParams), enabled: !!access.data?.allowed } });
   const update = useUpdateAdminUserStatus();
+  const updateVerification = useUpdateAdminUserVerification();
   const funding = useCreateAdminFunding();
   const deletion = useDeleteAdminTransaction();
   if (access.isLoading) return <PageSkeleton />;
@@ -789,6 +966,35 @@ export function AdminPage() {
       onError: error => setDeleteError(error instanceof Error ? error.message : 'The transaction could not be deleted.'),
     });
   };
+  const openIdentityReview = (user: AdminUser) => {
+    setIdentityTarget(user);
+    setReviewDecision('approved');
+    setReviewReason('');
+    setReviewMessage('');
+    setReviewError('');
+    setReviewFeedback('');
+  };
+  const submitIdentityReview = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!identityTarget) return;
+    setReviewError('');
+    setReviewFeedback('');
+    try {
+      await updateVerification.mutateAsync({
+        userId: identityTarget.id,
+        data: {
+          verificationStatus: reviewDecision,
+          reason: reviewReason.trim(),
+          ...(reviewMessage.trim() ? { userMessage: reviewMessage.trim() } : {}),
+        },
+      });
+      await queryClient.invalidateQueries({ queryKey: getListAdminUsersQueryKey() });
+      setReviewFeedback(`Identity decision saved for ${identityTarget.email}.`);
+      setIdentityTarget(null);
+    } catch (error) {
+      setReviewError(error instanceof Error ? error.message : 'The identity decision could not be saved.');
+    }
+  };
   return (
     <>
       <PageHeading eyebrow="Restricted operations" title="Operations overview" subtitle="Review platform totals, registered users and the simulated ledger." />
@@ -801,6 +1007,7 @@ export function AdminPage() {
       </div>
       <div className="mt-5 flex flex-wrap items-center gap-3 rounded-xl border border-[#d9e7e8] bg-[#eff7f7] px-4 py-3 text-[11px] text-[#48767b]"><ShieldCheck size={15} /> Simulation mode {summary.data?.simulationMode ? 'is active' : 'status unavailable'} <span className="text-[#adc0c2]">/</span> Provider {humanize(summary.data?.providerStatus)}</div>
       {statusError && <p role="alert" className="mt-3 rounded-lg bg-[#fff1ef] px-4 py-3 text-[11px] text-[#a24940]">{statusError}</p>}
+      {reviewFeedback && <p role="status" className="mt-3 rounded-lg border border-[#cfe5db] bg-[#f1f8f4] px-4 py-3 text-[11px] text-[#417461]">{reviewFeedback}</p>}
       {fundTarget && <section className="mt-6 rounded-[20px] border border-[#dfe7ec] bg-white p-5 sm:p-7">
         <div className="mb-5 flex items-start justify-between gap-4">
           <div><p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#55868b]">Simulation only</p><h2 className="mt-1 text-[15px] font-bold text-[#29425c]">Fund a user wallet</h2><p className="mt-1 text-[11px] text-[#7e8d9c]">{[fundTarget.firstName, fundTarget.lastName].filter(Boolean).join(' ') || 'Globus member'} · {fundTarget.email}</p></div>
@@ -820,13 +1027,47 @@ export function AdminPage() {
       </section>}
       <section className="mt-7 overflow-hidden rounded-[20px] border border-[#e1e8ee] bg-white">
         <div className="flex flex-col gap-3 border-b border-[#edf0f3] px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7"><div><h2 className="text-[14px] font-bold text-[#28405c]">Registered users</h2><p className="mt-1 text-[10px] text-[#8592a1]">Account status changes require a documented reason.</p></div><label className="relative"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8996a4]" /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search users" className="h-10 w-full rounded-lg border border-[#e0e7ec] bg-white pl-9 pr-3 text-[11px] outline-none sm:w-[240px]" /></label></div>
-        {users.isLoading ? <ListSkeleton /> : users.isError ? <InlineError text="User records are unavailable." retry={() => users.refetch()} /> : users.data?.length ? <div className="overflow-x-auto"><table className="w-full min-w-[820px] text-left"><thead className="bg-[#f7f9fa] text-[9px] uppercase tracking-[.13em] text-[#8291a0]"><tr><th className="px-6 py-3">Member</th><th className="px-4 py-3">Region</th><th className="px-4 py-3">Verification</th><th className="px-4 py-3">Account</th><th className="px-4 py-3">Wallets</th><th className="px-6 py-3 text-right">Actions</th></tr></thead><tbody>{users.data.map(user => <tr key={user.id} className="border-t border-[#edf0f2] text-[11px] text-[#445a71]"><td className="px-6 py-4"><b className="block text-[#2d435c]">{[user.firstName, user.lastName].filter(Boolean).join(' ') || 'Globus member'}</b><span className="mt-1 block text-[10px] text-[#8a97a5]">{user.email}</span></td><td className="px-4 py-4">{user.country || '—'}</td><td className="px-4 py-4">{humanize(user.verificationStatus)}</td><td className="px-4 py-4">{humanize(user.accountStatus)}</td><td className="px-4 py-4">{user.walletCount}</td><td className="px-6 py-4 text-right"><div className="flex justify-end gap-2"><button disabled={user.accountStatus !== 'active'} onClick={() => { setFundTarget(user); setFundingError(''); setFundingSuccess(null); }} className="rounded-lg bg-[#eff7f7] px-3 py-2 text-[10px] font-bold text-[#36777c] hover:bg-[#e2f1f1] disabled:cursor-not-allowed disabled:opacity-40">Fund</button><button disabled={update.isPending} onClick={() => setStatus(user.id, user.accountStatus === 'active' ? 'suspended' : 'active')} className="rounded-lg border border-[#dfe6eb] px-3 py-2 text-[10px] font-bold text-[#3f5c75] hover:bg-[#f4f7f8] disabled:opacity-50">{user.accountStatus === 'active' ? 'Suspend' : 'Reactivate'}</button></div></td></tr>)}</tbody></table></div> : <EmptyState title="No users found" text="Try another email or name." />}
+        {users.isLoading ? <ListSkeleton /> : users.isError ? <InlineError text="User records are unavailable." retry={() => users.refetch()} /> : users.data?.length ? <div className="overflow-x-auto"><table className="w-full min-w-[980px] text-left"><thead className="bg-[#f7f9fa] text-[9px] uppercase tracking-[.13em] text-[#8291a0]"><tr><th className="px-6 py-3">Member</th><th className="px-4 py-3">Region</th><th className="px-4 py-3">Verification</th><th className="px-4 py-3">Account</th><th className="px-4 py-3">Wallets</th><th className="px-6 py-3 text-right">Actions</th></tr></thead><tbody>{users.data.map(user => <tr key={user.id} className="border-t border-[#edf0f2] text-[11px] text-[#445a71]"><td className="px-6 py-4"><b className="block text-[#2d435c]">{[user.firstName, user.lastName].filter(Boolean).join(' ') || 'Globus member'}</b><span className="mt-1 block text-[10px] text-[#8a97a5]">{user.email}</span></td><td className="px-4 py-4">{user.country || '—'}</td><td className="px-4 py-4"><span>{humanize(user.verificationStatus)}</span>{user.verificationNote && <span className="mt-1 block max-w-[220px] truncate text-[9px] text-[#8794a2]" title={user.verificationNote}>{user.verificationNote}</span>}</td><td className="px-4 py-4">{humanize(user.accountStatus)}</td><td className="px-4 py-4">{user.walletCount}</td><td className="px-6 py-4 text-right"><div className="flex justify-end gap-2">{(user.verificationStatus === 'pending' || user.verificationStatus === 'additional_information_required') && <button onClick={() => openIdentityReview(user)} className="rounded-lg border border-[#d7e6e7] bg-[#f2f8f8] px-3 py-2 text-[10px] font-bold text-[#36777c] hover:bg-[#e5f2f2]">Review ID</button>}<button disabled={user.accountStatus !== 'active'} onClick={() => { setFundTarget(user); setFundingError(''); setFundingSuccess(null); }} className="rounded-lg bg-[#eff7f7] px-3 py-2 text-[10px] font-bold text-[#36777c] hover:bg-[#e2f1f1] disabled:cursor-not-allowed disabled:opacity-40">Fund</button><button disabled={update.isPending} onClick={() => setStatus(user.id, user.accountStatus === 'active' ? 'suspended' : 'active')} className="rounded-lg border border-[#dfe6eb] px-3 py-2 text-[10px] font-bold text-[#3f5c75] hover:bg-[#f4f7f8] disabled:opacity-50">{user.accountStatus === 'active' ? 'Suspend' : 'Reactivate'}</button></div></td></tr>)}</tbody></table></div> : <EmptyState title="No users found" text="Try another email or name." />}
       </section>
       <section className="mt-6 overflow-hidden rounded-[20px] border border-[#e1e8ee] bg-white">
         <div className="border-b border-[#edf0f3] px-5 py-4 sm:px-7"><h2 className="text-[14px] font-bold text-[#28405c]">Ledger review</h2><p className="mt-1 text-[10px] text-[#8592a1]">Review completed activity and pending simulation requests. Permanent deletion removes the transaction and its ledger entries; a reason is recorded in the audit log, and deletions that would create a negative wallet balance are blocked.</p></div>
         {deleteError && <p role="alert" className="border-b border-[#edf0f3] bg-[#fff1ef] px-5 py-3 text-[11px] text-[#a24940]">{deleteError}</p>}
         {ledger.isLoading ? <ListSkeleton /> : ledger.isError ? <InlineError text="Ledger records are unavailable." retry={() => ledger.refetch()} /> : ledger.data?.length ? <TransactionList transactions={ledger.data} onDelete={deleteLedgerTransaction} deletePending={deletion.isPending} /> : <EmptyState title="Ledger is clear" text="There are no recorded transactions to review." />}
       </section>
+      {identityTarget && <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#14263e]/55 p-4" role="presentation">
+        <section role="dialog" aria-modal="true" aria-labelledby="identity-review-title" className="max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-[22px] border border-[#dfe7ec] bg-white p-5 shadow-2xl sm:p-7">
+          <div className="flex items-start justify-between gap-4">
+            <div><p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#55868b]">Private admin review</p><h2 id="identity-review-title" className="mt-1 text-[16px] font-bold text-[#29425c]">Review identity documents</h2><p className="mt-1 text-[11px] text-[#7e8d9c]">{identityTarget.email} · {humanize(identityTarget.verificationStatus)}</p></div>
+            <button type="button" aria-label="Close identity review" onClick={() => setIdentityTarget(null)} className="rounded-lg p-2 text-[#6d8092] hover:bg-[#f1f5f7]"><X size={16} /></button>
+          </div>
+          <p className="mt-5 rounded-lg border border-[#d9e8e9] bg-[#f2f8f8] px-4 py-3 text-[10px] leading-4 text-[#4e777a]">Download files only for this review. Approval or rejection permanently deletes the uploaded documents; requesting more information keeps them available.</p>
+          <div className="mt-4">
+            {reviewDocuments.isLoading ? <ListSkeleton /> : reviewDocuments.isError ? <InlineError text="Identity documents could not be loaded." retry={() => reviewDocuments.refetch()} /> : reviewDocuments.data?.length ? (
+              <ul className="space-y-2">
+                {reviewDocuments.data.map((document, index) => (
+                  <li key={document.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#e7edf0] px-4 py-3">
+                    <div><p className="text-[11px] font-semibold text-[#344b64]">Document {index + 1} · {document.contentType === 'application/pdf' ? 'PDF' : document.contentType === 'image/png' ? 'PNG image' : 'JPG image'}</p><p className="mt-1 text-[10px] text-[#8492a0]">{(document.sizeBytes / 1024 / 1024).toFixed(2)} MB · Uploaded {document.uploadedAt ? formatDate(document.uploadedAt) : formatDate(document.createdAt)}</p></div>
+                    <button type="button" onClick={() => window.open(getGetAdminIdentityDocumentContentUrl(document.id), '_blank', 'noopener,noreferrer')} className="rounded-lg border border-[#dfe6eb] px-3 py-2 text-[10px] font-bold text-[#3f5c75] hover:bg-[#f5f8f9]">Download securely</button>
+                  </li>
+                ))}
+              </ul>
+            ) : <EmptyState title="No uploaded documents" text="This member has no files available for review." />}
+          </div>
+          <form onSubmit={submitIdentityReview} className="mt-6 border-t border-[#edf0f2] pt-5">
+            <Field label="Decision">
+              <select value={reviewDecision} onChange={event => setReviewDecision(event.target.value as typeof reviewDecision)} className={inputClass}>
+                <option value="approved">Approve identity</option>
+                <option value="rejected">Reject and close review</option>
+                <option value="additional_information_required">Request more information</option>
+              </select>
+            </Field>
+            {reviewDecision === 'additional_information_required' && <div className="mt-4"><Field label="Message for the member"><textarea required minLength={5} maxLength={500} rows={3} value={reviewMessage} onChange={event => setReviewMessage(event.target.value)} placeholder="Explain what additional documents or details are needed." className={`${inputClass} h-auto py-3`} /></Field></div>}
+            <div className="mt-4"><Field label="Internal audit reason"><textarea required minLength={5} maxLength={500} rows={3} value={reviewReason} onChange={event => setReviewReason(event.target.value)} placeholder="Reason for this identity review decision." className={`${inputClass} h-auto py-3`} /></Field></div>
+            {reviewError && <p role="alert" className="mt-4 rounded-lg bg-[#fff1ef] px-4 py-3 text-[11px] text-[#a24940]">{reviewError}</p>}
+            <div className="mt-5 flex flex-wrap justify-end gap-2"><button type="button" onClick={() => setIdentityTarget(null)} className="rounded-xl border border-[#dfe6eb] px-4 py-3 text-[10px] font-bold text-[#546b80] hover:bg-[#f5f8f9]">Cancel</button><button disabled={updateVerification.isPending || reviewDocuments.isLoading || !reviewDocuments.data?.length} className="rounded-xl bg-[#142f51] px-4 py-3 text-[10px] font-bold text-white hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">{updateVerification.isPending ? 'Saving decision…' : 'Save decision'}</button></div>
+          </form>
+        </section>
+      </div>}
     </>
   );
 }
@@ -835,7 +1076,7 @@ const disclosureCopy: Record<string, { eyebrow: string; title: string; intro: st
   '/about': { eyebrow: 'About Globus', title: 'International by perspective. Careful by design.', intro: 'Globus is a simulation-only multi-currency software platform for people who want a clearer view of global money workflows.', sections: [['A platform, not a bank', 'Globus is not a licensed bank, payment institution or custodian. It does not accept deposits or hold customer funds.'], ['Simulated value stays simulated', 'Currency balances and transfers shown in the product are fictional ledger records. No provider is connected and no live money moves.'], ['Built for clear review', 'Balances, activity and provider requests are presented with statuses and references to make their state easier to understand.']] },
   '/help': { eyebrow: 'Support', title: 'Help, without the fine print.', intro: 'Find your way around Globus and understand what happens when you simulate a transaction.', sections: [['Why are transactions simulated?', 'Globus records fictional ledger activity only. No live payment provider is connected and no external payment can complete.'], ['Can I send someone money?', 'You can simulate a transfer to a registered Globus member or record a simulated external-recipient transfer. Neither is a real payment.'], ['Where can I find my wallet identifier?', 'Open Receive from your account navigation. The identifier helps another registered member direct an internal simulated transfer.']] },
   '/fees': { eyebrow: 'Fees and rates', title: 'Understand costs before any action.', intro: 'Globus does not process provider-backed deposits, withdrawals or currency exchanges.', sections: [['Provider availability', 'External money movement providers are not connected. Add-money, withdrawal and exchange actions create simulated requests only.'], ['Fees', 'No provider transaction fee is charged by Globus because no provider action completes. This does not describe any future third-party provider pricing.'], ['Exchange rates', 'No live exchange quote or guaranteed conversion is provided. Currency values should not be interpreted as exchangeable funds.']] },
-  '/privacy': { eyebrow: 'Privacy notice', title: 'Your information deserves clarity.', intro: 'This page summarizes the kinds of account information a Globus platform may use to provide its software experience.', sections: [['Account details', 'Profile details and account identifiers are used to associate your simulated records with your account. Authentication is provided through Clerk.'], ['Operational records', 'Transactions and requests recorded through the product may include references, status, currency, amount, descriptions and timestamps.'], ['Your choices', 'Use Settings to review your profile. Contact the support team with questions about account information or platform operations.']] },
+  '/privacy': { eyebrow: 'Privacy notice', title: 'Your information deserves clarity.', intro: 'This page summarizes the kinds of account information a Globus platform may use to provide its software experience.', sections: [['Account details', 'Profile details and account identifiers are used to associate your simulated records with your account. Authentication is provided through Clerk.'], ['Private identity documents', 'Documents submitted for internal review are stored privately and accessible only to the submitting member and authorized Globus admins. Files are deleted after approval or rejection. The verification status and an audit record of the decision remain. This simulation review is not legal, bank or government identity verification.'], ['Operational records', 'Transactions and requests recorded through the product may include references, status, currency, amount, descriptions and timestamps.'], ['Your choices', 'Use Settings to review your profile and manage identity documents before submitting them. Contact the support team with questions about account information or platform operations.']] },
   '/terms': { eyebrow: 'Terms of use', title: 'A platform for simulation, not deposits.', intro: 'By using Globus, you understand that the product records simulated financial activity only.', sections: [['No banking service', 'Globus is not a licensed bank and does not accept deposits, provide credit, custody funds or promise payment execution.'], ['Simulated records', 'Displayed balances and transactions are fictional ledger records. Provider requests may be stored for testing but do not mean a deposit, withdrawal or exchange has occurred.'], ['Use responsibly', 'Do not rely on simulated balances or status labels for financial, tax, investment or payment decisions.']] },
   '/contact': { eyebrow: 'Contact', title: 'Contact information is not configured yet.', intro: 'This simulation-only product does not currently have a verified support channel.', sections: [['Account help', 'Visit Help for guidance about the software experience. Do not include passwords, verification codes or sensitive payment details in support requests.'], ['Recorded activity', 'Include the transaction reference when asking about a simulated entry in your account.'], ['Operational disclosure', 'Globus support cannot complete, trace or reverse a real payment through this product.']] },
 };

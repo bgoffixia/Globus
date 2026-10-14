@@ -1,29 +1,35 @@
 import { Router, type IRouter, type RequestHandler } from "express";
 import { getAuth } from "@clerk/express";
-import {
-  asc,
-  eq,
-  inArray,
-  sql,
-} from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
 import {
   CreateBankTransferBody,
   CreateBankTransferResponse,
+  CreateIdentityDocumentUploadUrlBody,
+  CreateIdentityDocumentUploadUrlResponse,
   CreateExternalTransferBody,
   CreateExternalTransferResponse,
   CreateIncomingExternalTransferBody,
   CreateSimulationRequestBody,
+  CompleteIdentityDocumentUploadParams,
+  CompleteIdentityDocumentUploadResponse,
+  DeleteMyIdentityDocumentParams,
+  DeleteMyIdentityDocumentResponse,
   CreateIncomingExternalTransferResponse,
   CreateSimulationRequestResponse,
   GetBankDashboardResponse,
   GetBankProfileResponse,
+  ListMyIdentityDocumentsResponse,
   ListBankTransactionsQueryParams,
   ListBankTransactionsResponse,
   ListBankWalletsResponse,
+  SubmitIdentityDocumentsBody,
+  SubmitIdentityDocumentsResponse,
   UpdateBankProfileBody,
   UpdateBankProfileResponse,
 } from "@workspace/api-zod";
 import {
+  bankAuditLogsTable,
+  bankIdentityDocumentsTable,
   bankLedgerEntriesTable,
   bankSandboxRequestsTable,
   bankTransactionsTable,
@@ -44,6 +50,13 @@ import {
   toBankTransaction,
   userWallet,
 } from "../lib/bank";
+import {
+  createIdentityDocumentUploadUrl,
+  deleteIdentityDocumentObject,
+  getIdentityDocumentFile,
+  sealIdentityDocumentUpload,
+  validateUploadedIdentityDocument,
+} from "../lib/identityDocumentStorage";
 
 const router: IRouter = Router();
 
@@ -57,6 +70,67 @@ const requireSignedIn: RequestHandler = (req, res, next) => {
 
 async function getOrCreateBankUser(clerkUserId: string) {
   return ensureBankUser(clerkUserId);
+}
+
+function identityDocumentResponse(document: typeof bankIdentityDocumentsTable.$inferSelect) {
+  return {
+    id: document.id,
+    contentType: document.contentType as "application/pdf" | "image/jpeg" | "image/png",
+    sizeBytes: document.sizeBytes,
+    status: document.status as "uploading" | "uploaded",
+    createdAt: document.createdAt.toISOString(),
+    uploadedAt: document.uploadedAt?.toISOString() ?? null,
+  };
+}
+
+async function completeIdentityDocument(input: {
+  userId: string;
+  documentId: string;
+  sealUpload: (uploadPath: string) => Promise<string>;
+}) {
+  return db.transaction(async (tx) => {
+    const [user] = await tx
+      .select()
+      .from(bankUsersTable)
+      .where(eq(bankUsersTable.id, input.userId))
+      .for("update");
+    const [document] = await tx
+      .select()
+      .from(bankIdentityDocumentsTable)
+      .where(
+        and(
+          eq(bankIdentityDocumentsTable.id, input.documentId),
+          eq(bankIdentityDocumentsTable.userId, input.userId),
+        ),
+      )
+      .for("update");
+    if (!user || !document) {
+      return { notFound: true as const };
+    }
+    if (user.verificationStatus === "approved" || user.verificationStatus === "pending") {
+      return { error: "Documents cannot be changed while verification is pending or approved." };
+    }
+    if (document.status === "uploaded") {
+      return { document, uploadObjectPath: null };
+    }
+    const sealedPath = await input.sealUpload(document.objectPath);
+    const [updated] = await tx
+      .update(bankIdentityDocumentsTable)
+      .set({
+        objectPath: sealedPath,
+        status: "uploaded",
+        uploadedAt: new Date(),
+      })
+      .where(eq(bankIdentityDocumentsTable.id, document.id))
+      .returning();
+    await tx.insert(bankAuditLogsTable).values({
+      actorUserId: input.userId,
+      targetUserId: input.userId,
+      action: "upload_identity_document",
+      reason: "Member uploaded an identity document for review.",
+    });
+    return { document: updated, uploadObjectPath: document.objectPath };
+  });
 }
 
 router.use("/bank", requireSignedIn);
@@ -78,6 +152,7 @@ router.get("/bank/me", async (req, res): Promise<void> => {
       phone: user.phone,
       country: user.country,
       verificationStatus: user.verificationStatus,
+      verificationNote: user.verificationNote,
       accountStatus: user.accountStatus,
       createdAt: user.createdAt.toISOString(),
     }),
@@ -107,6 +182,7 @@ router.get("/bank/dashboard", async (req, res): Promise<void> => {
         phone: profile.phone,
         country: profile.country,
         verificationStatus: profile.verificationStatus,
+        verificationNote: profile.verificationNote,
         accountStatus: profile.accountStatus,
         createdAt: profile.createdAt.toISOString(),
       },
@@ -189,11 +265,359 @@ router.put("/bank/profile", async (req, res): Promise<void> => {
       phone: user.phone,
       country: user.country,
       verificationStatus: user.verificationStatus,
+      verificationNote: user.verificationNote,
       accountStatus: user.accountStatus,
       createdAt: user.createdAt.toISOString(),
     }),
   );
 });
+
+router.get("/bank/verification/documents", async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId;
+  if (!userId) {
+    res.status(401).json({ error: "Sign in to access your Globus account." });
+    return;
+  }
+  await getOrCreateBankUser(userId);
+  const documents = await db
+    .select()
+    .from(bankIdentityDocumentsTable)
+    .where(eq(bankIdentityDocumentsTable.userId, userId))
+    .orderBy(desc(bankIdentityDocumentsTable.createdAt));
+  res.json(
+    ListMyIdentityDocumentsResponse.parse(
+      documents.map(identityDocumentResponse),
+    ),
+  );
+});
+
+router.post(
+  "/bank/verification/documents/upload-url",
+  async (req, res): Promise<void> => {
+    const userId = getAuth(req).userId;
+    if (!userId) {
+      res.status(401).json({ error: "Sign in to access your Globus account." });
+      return;
+    }
+    const parsed = CreateIdentityDocumentUploadUrlBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+    await getOrCreateBankUser(userId);
+
+    let upload: { uploadUrl: string; objectPath: string };
+    try {
+      upload = await createIdentityDocumentUploadUrl();
+    } catch (error) {
+      req.log.error({ err: error }, "Could not create identity document upload URL");
+      res.status(503).json({ error: "Private document storage is unavailable." });
+      return;
+    }
+
+    const result = await db.transaction(async (tx) => {
+      const [user] = await tx
+        .select()
+        .from(bankUsersTable)
+        .where(eq(bankUsersTable.id, userId))
+        .for("update");
+      if (!user) {
+        return { notFound: true as const };
+      }
+      if (user.verificationStatus === "approved" || user.verificationStatus === "pending") {
+        return { error: "Documents cannot be changed while verification is pending or approved." };
+      }
+      const [documentCount] = await tx
+        .select({ value: count() })
+        .from(bankIdentityDocumentsTable)
+        .where(eq(bankIdentityDocumentsTable.userId, userId));
+      if ((documentCount?.value ?? 0) >= 5) {
+        return { error: "Remove an existing document before uploading another. You can upload up to five." };
+      }
+      const [document] = await tx
+        .insert(bankIdentityDocumentsTable)
+        .values({
+          userId,
+          objectPath: upload.objectPath,
+          contentType: parsed.data.contentType,
+          sizeBytes: parsed.data.sizeBytes,
+          status: "uploading",
+        })
+        .returning();
+      return { document };
+    });
+
+    if ("notFound" in result) {
+      res.status(404).json({ error: "User record not found." });
+      return;
+    }
+    if ("error" in result) {
+      res.status(409).json({ error: result.error });
+      return;
+    }
+    res.status(201).json(
+      CreateIdentityDocumentUploadUrlResponse.parse({
+        documentId: result.document.id,
+        uploadUrl: upload.uploadUrl,
+      }),
+    );
+  },
+);
+
+router.post(
+  "/bank/verification/documents/:documentId/complete",
+  async (req, res): Promise<void> => {
+    const params = CompleteIdentityDocumentUploadParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const userId = getAuth(req).userId;
+    if (!userId) {
+      res.status(401).json({ error: "Sign in to access your Globus account." });
+      return;
+    }
+    const [document] = await db
+      .select()
+      .from(bankIdentityDocumentsTable)
+      .where(
+        and(
+          eq(bankIdentityDocumentsTable.id, params.data.documentId),
+          eq(bankIdentityDocumentsTable.userId, userId),
+        ),
+      )
+      .limit(1);
+    if (!document) {
+      res.status(404).json({ error: "Identity document not found." });
+      return;
+    }
+    if (document.status === "uploaded") {
+      res.json(CompleteIdentityDocumentUploadResponse.parse(identityDocumentResponse(document)));
+      return;
+    }
+
+    const user = await getOrCreateBankUser(userId);
+    if (user.verificationStatus === "approved" || user.verificationStatus === "pending") {
+      res.status(409).json({ error: "Documents cannot be changed while verification is pending or approved." });
+      return;
+    }
+    let valid = false;
+    try {
+      valid = await validateUploadedIdentityDocument(
+        getIdentityDocumentFile(document.objectPath),
+        document.contentType,
+        document.sizeBytes,
+      );
+    } catch (error) {
+      req.log.warn({ err: error }, "Identity document upload is not available for validation");
+    }
+    if (!valid) {
+      try {
+        await deleteIdentityDocumentObject(document.objectPath);
+        await db
+          .delete(bankIdentityDocumentsTable)
+          .where(
+            and(
+              eq(bankIdentityDocumentsTable.id, document.id),
+              eq(bankIdentityDocumentsTable.userId, userId),
+              eq(bankIdentityDocumentsTable.status, "uploading"),
+            ),
+          );
+      } catch (error) {
+        req.log.warn({ err: error }, "Invalid identity upload could not be cleaned up");
+      }
+      res.status(409).json({
+        error: "The upload is missing, incomplete, or does not match the selected PDF, JPG, or PNG file type.",
+      });
+      return;
+    }
+
+    let sealedObjectPath: string | null = null;
+    let result: Awaited<ReturnType<typeof completeIdentityDocument>>;
+    try {
+      result = await completeIdentityDocument({
+        userId,
+        documentId: document.id,
+        sealUpload: async (uploadPath) => {
+          sealedObjectPath = await sealIdentityDocumentUpload(uploadPath);
+          return sealedObjectPath;
+        },
+      });
+    } catch (error) {
+      if (sealedObjectPath) {
+        await deleteIdentityDocumentObject(sealedObjectPath).catch(() => undefined);
+      }
+      req.log.error({ err: error }, "Could not finalize a private identity document");
+      res.status(503).json({ error: "The document could not be finalized. Please try again." });
+      return;
+    }
+
+    if ("notFound" in result) {
+      res.status(404).json({ error: "Identity document not found." });
+      return;
+    }
+    if ("error" in result) {
+      res.status(409).json({ error: result.error });
+      return;
+    }
+    if (result.uploadObjectPath) {
+      try {
+        await deleteIdentityDocumentObject(result.uploadObjectPath);
+      } catch (error) {
+        req.log.warn({ err: error }, "Temporary identity upload could not be removed");
+      }
+    }
+    res.json(
+      CompleteIdentityDocumentUploadResponse.parse(
+        identityDocumentResponse(result.document),
+      ),
+    );
+  },
+);
+
+router.delete(
+  "/bank/verification/documents/:documentId",
+  async (req, res): Promise<void> => {
+    const params = DeleteMyIdentityDocumentParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const userId = getAuth(req).userId;
+    if (!userId) {
+      res.status(401).json({ error: "Sign in to access your Globus account." });
+      return;
+    }
+    const result = await db.transaction(async (tx) => {
+      const [user] = await tx
+        .select()
+        .from(bankUsersTable)
+        .where(eq(bankUsersTable.id, userId))
+        .for("update");
+      const [document] = await tx
+        .select()
+        .from(bankIdentityDocumentsTable)
+        .where(
+          and(
+            eq(bankIdentityDocumentsTable.id, params.data.documentId),
+            eq(bankIdentityDocumentsTable.userId, userId),
+          ),
+        )
+        .for("update");
+      if (!user || !document) {
+        return { notFound: true as const };
+      }
+      if (user.verificationStatus === "pending" || user.verificationStatus === "approved") {
+        return { error: "Documents cannot be removed while verification is pending or approved." };
+      }
+      try {
+        await deleteIdentityDocumentObject(document.objectPath);
+      } catch (error) {
+        req.log.error({ err: error }, "Could not remove identity document");
+        return { error: "The document could not be removed from private storage." };
+      }
+      await tx
+        .delete(bankIdentityDocumentsTable)
+        .where(eq(bankIdentityDocumentsTable.id, document.id));
+      await tx.insert(bankAuditLogsTable).values({
+        actorUserId: userId,
+        targetUserId: userId,
+        action: "remove_identity_document",
+        reason: "Member removed an identity document before review.",
+      });
+      return { deleted: true as const };
+    });
+    if ("notFound" in result) {
+      res.status(404).json({ error: "Identity document not found." });
+      return;
+    }
+    if ("error" in result) {
+      res.status(409).json({ error: result.error });
+      return;
+    }
+    res.status(204).send();
+    DeleteMyIdentityDocumentResponse.parse(undefined);
+  },
+);
+
+router.post(
+  "/bank/verification/submit",
+  async (req, res): Promise<void> => {
+    const parsed = SubmitIdentityDocumentsBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+    const userId = getAuth(req).userId;
+    if (!userId) {
+      res.status(401).json({ error: "Sign in to access your Globus account." });
+      return;
+    }
+    await getOrCreateBankUser(userId);
+    const result = await db.transaction(async (tx) => {
+      const [user] = await tx
+        .select()
+        .from(bankUsersTable)
+        .where(eq(bankUsersTable.id, userId))
+        .for("update");
+      if (!user) {
+        return { notFound: true as const };
+      }
+      if (user.verificationStatus === "pending" || user.verificationStatus === "approved") {
+        return { error: "This verification is already pending or approved." };
+      }
+      const documents = await tx
+        .select({ status: bankIdentityDocumentsTable.status })
+        .from(bankIdentityDocumentsTable)
+        .where(eq(bankIdentityDocumentsTable.userId, userId));
+      if (documents.some((document) => document.status === "uploading")) {
+        return { error: "Finish or remove each in-progress upload before submitting for review." };
+      }
+      const uploadedCount = documents.filter((document) => document.status === "uploaded").length;
+      if (uploadedCount === 0) {
+        return { error: "Upload at least one identity document before submitting." };
+      }
+      const [updated] = await tx
+        .update(bankUsersTable)
+        .set({
+          verificationStatus: "pending",
+          verificationNote: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(bankUsersTable.id, userId))
+        .returning();
+      await tx.insert(bankAuditLogsTable).values({
+        actorUserId: userId,
+        targetUserId: userId,
+        action: "submit_identity_documents",
+        reason: `Member submitted ${uploadedCount} identity document(s) for review.`,
+      });
+      return { user: updated };
+    });
+    if ("notFound" in result) {
+      res.status(404).json({ error: "User record not found." });
+      return;
+    }
+    if ("error" in result) {
+      res.status(409).json({ error: result.error });
+      return;
+    }
+    res.json(
+      SubmitIdentityDocumentsResponse.parse({
+        id: result.user.id,
+        email: result.user.email,
+        firstName: result.user.firstName,
+        lastName: result.user.lastName,
+        phone: result.user.phone,
+        country: result.user.country,
+        verificationStatus: result.user.verificationStatus,
+        verificationNote: result.user.verificationNote,
+        accountStatus: result.user.accountStatus,
+        createdAt: result.user.createdAt.toISOString(),
+      }),
+    );
+  },
+);
 
 router.post("/bank/transfers", async (req, res): Promise<void> => {
   const userId = getAuth(req).userId;

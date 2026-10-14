@@ -28,6 +28,7 @@ export const GetBankProfileResponse = zod.object({
   "phone": zod.string().nullable(),
   "country": zod.string().nullable(),
   "verificationStatus": zod.enum(['not_started', 'pending', 'approved', 'rejected', 'additional_information_required']),
+  "verificationNote": zod.string().nullable(),
   "accountStatus": zod.enum(['active', 'suspended']),
   "createdAt": zod.coerce.date()
 })
@@ -45,6 +46,7 @@ export const GetBankDashboardResponse = zod.object({
   "phone": zod.string().nullable(),
   "country": zod.string().nullable(),
   "verificationStatus": zod.enum(['not_started', 'pending', 'approved', 'rejected', 'additional_information_required']),
+  "verificationNote": zod.string().nullable(),
   "accountStatus": zod.enum(['active', 'suspended']),
   "createdAt": zod.coerce.date()
 }),
@@ -152,6 +154,95 @@ export const UpdateBankProfileResponse = zod.object({
   "phone": zod.string().nullable(),
   "country": zod.string().nullable(),
   "verificationStatus": zod.enum(['not_started', 'pending', 'approved', 'rejected', 'additional_information_required']),
+  "verificationNote": zod.string().nullable(),
+  "accountStatus": zod.enum(['active', 'suspended']),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary List identity documents belonging to the authenticated user
+ */
+export const listMyIdentityDocumentsResponseSizeBytesMax = 10485760;
+
+
+
+export const ListMyIdentityDocumentsResponseItem = zod.object({
+  "id": zod.string().uuid(),
+  "contentType": zod.enum(['application/pdf', 'image/jpeg', 'image/png']),
+  "sizeBytes": zod.number().int().min(1).max(listMyIdentityDocumentsResponseSizeBytesMax),
+  "status": zod.enum(['uploading', 'uploaded']),
+  "createdAt": zod.coerce.date(),
+  "uploadedAt": zod.coerce.date().nullable()
+})
+export const ListMyIdentityDocumentsResponse = zod.array(ListMyIdentityDocumentsResponseItem)
+
+
+/**
+ * @summary Request a private upload URL for an identity document
+ */
+export const createIdentityDocumentUploadUrlBodySizeBytesMax = 10485760;
+
+
+
+export const CreateIdentityDocumentUploadUrlBody = zod.object({
+  "contentType": zod.enum(['application/pdf', 'image/jpeg', 'image/png']),
+  "sizeBytes": zod.number().int().min(1).max(createIdentityDocumentUploadUrlBodySizeBytesMax)
+})
+
+export const CreateIdentityDocumentUploadUrlResponse = zod.object({
+  "documentId": zod.string().uuid(),
+  "uploadUrl": zod.string().url()
+})
+
+
+/**
+ * @summary Validate and complete an identity document upload
+ */
+export const CompleteIdentityDocumentUploadParams = zod.object({
+  "documentId": zod.coerce.string().uuid()
+})
+
+export const completeIdentityDocumentUploadResponseSizeBytesMax = 10485760;
+
+
+
+export const CompleteIdentityDocumentUploadResponse = zod.object({
+  "id": zod.string().uuid(),
+  "contentType": zod.enum(['application/pdf', 'image/jpeg', 'image/png']),
+  "sizeBytes": zod.number().int().min(1).max(completeIdentityDocumentUploadResponseSizeBytesMax),
+  "status": zod.enum(['uploading', 'uploaded']),
+  "createdAt": zod.coerce.date(),
+  "uploadedAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Remove an identity document before it enters review
+ */
+export const DeleteMyIdentityDocumentParams = zod.object({
+  "documentId": zod.coerce.string().uuid()
+})
+
+export const DeleteMyIdentityDocumentResponse = zod.void()
+
+
+/**
+ * @summary Submit uploaded identity documents for review
+ */
+export const SubmitIdentityDocumentsBody = zod.object({
+  "confirmed": zod.literal(true)
+})
+
+export const SubmitIdentityDocumentsResponse = zod.object({
+  "id": zod.string(),
+  "email": zod.string(),
+  "firstName": zod.string().nullable(),
+  "lastName": zod.string().nullable(),
+  "phone": zod.string().nullable(),
+  "country": zod.string().nullable(),
+  "verificationStatus": zod.enum(['not_started', 'pending', 'approved', 'rejected', 'additional_information_required']),
+  "verificationNote": zod.string().nullable(),
   "accountStatus": zod.enum(['active', 'suspended']),
   "createdAt": zod.coerce.date()
 })
@@ -350,6 +441,7 @@ export const ListAdminUsersResponseItem = zod.object({
   "lastName": zod.string().nullable(),
   "country": zod.string().nullable(),
   "verificationStatus": zod.enum(['not_started', 'pending', 'approved', 'rejected', 'additional_information_required']),
+  "verificationNote": zod.string().nullable(),
   "accountStatus": zod.enum(['active', 'suspended']),
   "walletCount": zod.number().int(),
   "createdAt": zod.coerce.date()
@@ -384,6 +476,79 @@ export const UpdateAdminUserStatusResponse = zod.object({
   "lastName": zod.string().nullable(),
   "country": zod.string().nullable(),
   "verificationStatus": zod.enum(['not_started', 'pending', 'approved', 'rejected', 'additional_information_required']),
+  "verificationNote": zod.string().nullable(),
+  "accountStatus": zod.enum(['active', 'suspended']),
+  "walletCount": zod.number().int(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary List a user's identity documents for admin review
+ */
+
+
+
+export const ListAdminIdentityDocumentsParams = zod.object({
+  "userId": zod.coerce.string().min(1)
+})
+
+export const listAdminIdentityDocumentsResponseSizeBytesMax = 10485760;
+
+
+
+export const ListAdminIdentityDocumentsResponseItem = zod.object({
+  "id": zod.string().uuid(),
+  "contentType": zod.enum(['application/pdf', 'image/jpeg', 'image/png']),
+  "sizeBytes": zod.number().int().min(1).max(listAdminIdentityDocumentsResponseSizeBytesMax),
+  "status": zod.enum(['uploading', 'uploaded']),
+  "createdAt": zod.coerce.date(),
+  "uploadedAt": zod.coerce.date().nullable()
+})
+export const ListAdminIdentityDocumentsResponse = zod.array(ListAdminIdentityDocumentsResponseItem)
+
+
+/**
+ * @summary Stream an identity document to an authorized admin
+ */
+export const GetAdminIdentityDocumentContentParams = zod.object({
+  "documentId": zod.coerce.string().uuid()
+})
+
+export const GetAdminIdentityDocumentContentResponse = zod.unknown()
+
+
+/**
+ * @summary Record an identity review decision
+ */
+
+
+
+export const UpdateAdminUserVerificationParams = zod.object({
+  "userId": zod.coerce.string().min(1)
+})
+
+export const updateAdminUserVerificationBodyReasonMin = 5;
+export const updateAdminUserVerificationBodyReasonMax = 500;
+
+export const updateAdminUserVerificationBodyUserMessageMax = 500;
+
+
+
+export const UpdateAdminUserVerificationBody = zod.object({
+  "verificationStatus": zod.enum(['approved', 'rejected', 'additional_information_required']),
+  "reason": zod.string().min(updateAdminUserVerificationBodyReasonMin).max(updateAdminUserVerificationBodyReasonMax),
+  "userMessage": zod.string().max(updateAdminUserVerificationBodyUserMessageMax).optional()
+})
+
+export const UpdateAdminUserVerificationResponse = zod.object({
+  "id": zod.string(),
+  "email": zod.string(),
+  "firstName": zod.string().nullable(),
+  "lastName": zod.string().nullable(),
+  "country": zod.string().nullable(),
+  "verificationStatus": zod.enum(['not_started', 'pending', 'approved', 'rejected', 'additional_information_required']),
+  "verificationNote": zod.string().nullable(),
   "accountStatus": zod.enum(['active', 'suspended']),
   "walletCount": zod.number().int(),
   "createdAt": zod.coerce.date()

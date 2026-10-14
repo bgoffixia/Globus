@@ -8,6 +8,8 @@
 
 export * from './adminAccess';
 export * from './adminFundingInput';
+export * from './adminIdentityVerificationInput';
+export * from './adminIdentityVerificationInputVerificationStatus';
 export * from './adminSummary';
 export * from './adminSummaryProviderStatus';
 export * from './adminTransactionDeleteInput';
@@ -31,6 +33,12 @@ export * from './errorResponse';
 export * from './externalTransferInput';
 export * from './forbiddenResponse';
 export * from './healthStatus';
+export * from './identityDocument';
+export * from './identityDocumentContentType';
+export * from './identityDocumentStatus';
+export * from './identityDocumentUploadInput';
+export * from './identityDocumentUploadUrl';
+export * from './identityVerificationSubmissionInput';
 export * from './incomingExternalTransferInput';
 export * from './listAdminLedgerParams';
 export * from './listAdminUsersParams';

@@ -135,6 +135,114 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /bank/verification/documents:
+    get:
+      operationId: listMyIdentityDocuments
+      tags: [bank]
+      summary: List identity documents belonging to the authenticated user
+      responses:
+        "200":
+          description: The user's identity documents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/IdentityDocument"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /bank/verification/documents/upload-url:
+    post:
+      operationId: createIdentityDocumentUploadUrl
+      tags: [bank]
+      summary: Request a private upload URL for an identity document
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IdentityDocumentUploadInput"
+      responses:
+        "201":
+          description: Upload URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdentityDocumentUploadUrl"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /bank/verification/documents/{documentId}/complete:
+    post:
+      operationId: completeIdentityDocumentUpload
+      tags: [bank]
+      summary: Validate and complete an identity document upload
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Uploaded identity document
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdentityDocument"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /bank/verification/documents/{documentId}:
+    delete:
+      operationId: deleteMyIdentityDocument
+      tags: [bank]
+      summary: Remove an identity document before it enters review
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Document removed
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /bank/verification/submit:
+    post:
+      operationId: submitIdentityDocuments
+      tags: [bank]
+      summary: Submit uploaded identity documents for review
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IdentityVerificationSubmissionInput"
+      responses:
+        "200":
+          description: Verification request submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BankProfile"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
   /bank/transfers:
     post:
       operationId: createBankTransfer
@@ -325,6 +433,94 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+  /bank/admin/users/{userId}/verification-documents:
+    get:
+      operationId: listAdminIdentityDocuments
+      tags: [admin]
+      summary: List a user's identity documents for admin review
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: Identity documents available for review
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/IdentityDocument"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /bank/admin/identity-documents/{documentId}/content:
+    get:
+      operationId: getAdminIdentityDocumentContent
+      tags: [admin]
+      summary: Stream an identity document to an authorized admin
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Private identity document content
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /bank/admin/users/{userId}/verification:
+    patch:
+      operationId: updateAdminUserVerification
+      tags: [admin]
+      summary: Record an identity review decision
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminIdentityVerificationInput"
+      responses:
+        "200":
+          description: Updated identity review status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
   /bank/admin/users/{userId}/funding:
     post:
       operationId: createAdminFunding
@@ -502,9 +698,10 @@ components:
         phone: { type: ["string", "null"] }
         country: { type: ["string", "null"] }
         verificationStatus: { type: string, enum: [not_started, pending, approved, rejected, additional_information_required] }
+        verificationNote: { type: ["string", "null"] }
         accountStatus: { type: string, enum: [active, suspended] }
         createdAt: { type: string, format: date-time }
-      required: [id, email, firstName, lastName, phone, country, verificationStatus, accountStatus, createdAt]
+      required: [id, email, firstName, lastName, phone, country, verificationStatus, verificationNote, accountStatus, createdAt]
     BankProfileInput:
       type: object
       properties:
@@ -514,6 +711,36 @@ components:
         country: { type: string, minLength: 2, maxLength: 80 }
         acceptedTerms: { type: boolean, const: true }
       required: [firstName, lastName, phone, country, acceptedTerms]
+    IdentityDocumentContentType:
+      type: string
+      enum: [application/pdf, image/jpeg, image/png]
+    IdentityDocument:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        contentType: { $ref: "#/components/schemas/IdentityDocumentContentType" }
+        sizeBytes: { type: integer, minimum: 1, maximum: 10485760 }
+        status: { type: string, enum: [uploading, uploaded] }
+        createdAt: { type: string, format: date-time }
+        uploadedAt: { type: ["string", "null"], format: date-time }
+      required: [id, contentType, sizeBytes, status, createdAt, uploadedAt]
+    IdentityDocumentUploadInput:
+      type: object
+      properties:
+        contentType: { $ref: "#/components/schemas/IdentityDocumentContentType" }
+        sizeBytes: { type: integer, minimum: 1, maximum: 10485760 }
+      required: [contentType, sizeBytes]
+    IdentityDocumentUploadUrl:
+      type: object
+      properties:
+        documentId: { type: string, format: uuid }
+        uploadUrl: { type: string, format: uri }
+      required: [documentId, uploadUrl]
+    IdentityVerificationSubmissionInput:
+      type: object
+      properties:
+        confirmed: { type: boolean, const: true }
+      required: [confirmed]
     BankTransaction:
       type: object
       properties:
@@ -622,16 +849,24 @@ components:
         lastName: { type: ["string", "null"] }
         country: { type: ["string", "null"] }
         verificationStatus: { type: string, enum: [not_started, pending, approved, rejected, additional_information_required] }
+        verificationNote: { type: ["string", "null"] }
         accountStatus: { type: string, enum: [active, suspended] }
         walletCount: { type: integer }
         createdAt: { type: string, format: date-time }
-      required: [id, email, firstName, lastName, country, verificationStatus, accountStatus, walletCount, createdAt]
+      required: [id, email, firstName, lastName, country, verificationStatus, verificationNote, accountStatus, walletCount, createdAt]
     AdminUserStatusInput:
       type: object
       properties:
         accountStatus: { type: string, enum: [active, suspended] }
         reason: { type: string, minLength: 5, maxLength: 500 }
       required: [accountStatus, reason]
+    AdminIdentityVerificationInput:
+      type: object
+      properties:
+        verificationStatus: { type: string, enum: [approved, rejected, additional_information_required] }
+        reason: { type: string, minLength: 5, maxLength: 500 }
+        userMessage: { type: string, maxLength: 500 }
+      required: [verificationStatus, reason]
     AdminFundingInput:
       type: object
       properties:

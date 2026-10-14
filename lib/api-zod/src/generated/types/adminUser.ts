@@ -18,6 +18,8 @@ export interface AdminUser {
   /** @nullable */
   country: string | null;
   verificationStatus: AdminUserVerificationStatus;
+  /** @nullable */
+  verificationNote: string | null;
   accountStatus: AdminUserAccountStatus;
   walletCount: number;
   createdAt: Date;

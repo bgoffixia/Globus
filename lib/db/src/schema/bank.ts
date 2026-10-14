@@ -52,6 +52,7 @@ export const bankUsersTable = pgTable("bank_users", {
   phone: text("phone"),
   country: text("country"),
   verificationStatus: text("verification_status").notNull().default("not_started"),
+  verificationNote: text("verification_note"),
   accountStatus: text("account_status").notNull().default("active"),
   acceptedTermsAt: timestamp("accepted_terms_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })

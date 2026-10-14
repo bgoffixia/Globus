@@ -20,6 +20,8 @@ export interface BankProfile {
   /** @nullable */
   country: string | null;
   verificationStatus: BankProfileVerificationStatus;
+  /** @nullable */
+  verificationNote: string | null;
   accountStatus: BankProfileAccountStatus;
   createdAt: Date;
 }

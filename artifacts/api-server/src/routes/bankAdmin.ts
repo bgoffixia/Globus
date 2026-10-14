@@ -1,4 +1,5 @@
 import { Router, type IRouter, type RequestHandler } from "express";
+import { pipeline } from "node:stream/promises";
 import { getAuth } from "@clerk/express";
 import { and, asc, count, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import {
@@ -8,18 +9,25 @@ import {
   DeleteAdminTransactionBody,
   DeleteAdminTransactionParams,
   DeleteAdminTransactionResponse,
+  GetAdminIdentityDocumentContentParams,
   GetAdminAccessResponse,
   GetAdminSummaryResponse,
   ListAdminLedgerQueryParams,
   ListAdminLedgerResponse,
+  ListAdminIdentityDocumentsParams,
+  ListAdminIdentityDocumentsResponse,
   ListAdminUsersQueryParams,
   ListAdminUsersResponse,
+  UpdateAdminUserVerificationBody,
+  UpdateAdminUserVerificationParams,
+  UpdateAdminUserVerificationResponse,
   UpdateAdminUserStatusBody,
   UpdateAdminUserStatusParams,
   UpdateAdminUserStatusResponse,
 } from "@workspace/api-zod";
 import {
   bankAuditLogsTable,
+  bankIdentityDocumentsTable,
   bankLedgerEntriesTable,
   bankSandboxRequestsTable,
   bankTransactionsTable,
@@ -35,6 +43,10 @@ import {
   toBankTransaction,
   userWallet,
 } from "../lib/bank";
+import {
+  deleteIdentityDocumentObject,
+  getIdentityDocumentFile,
+} from "../lib/identityDocumentStorage";
 
 const router: IRouter = Router();
 
@@ -67,6 +79,81 @@ const requireAdmin: RequestHandler = (req, res, next) => {
   }
   next();
 };
+
+async function runIdentityReview(input: {
+  actorUserId: string;
+  userId: string;
+  verificationStatus:
+    | "approved"
+    | "rejected"
+    | "additional_information_required";
+  reason: string;
+  userMessage: string | null;
+}) {
+  return db.transaction(async (tx) => {
+    const [user] = await tx
+      .select()
+      .from(bankUsersTable)
+      .where(eq(bankUsersTable.id, input.userId))
+      .for("update");
+    if (!user) {
+      return { notFound: true as const };
+    }
+    if (
+      user.verificationStatus !== "pending" &&
+      user.verificationStatus !== "additional_information_required"
+    ) {
+      return { error: "This user does not have an identity review awaiting a decision." };
+    }
+
+    const documents = await tx
+      .select()
+      .from(bankIdentityDocumentsTable)
+      .where(eq(bankIdentityDocumentsTable.userId, input.userId))
+      .for("update");
+    if (
+      documents.length === 0 ||
+      documents.some((document) => document.status !== "uploaded")
+    ) {
+      return { error: "At least one fully uploaded identity document is required." };
+    }
+
+    const finalDecision =
+      input.verificationStatus === "approved" ||
+      input.verificationStatus === "rejected";
+    if (finalDecision) {
+      for (const document of documents) {
+        await deleteIdentityDocumentObject(document.objectPath);
+      }
+    }
+
+    const [updated] = await tx
+      .update(bankUsersTable)
+      .set({
+        verificationStatus: input.verificationStatus,
+        verificationNote: input.userMessage,
+        updatedAt: new Date(),
+      })
+      .where(eq(bankUsersTable.id, input.userId))
+      .returning();
+    if (finalDecision) {
+      await tx
+        .delete(bankIdentityDocumentsTable)
+        .where(eq(bankIdentityDocumentsTable.userId, input.userId));
+    }
+    await tx.insert(bankAuditLogsTable).values({
+      actorUserId: input.actorUserId,
+      targetUserId: input.userId,
+      action: `identity_review_${input.verificationStatus}`,
+      reason: input.reason,
+    });
+    const [walletCount] = await tx
+      .select({ value: count() })
+      .from(bankWalletsTable)
+      .where(eq(bankWalletsTable.userId, input.userId));
+    return { user: updated, walletCount: Number(walletCount?.value ?? 0) };
+  });
+}
 
 router.get("/bank/admin/access", requireSignedIn, (req, res): void => {
   const userId = getAuth(req).userId;
@@ -125,6 +212,7 @@ router.get("/bank/admin/users", requireAdmin, async (req, res): Promise<void> =>
       lastName: bankUsersTable.lastName,
       country: bankUsersTable.country,
       verificationStatus: bankUsersTable.verificationStatus,
+      verificationNote: bankUsersTable.verificationNote,
       accountStatus: bankUsersTable.accountStatus,
       createdAt: bankUsersTable.createdAt,
       walletCount: count(bankWalletsTable.id),
@@ -146,6 +234,7 @@ router.get("/bank/admin/users", requireAdmin, async (req, res): Promise<void> =>
       bankUsersTable.lastName,
       bankUsersTable.country,
       bankUsersTable.verificationStatus,
+      bankUsersTable.verificationNote,
       bankUsersTable.accountStatus,
       bankUsersTable.createdAt,
     )
@@ -162,6 +251,7 @@ router.get("/bank/admin/users", requireAdmin, async (req, res): Promise<void> =>
           | "approved"
           | "rejected"
           | "additional_information_required",
+        verificationNote: row.verificationNote,
         accountStatus: row.accountStatus as "active" | "suspended",
         createdAt: row.createdAt.toISOString(),
         walletCount: Number(row.walletCount),
@@ -240,9 +330,214 @@ router.patch(
         lastName: result.lastName,
         country: result.country,
         verificationStatus: result.verificationStatus,
+        verificationNote: result.verificationNote,
         accountStatus: result.accountStatus,
         walletCount: walletCount?.value ?? 0,
         createdAt: result.createdAt.toISOString(),
+      }),
+    );
+  },
+);
+
+router.get(
+  "/bank/admin/users/:userId/verification-documents",
+  requireAdmin,
+  async (req, res): Promise<void> => {
+    const params = ListAdminIdentityDocumentsParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const [user] = await db
+      .select({
+        id: bankUsersTable.id,
+        verificationStatus: bankUsersTable.verificationStatus,
+      })
+      .from(bankUsersTable)
+      .where(eq(bankUsersTable.id, params.data.userId))
+      .limit(1);
+    if (!user) {
+      res.status(404).json({ error: "User record not found." });
+      return;
+    }
+    if (
+      user.verificationStatus !== "pending" &&
+      user.verificationStatus !== "additional_information_required"
+    ) {
+      res.json(ListAdminIdentityDocumentsResponse.parse([]));
+      return;
+    }
+    const documents = await db
+      .select()
+      .from(bankIdentityDocumentsTable)
+      .where(
+        and(
+          eq(bankIdentityDocumentsTable.userId, user.id),
+          eq(bankIdentityDocumentsTable.status, "uploaded"),
+        ),
+      )
+      .orderBy(asc(bankIdentityDocumentsTable.createdAt));
+    res.json(
+      ListAdminIdentityDocumentsResponse.parse(
+        documents.map((document) => ({
+          id: document.id,
+          contentType: document.contentType as
+            | "application/pdf"
+            | "image/jpeg"
+            | "image/png",
+          sizeBytes: document.sizeBytes,
+          status: document.status as "uploading" | "uploaded",
+          createdAt: document.createdAt.toISOString(),
+          uploadedAt: document.uploadedAt?.toISOString() ?? null,
+        })),
+      ),
+    );
+  },
+);
+
+router.get(
+  "/bank/admin/identity-documents/:documentId/content",
+  requireAdmin,
+  async (req, res): Promise<void> => {
+    const params = GetAdminIdentityDocumentContentParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const [document] = await db
+      .select({
+        document: bankIdentityDocumentsTable,
+        verificationStatus: bankUsersTable.verificationStatus,
+      })
+      .from(bankIdentityDocumentsTable)
+      .innerJoin(
+        bankUsersTable,
+        eq(bankUsersTable.id, bankIdentityDocumentsTable.userId),
+      )
+      .where(
+        and(
+          eq(bankIdentityDocumentsTable.id, params.data.documentId),
+          eq(bankIdentityDocumentsTable.status, "uploaded"),
+        ),
+      )
+      .limit(1);
+    if (
+      !document ||
+      (document.verificationStatus !== "pending" &&
+        document.verificationStatus !== "additional_information_required")
+    ) {
+      res.status(404).json({ error: "Identity document not found." });
+      return;
+    }
+    try {
+      const file = getIdentityDocumentFile(document.document.objectPath);
+      const [exists] = await file.exists();
+      if (!exists) {
+        res.status(404).json({ error: "Identity document not found." });
+        return;
+      }
+      const extension =
+        document.document.contentType === "application/pdf"
+          ? "pdf"
+          : document.document.contentType === "image/png"
+            ? "png"
+            : "jpg";
+      res.setHeader("Content-Type", document.document.contentType);
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="identity-document-${document.document.id}.${extension}"`,
+      );
+      res.setHeader("Content-Length", String(document.document.sizeBytes));
+      res.setHeader("Cache-Control", "private, no-store");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      await pipeline(file.createReadStream(), res);
+    } catch (error) {
+      req.log.error({ err: error }, "Could not stream a private identity document");
+      if (!res.headersSent) {
+        res.status(503).json({ error: "The identity document is temporarily unavailable." });
+      } else {
+        res.destroy(error instanceof Error ? error : undefined);
+      }
+    }
+  },
+);
+
+router.patch(
+  "/bank/admin/users/:userId/verification",
+  requireAdmin,
+  async (req, res): Promise<void> => {
+    const params = UpdateAdminUserVerificationParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const parsed = UpdateAdminUserVerificationBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+    const actorUserId = getAuth(req).userId;
+    if (!actorUserId) {
+      res.status(401).json({ error: "Sign in to access your Globus account." });
+      return;
+    }
+    if (params.data.userId === actorUserId) {
+      res.status(400).json({ error: "Administrators cannot review their own identity." });
+      return;
+    }
+    const reason = parsed.data.reason.trim();
+    const userMessage = parsed.data.userMessage?.trim() ?? "";
+    if (reason.length < 5) {
+      res.status(400).json({ error: "Enter an audit reason of at least five characters." });
+      return;
+    }
+    if (
+      parsed.data.verificationStatus === "additional_information_required" &&
+      !userMessage
+    ) {
+      res.status(400).json({
+        error: "Include a message telling the user what additional information is needed.",
+      });
+      return;
+    }
+
+    await ensureBankUser(actorUserId);
+    let result: Awaited<ReturnType<typeof runIdentityReview>>;
+    try {
+      result = await runIdentityReview({
+        actorUserId,
+        userId: params.data.userId,
+        verificationStatus: parsed.data.verificationStatus,
+        reason,
+        userMessage: userMessage || null,
+      });
+    } catch (error) {
+      req.log.error({ err: error }, "Could not complete identity verification decision");
+      res.status(503).json({
+        error: "Private document cleanup failed. No final verification decision was recorded; retry the review.",
+      });
+      return;
+    }
+    if ("notFound" in result) {
+      res.status(404).json({ error: "User record not found." });
+      return;
+    }
+    if ("error" in result) {
+      res.status(409).json({ error: result.error });
+      return;
+    }
+    res.json(
+      UpdateAdminUserVerificationResponse.parse({
+        id: result.user.id,
+        email: result.user.email,
+        firstName: result.user.firstName,
+        lastName: result.user.lastName,
+        country: result.user.country,
+        verificationStatus: result.user.verificationStatus,
+        verificationNote: result.user.verificationNote,
+        accountStatus: result.user.accountStatus,
+        walletCount: result.walletCount,
+        createdAt: result.user.createdAt.toISOString(),
       }),
     );
   },

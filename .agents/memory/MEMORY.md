@@ -1,0 +1,1 @@
+- [Identity-document retention](identity-document-retention.md) — Keep uploads private; delete files after approval/rejection, retaining them during requests for more information.

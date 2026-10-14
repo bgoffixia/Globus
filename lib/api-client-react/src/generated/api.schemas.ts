@@ -98,6 +98,8 @@ export interface BankProfile {
   /** @nullable */
   country: string | null;
   verificationStatus: BankProfileVerificationStatus;
+  /** @nullable */
+  verificationNote: string | null;
   accountStatus: BankProfileAccountStatus;
   createdAt: string;
 }
@@ -125,6 +127,56 @@ export interface BankProfileInput {
   country: string;
   acceptedTerms: true;
 }
+
+export type IdentityDocumentContentType = typeof IdentityDocumentContentType[keyof typeof IdentityDocumentContentType];
+
+
+export const IdentityDocumentContentType = {
+  'application/pdf': 'application/pdf',
+  'image/jpeg': 'image/jpeg',
+  'image/png': 'image/png',
+} as const;
+
+export type IdentityDocumentStatus = typeof IdentityDocumentStatus[keyof typeof IdentityDocumentStatus];
+
+
+export const IdentityDocumentStatus = {
+  uploading: 'uploading',
+  uploaded: 'uploaded',
+} as const;
+
+export interface IdentityDocument {
+  id: string;
+  contentType: IdentityDocumentContentType;
+  /**
+     * @minimum 1
+     * @maximum 10485760
+     */
+  sizeBytes: number;
+  status: IdentityDocumentStatus;
+  createdAt: string;
+  /** @nullable */
+  uploadedAt: string | null;
+}
+
+export interface IdentityDocumentUploadInput {
+  contentType: IdentityDocumentContentType;
+  /**
+     * @minimum 1
+     * @maximum 10485760
+     */
+  sizeBytes: number;
+}
+
+export interface IdentityDocumentUploadUrl {
+  documentId: string;
+  uploadUrl: string;
+}
+
+export const IdentityVerificationSubmissionInputValue = {
+  confirmed: true,
+} as const;
+export type IdentityVerificationSubmissionInput = typeof IdentityVerificationSubmissionInputValue;
 
 export type BankTransactionMode = typeof BankTransactionMode[keyof typeof BankTransactionMode];
 
@@ -324,6 +376,8 @@ export interface AdminUser {
   /** @nullable */
   country: string | null;
   verificationStatus: AdminUserVerificationStatus;
+  /** @nullable */
+  verificationNote: string | null;
   accountStatus: AdminUserAccountStatus;
   walletCount: number;
   createdAt: string;
@@ -344,6 +398,26 @@ export interface AdminUserStatusInput {
      * @maxLength 500
      */
   reason: string;
+}
+
+export type AdminIdentityVerificationInputVerificationStatus = typeof AdminIdentityVerificationInputVerificationStatus[keyof typeof AdminIdentityVerificationInputVerificationStatus];
+
+
+export const AdminIdentityVerificationInputVerificationStatus = {
+  approved: 'approved',
+  rejected: 'rejected',
+  additional_information_required: 'additional_information_required',
+} as const;
+
+export interface AdminIdentityVerificationInput {
+  verificationStatus: AdminIdentityVerificationInputVerificationStatus;
+  /**
+     * @minLength 5
+     * @maxLength 500
+     */
+  reason: string;
+  /** @maxLength 500 */
+  userMessage?: string;
 }
 
 export interface AdminFundingInput {
