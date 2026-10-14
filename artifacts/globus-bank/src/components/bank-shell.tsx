@@ -151,5 +151,5 @@ function pageLabel(path: string) {
     '/settings': 'Settings',
     '/admin': 'Operations',
   };
-  return labels[path] ?? 'Account';
+  return path.startsWith('/admin/users/') ? 'Member management' : labels[path] ?? 'Account';
 }

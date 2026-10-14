@@ -383,6 +383,14 @@ export interface AdminUser {
   createdAt: string;
 }
 
+export interface AdminUserDetail {
+  user: AdminUser;
+  /** @nullable */
+  phone: string | null;
+  wallets: Wallet[];
+  transactions: BankTransaction[];
+}
+
 export type AdminUserStatusInputAccountStatus = typeof AdminUserStatusInputAccountStatus[keyof typeof AdminUserStatusInputAccountStatus];
 
 

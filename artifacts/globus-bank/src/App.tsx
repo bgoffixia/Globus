@@ -10,6 +10,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
 import {
   AdminPage,
+  AdminUserManagementPage,
   DashboardPage,
   DisclosurePage,
   HomePage,
@@ -222,6 +223,7 @@ function ClerkRoutes() {
         <Route path="/exchange"><ProtectedPage><ProviderRequestPage type="exchange" /></ProtectedPage></Route>
         <Route path="/receive"><ProtectedPage><ReceivePage /></ProtectedPage></Route>
         <Route path="/settings"><ProtectedPage><SettingsPage /></ProtectedPage></Route>
+        <Route path="/admin/users/:userId"><ProtectedPage><AdminUserManagementPage /></ProtectedPage></Route>
         <Route path="/admin"><ProtectedPage><AdminPage /></ProtectedPage></Route>
         <Route path="/about"><DisclosurePage path="/about" /></Route>
         <Route path="/help"><DisclosurePage path="/help" /></Route>

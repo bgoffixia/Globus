@@ -16,6 +16,7 @@ export * from './adminTransactionDeleteInput';
 export * from './adminTransactionDeleteResult';
 export * from './adminUser';
 export * from './adminUserAccountStatus';
+export * from './adminUserDetail';
 export * from './adminUserStatusInput';
 export * from './adminUserStatusInputAccountStatus';
 export * from './adminUserVerificationStatus';

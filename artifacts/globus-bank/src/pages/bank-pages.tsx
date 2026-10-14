@@ -1,6 +1,7 @@
-import { Link } from 'wouter';
+import { Link, useRoute } from 'wouter';
 import {
   ArrowDownLeft,
+  ArrowLeft,
   ArrowLeftRight,
   ArrowRight,
   ArrowUpRight,
@@ -30,6 +31,7 @@ import {
   getGetAdminAccessQueryKey,
   getGetAdminIdentityDocumentContentUrl,
   getGetAdminSummaryQueryKey,
+  getGetAdminUserDetailQueryKey,
   getGetBankDashboardQueryKey,
   getGetBankProfileQueryKey,
   getHealthCheckQueryKey,
@@ -49,6 +51,7 @@ import {
   useDeleteAdminTransaction,
   useGetAdminAccess,
   useGetAdminSummary,
+  useGetAdminUserDetail,
   useGetBankDashboard,
   useGetBankProfile,
   useHealthCheck,
@@ -1027,7 +1030,7 @@ export function AdminPage() {
       </section>}
       <section className="mt-7 overflow-hidden rounded-[20px] border border-[#e1e8ee] bg-white">
         <div className="flex flex-col gap-3 border-b border-[#edf0f3] px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7"><div><h2 className="text-[14px] font-bold text-[#28405c]">Registered users</h2><p className="mt-1 text-[10px] text-[#8592a1]">Account status changes require a documented reason.</p></div><label className="relative"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8996a4]" /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search users" className="h-10 w-full rounded-lg border border-[#e0e7ec] bg-white pl-9 pr-3 text-[11px] outline-none sm:w-[240px]" /></label></div>
-        {users.isLoading ? <ListSkeleton /> : users.isError ? <InlineError text="User records are unavailable." retry={() => users.refetch()} /> : users.data?.length ? <div className="overflow-x-auto"><table className="w-full min-w-[980px] text-left"><thead className="bg-[#f7f9fa] text-[9px] uppercase tracking-[.13em] text-[#8291a0]"><tr><th className="px-6 py-3">Member</th><th className="px-4 py-3">Region</th><th className="px-4 py-3">Verification</th><th className="px-4 py-3">Account</th><th className="px-4 py-3">Wallets</th><th className="px-6 py-3 text-right">Actions</th></tr></thead><tbody>{users.data.map(user => <tr key={user.id} className="border-t border-[#edf0f2] text-[11px] text-[#445a71]"><td className="px-6 py-4"><b className="block text-[#2d435c]">{[user.firstName, user.lastName].filter(Boolean).join(' ') || 'Globus member'}</b><span className="mt-1 block text-[10px] text-[#8a97a5]">{user.email}</span></td><td className="px-4 py-4">{user.country || '—'}</td><td className="px-4 py-4"><span>{humanize(user.verificationStatus)}</span>{user.verificationNote && <span className="mt-1 block max-w-[220px] truncate text-[9px] text-[#8794a2]" title={user.verificationNote}>{user.verificationNote}</span>}</td><td className="px-4 py-4">{humanize(user.accountStatus)}</td><td className="px-4 py-4">{user.walletCount}</td><td className="px-6 py-4 text-right"><div className="flex justify-end gap-2">{(user.verificationStatus === 'pending' || user.verificationStatus === 'additional_information_required') && <button onClick={() => openIdentityReview(user)} className="rounded-lg border border-[#d7e6e7] bg-[#f2f8f8] px-3 py-2 text-[10px] font-bold text-[#36777c] hover:bg-[#e5f2f2]">Review ID</button>}<button disabled={user.accountStatus !== 'active'} onClick={() => { setFundTarget(user); setFundingError(''); setFundingSuccess(null); }} className="rounded-lg bg-[#eff7f7] px-3 py-2 text-[10px] font-bold text-[#36777c] hover:bg-[#e2f1f1] disabled:cursor-not-allowed disabled:opacity-40">Fund</button><button disabled={update.isPending} onClick={() => setStatus(user.id, user.accountStatus === 'active' ? 'suspended' : 'active')} className="rounded-lg border border-[#dfe6eb] px-3 py-2 text-[10px] font-bold text-[#3f5c75] hover:bg-[#f4f7f8] disabled:opacity-50">{user.accountStatus === 'active' ? 'Suspend' : 'Reactivate'}</button></div></td></tr>)}</tbody></table></div> : <EmptyState title="No users found" text="Try another email or name." />}
+        {users.isLoading ? <ListSkeleton /> : users.isError ? <InlineError text="User records are unavailable." retry={() => users.refetch()} /> : users.data?.length ? <div className="overflow-x-auto"><table className="w-full min-w-[1080px] text-left"><thead className="bg-[#f7f9fa] text-[9px] uppercase tracking-[.13em] text-[#8291a0]"><tr><th className="px-6 py-3">Member</th><th className="px-4 py-3">Region</th><th className="px-4 py-3">Verification</th><th className="px-4 py-3">Account</th><th className="px-4 py-3">Wallets</th><th className="px-6 py-3 text-right">Actions</th></tr></thead><tbody>{users.data.map(user => <tr key={user.id} className="border-t border-[#edf0f2] text-[11px] text-[#445a71]"><td className="px-6 py-4"><b className="block text-[#2d435c]">{[user.firstName, user.lastName].filter(Boolean).join(' ') || 'Globus member'}</b><span className="mt-1 block text-[10px] text-[#8a97a5]">{user.email}</span></td><td className="px-4 py-4">{user.country || '—'}</td><td className="px-4 py-4"><span>{humanize(user.verificationStatus)}</span>{user.verificationNote && <span className="mt-1 block max-w-[220px] truncate text-[9px] text-[#8794a2]" title={user.verificationNote}>{user.verificationNote}</span>}</td><td className="px-4 py-4">{humanize(user.accountStatus)}</td><td className="px-4 py-4">{user.walletCount}</td><td className="px-6 py-4 text-right"><div className="flex justify-end gap-2"><Link href={`/admin/users/${encodeURIComponent(user.id)}`} className="rounded-lg border border-[#dfe6eb] px-3 py-2 text-[10px] font-bold text-[#3f5c75] hover:bg-[#f4f7f8]">Manage</Link>{(user.verificationStatus === 'pending' || user.verificationStatus === 'additional_information_required') && <button onClick={() => openIdentityReview(user)} className="rounded-lg border border-[#d7e6e7] bg-[#f2f8f8] px-3 py-2 text-[10px] font-bold text-[#36777c] hover:bg-[#e5f2f2]">Review ID</button>}<button disabled={user.accountStatus !== 'active'} onClick={() => { setFundTarget(user); setFundingError(''); setFundingSuccess(null); }} className="rounded-lg bg-[#eff7f7] px-3 py-2 text-[10px] font-bold text-[#36777c] hover:bg-[#e2f1f1] disabled:cursor-not-allowed disabled:opacity-40">Fund</button><button disabled={update.isPending} onClick={() => setStatus(user.id, user.accountStatus === 'active' ? 'suspended' : 'active')} className="rounded-lg border border-[#dfe6eb] px-3 py-2 text-[10px] font-bold text-[#3f5c75] hover:bg-[#f4f7f8] disabled:opacity-50">{user.accountStatus === 'active' ? 'Suspend' : 'Reactivate'}</button></div></td></tr>)}</tbody></table></div> : <EmptyState title="No users found" text="Try another email or name." />}
       </section>
       <section className="mt-6 overflow-hidden rounded-[20px] border border-[#e1e8ee] bg-white">
         <div className="border-b border-[#edf0f3] px-5 py-4 sm:px-7"><h2 className="text-[14px] font-bold text-[#28405c]">Ledger review</h2><p className="mt-1 text-[10px] text-[#8592a1]">Review completed activity and pending simulation requests. Permanent deletion removes the transaction and its ledger entries; a reason is recorded in the audit log, and deletions that would create a negative wallet balance are blocked.</p></div>
@@ -1068,6 +1071,294 @@ export function AdminPage() {
           </form>
         </section>
       </div>}
+    </>
+  );
+}
+
+export function AdminUserManagementPage() {
+  const [, routeParams] = useRoute('/admin/users/:userId');
+  const userId = routeParams?.userId ?? '';
+  const queryClient = useQueryClient();
+  const access = useGetAdminAccess({
+    query: { queryKey: getGetAdminAccessQueryKey(), retry: false },
+  });
+  const detail = useGetAdminUserDetail(userId, {
+    query: {
+      queryKey: getGetAdminUserDetailQueryKey(userId),
+      enabled: !!userId && !!access.data?.allowed,
+    },
+  });
+  const user = detail.data?.user;
+  const canReviewIdentity =
+    user?.verificationStatus === 'pending' ||
+    user?.verificationStatus === 'additional_information_required';
+  const identityDocuments = useListAdminIdentityDocuments(userId, {
+    query: {
+      queryKey: getListAdminIdentityDocumentsQueryKey(userId),
+      enabled: !!userId && !!access.data?.allowed && canReviewIdentity,
+    },
+  });
+  const updateStatus = useUpdateAdminUserStatus();
+  const createFunding = useCreateAdminFunding();
+  const deleteTransaction = useDeleteAdminTransaction();
+  const updateVerification = useUpdateAdminUserVerification();
+
+  const [currency, setCurrency] = useState<Currency>('USD');
+  const [amount, setAmount] = useState('');
+  const [senderName, setSenderName] = useState('Globus operations');
+  const [fundingDescription, setFundingDescription] = useState('');
+  const [fundingReason, setFundingReason] = useState('');
+  const [fundingError, setFundingError] = useState('');
+  const [fundingReference, setFundingReference] = useState('');
+  const [pageMessage, setPageMessage] = useState('');
+  const [pageError, setPageError] = useState('');
+  const [decision, setDecision] = useState<
+    'approved' | 'rejected' | 'additional_information_required'
+  >('approved');
+  const [decisionReason, setDecisionReason] = useState('');
+  const [decisionMessage, setDecisionMessage] = useState('');
+  const [decisionError, setDecisionError] = useState('');
+
+  const refreshUserData = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: getGetAdminUserDetailQueryKey(userId),
+      }),
+      queryClient.invalidateQueries({ queryKey: getListAdminUsersQueryKey() }),
+      queryClient.invalidateQueries({ queryKey: getGetAdminSummaryQueryKey() }),
+      queryClient.invalidateQueries({ queryKey: getListAdminLedgerQueryKey() }),
+    ]);
+  };
+
+  const changeAccountStatus = async () => {
+    if (!user) return;
+    const nextStatus = user.accountStatus === 'active' ? 'suspended' : 'active';
+    const reason = window.prompt(`Reason for setting this account to ${nextStatus}?`);
+    if (!reason || reason.trim().length < 5) {
+      if (reason !== null) setPageError('Enter a reason of at least five characters.');
+      return;
+    }
+    setPageError('');
+    try {
+      await updateStatus.mutateAsync({
+        userId,
+        data: { accountStatus: nextStatus, reason: reason.trim() },
+      });
+      await refreshUserData();
+      setPageMessage(`Account ${nextStatus === 'active' ? 'reactivated' : 'suspended'}.`);
+    } catch (error) {
+      setPageError(error instanceof Error ? error.message : 'Account status could not be updated.');
+    }
+  };
+
+  const submitFunding = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!user) return;
+    setFundingError('');
+    setFundingReference('');
+    try {
+      const transaction = await createFunding.mutateAsync({
+        userId,
+        data: {
+          currency,
+          amount,
+          senderName: senderName.trim(),
+          description: fundingDescription.trim(),
+          reason: fundingReason.trim(),
+          idempotencyKey: crypto.randomUUID(),
+        },
+      });
+      setFundingReference(transaction.reference);
+      setAmount('');
+      setFundingDescription('');
+      setFundingReason('');
+      await refreshUserData();
+    } catch (error) {
+      setFundingError(error instanceof Error ? error.message : 'Simulated funding could not be recorded.');
+    }
+  };
+
+  const deleteUserTransaction = async (transaction: BankTransaction) => {
+    const confirmed = window.confirm(
+      `Permanently delete transaction ${transaction.reference}? Its ledger entries will be removed and the affected wallet balance will change. This cannot be undone.`,
+    );
+    if (!confirmed) return;
+    const reason = window.prompt('Enter a reason for permanently deleting this transaction (at least 5 characters).');
+    if (!reason || reason.trim().length < 5) {
+      if (reason !== null) setPageError('Enter a deletion reason of at least five characters.');
+      return;
+    }
+    setPageError('');
+    try {
+      await deleteTransaction.mutateAsync({
+        transactionId: transaction.id,
+        data: { reason: reason.trim() },
+      });
+      await refreshUserData();
+      setPageMessage(`Transaction ${transaction.reference} was permanently deleted.`);
+    } catch (error) {
+      setPageError(error instanceof Error ? error.message : 'The transaction could not be deleted.');
+    }
+  };
+
+  const submitIdentityDecision = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setDecisionError('');
+    setPageMessage('');
+    try {
+      await updateVerification.mutateAsync({
+        userId,
+        data: {
+          verificationStatus: decision,
+          reason: decisionReason.trim(),
+          ...(decisionMessage.trim()
+            ? { userMessage: decisionMessage.trim() }
+            : {}),
+        },
+      });
+      await Promise.all([
+        refreshUserData(),
+        queryClient.invalidateQueries({
+          queryKey: getListAdminIdentityDocumentsQueryKey(userId),
+        }),
+      ]);
+      setDecisionReason('');
+      setDecisionMessage('');
+      setPageMessage('Identity review decision saved.');
+    } catch (error) {
+      setDecisionError(error instanceof Error ? error.message : 'The identity decision could not be saved.');
+    }
+  };
+
+  if (access.isLoading) return <PageSkeleton />;
+  if (access.isError || !access.data?.allowed) {
+    return (
+      <Failure
+        title="Operations access is restricted"
+        text="This area is only available to authorized Globus operations staff."
+        retry={() => access.refetch()}
+      />
+    );
+  }
+  if (detail.isLoading) return <PageSkeleton />;
+  if (detail.isError || !detail.data) {
+    return (
+      <Failure
+        title="Member record is unavailable"
+        text="The user may no longer exist or the record could not be loaded."
+        retry={() => detail.refetch()}
+      />
+    );
+  }
+
+  const profile = detail.data.user;
+  const memberName =
+    [profile.firstName, profile.lastName].filter(Boolean).join(' ') ||
+    'Globus member';
+
+  return (
+    <>
+      <Link href="/admin" className="mb-5 inline-flex items-center gap-2 text-[11px] font-bold text-[#4b687f] hover:text-[#2c7e84]">
+        <ArrowLeft size={14} /> All users
+      </Link>
+      <PageHeading
+        eyebrow="Restricted operations · Member management"
+        title={memberName}
+        subtitle="Review this member’s profile, simulated balances, activity, and account status."
+      />
+      {pageMessage && <p role="status" className="mt-4 rounded-lg border border-[#cfe5db] bg-[#f1f8f4] px-4 py-3 text-[11px] text-[#417461]">{pageMessage}</p>}
+      {pageError && <p role="alert" className="mt-4 rounded-lg bg-[#fff1ef] px-4 py-3 text-[11px] text-[#a24940]">{pageError}</p>}
+
+      <div className="mt-6 grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="space-y-5">
+          <section className="rounded-[20px] border border-[#e1e8ee] bg-white p-5 sm:p-7">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#71869a]">Member profile</p>
+                <h2 className="mt-2 text-[17px] font-bold text-[#29425c]">{memberName}</h2>
+                <p className="mt-1 text-[11px] text-[#687d92]">{profile.email}</p>
+              </div>
+              <button
+                type="button"
+                disabled={updateStatus.isPending}
+                onClick={changeAccountStatus}
+                className={`rounded-lg px-4 py-2.5 text-[10px] font-bold ${profile.accountStatus === 'active' ? 'border border-[#ead8d5] text-[#a24940] hover:bg-[#fff7f5]' : 'bg-[#eff7f7] text-[#36777c] hover:bg-[#e2f1f1]'} disabled:opacity-50`}
+              >
+                {profile.accountStatus === 'active' ? 'Suspend account' : 'Reactivate account'}
+              </button>
+            </div>
+            <dl className="mt-6 grid gap-4 border-t border-[#edf0f2] pt-5 sm:grid-cols-2">
+              <div><dt className="text-[9px] font-bold uppercase tracking-[.12em] text-[#8492a0]">Email</dt><dd className="mt-1 break-all text-[11px] font-semibold text-[#40566e]">{profile.email}</dd></div>
+              <div><dt className="text-[9px] font-bold uppercase tracking-[.12em] text-[#8492a0]">Phone</dt><dd className="mt-1 text-[11px] font-semibold text-[#40566e]">{detail.data.phone || 'Not provided'}</dd></div>
+              <div><dt className="text-[9px] font-bold uppercase tracking-[.12em] text-[#8492a0]">Country / region</dt><dd className="mt-1 text-[11px] font-semibold text-[#40566e]">{profile.country || 'Not provided'}</dd></div>
+              <div><dt className="text-[9px] font-bold uppercase tracking-[.12em] text-[#8492a0]">Member since</dt><dd className="mt-1 text-[11px] font-semibold text-[#40566e]">{formatDate(profile.createdAt)}</dd></div>
+            </dl>
+            <div className="mt-5 grid gap-3 border-t border-[#edf0f2] pt-5 sm:grid-cols-2">
+              <div className="rounded-xl bg-[#f7f9fa] p-4"><StatusLine label="Account" value={humanize(profile.accountStatus)} positive={profile.accountStatus === 'active'} /></div>
+              <div className="rounded-xl bg-[#f7f9fa] p-4"><StatusLine label="Identity review" value={humanize(profile.verificationStatus)} positive={profile.verificationStatus === 'approved'} /></div>
+            </div>
+            {profile.verificationNote && <p className="mt-4 rounded-lg border border-[#e4e9ed] bg-[#f8fafb] px-4 py-3 text-[10px] leading-5 text-[#52677c]"><b>Reviewer message:</b> {profile.verificationNote}</p>}
+          </section>
+
+          <section className="rounded-[20px] border border-[#e1e8ee] bg-white p-5 sm:p-7">
+            <div className="flex items-end justify-between gap-4"><div><p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#71869a]">Wallets</p><h2 className="mt-1 text-[14px] font-bold text-[#28405c]">Simulated balances</h2></div><span className="text-[10px] text-[#8492a0]">{detail.data.wallets.length} wallet{detail.data.wallets.length === 1 ? '' : 's'}</span></div>
+            {detail.data.wallets.length ? <div className="mt-4 grid gap-3 sm:grid-cols-2">{detail.data.wallets.map(wallet => <WalletCard key={wallet.id} wallet={wallet} />)}</div> : <EmptyState title="No wallets yet" text="A wallet is created when this member starts a simulated transaction or receives funding." />}
+          </section>
+
+          <section className="overflow-hidden rounded-[20px] border border-[#e1e8ee] bg-white">
+            <div className="border-b border-[#edf0f3] px-5 py-4 sm:px-7"><h2 className="text-[14px] font-bold text-[#28405c]">Recent activity</h2><p className="mt-1 text-[10px] text-[#8592a1]">Latest 50 transactions. Deletion is permanent and requires a reason.</p></div>
+            {detail.data.transactions.length ? <TransactionList transactions={detail.data.transactions} onDelete={deleteUserTransaction} deletePending={deleteTransaction.isPending} /> : <EmptyState title="No activity yet" text="This member has no recorded transactions." />}
+          </section>
+        </div>
+
+        <aside className="space-y-5">
+          <section className="rounded-[20px] border border-[#e1e8ee] bg-white p-5 sm:p-6">
+            <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#55868b]">Simulation only</p>
+            <h2 className="mt-1 text-[14px] font-bold text-[#29425c]">Fund this user</h2>
+            <p className="mt-2 text-[10px] leading-4 text-[#7e8d9c]">Creates a fictional wallet credit and audit entry. No real funds move.</p>
+            <form onSubmit={submitFunding} className="mt-4 space-y-3">
+              <Field label="Currency"><select value={currency} onChange={event => setCurrency(event.target.value as Currency)} className={inputClass}>{currencies.map(code => <option key={code} value={code}>{code} · {currencyNames[code]}</option>)}</select></Field>
+              <Field label="Amount"><input required inputMode="decimal" pattern="[0-9]+(\\.[0-9]{1,2})?" min="0.01" max="1000000" value={amount} onChange={event => setAmount(event.target.value)} placeholder="0.00" className={inputClass} /></Field>
+              <Field label="Sender / source"><input required maxLength={120} value={senderName} onChange={event => setSenderName(event.target.value)} className={inputClass} /></Field>
+              <Field label="Description"><input required maxLength={240} value={fundingDescription} onChange={event => setFundingDescription(event.target.value)} placeholder="Shown in activity" className={inputClass} /></Field>
+              <Field label="Audit reason"><textarea required minLength={5} maxLength={500} rows={3} value={fundingReason} onChange={event => setFundingReason(event.target.value)} className={`${inputClass} h-auto py-3`} /></Field>
+              {fundingError && <p role="alert" className="rounded-lg bg-[#fff1ef] px-3 py-2 text-[10px] text-[#a24940]">{fundingError}</p>}
+              {fundingReference && <p role="status" className="rounded-lg bg-[#f1f8f4] px-3 py-2 text-[10px] text-[#417461]">Funding recorded · {fundingReference}</p>}
+              <button disabled={profile.accountStatus !== 'active' || createFunding.isPending || !amount || !senderName.trim() || !fundingDescription.trim() || !fundingReason.trim()} className="h-10 w-full rounded-xl bg-[#142f51] px-4 text-[10px] font-bold text-white hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">{createFunding.isPending ? 'Recording…' : 'Record simulated funding'}</button>
+              {profile.accountStatus !== 'active' && <p className="text-[9px] text-[#9b8050]">Reactivate the account before funding it.</p>}
+            </form>
+          </section>
+
+          <section className="rounded-[20px] border border-[#e1e8ee] bg-white p-5 sm:p-6">
+            <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#71869a]">Identity management</p>
+            <h2 className="mt-1 text-[14px] font-bold text-[#29425c]">Verification status</h2>
+            <p className="mt-2 text-[10px] leading-4 text-[#7e8d9c]">Globus review is for this simulation only, not bank or government identity verification.</p>
+            {canReviewIdentity ? (
+              <>
+                {identityDocuments.isLoading ? <div className="mt-4"><ListSkeleton /></div> : identityDocuments.isError ? <div className="mt-4"><InlineError text="Identity documents could not be loaded." retry={() => identityDocuments.refetch()} /></div> : identityDocuments.data?.length ? (
+                  <ul className="mt-4 space-y-2">
+                    {identityDocuments.data.map((document, index) => (
+                      <li key={document.id} className="flex items-center justify-between gap-3 rounded-lg border border-[#e7edf0] px-3 py-2.5">
+                        <span className="text-[9px] font-semibold text-[#536b82]">Document {index + 1} · {(document.sizeBytes / 1024 / 1024).toFixed(2)} MB</span>
+                        <button type="button" onClick={() => window.open(getGetAdminIdentityDocumentContentUrl(document.id), '_blank', 'noopener,noreferrer')} className="text-[9px] font-bold text-[#36777c] hover:underline">Download</button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : <p className="mt-4 text-[10px] text-[#8794a2]">No uploaded documents are available.</p>}
+                <form onSubmit={submitIdentityDecision} className="mt-5 space-y-3 border-t border-[#edf0f2] pt-4">
+                  <Field label="Decision"><select value={decision} onChange={event => setDecision(event.target.value as typeof decision)} className={inputClass}><option value="approved">Approve identity</option><option value="rejected">Reject and close review</option><option value="additional_information_required">Request more information</option></select></Field>
+                  {decision === 'additional_information_required' && <Field label="Message for member"><textarea required minLength={5} maxLength={500} rows={3} value={decisionMessage} onChange={event => setDecisionMessage(event.target.value)} className={`${inputClass} h-auto py-3`} /></Field>}
+                  <Field label="Internal audit reason"><textarea required minLength={5} maxLength={500} rows={3} value={decisionReason} onChange={event => setDecisionReason(event.target.value)} className={`${inputClass} h-auto py-3`} /></Field>
+                  {decisionError && <p role="alert" className="rounded-lg bg-[#fff1ef] px-3 py-2 text-[10px] text-[#a24940]">{decisionError}</p>}
+                  <button disabled={updateVerification.isPending || identityDocuments.isLoading || !identityDocuments.data?.length} className="h-10 w-full rounded-xl border border-[#d7e6e7] bg-[#f2f8f8] px-4 text-[10px] font-bold text-[#36777c] hover:bg-[#e5f2f2] disabled:cursor-not-allowed disabled:opacity-50">{updateVerification.isPending ? 'Saving…' : 'Save identity decision'}</button>
+                </form>
+              </>
+            ) : (
+              <div className="mt-4 rounded-lg bg-[#f7f9fa] px-3 py-3 text-[10px] leading-4 text-[#718294]">There is no identity review awaiting a decision. Current status: <b>{humanize(profile.verificationStatus)}</b>.</div>
+            )}
+          </section>
+        </aside>
+      </div>
     </>
   );
 }

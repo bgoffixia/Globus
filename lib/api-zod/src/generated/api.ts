@@ -450,6 +450,54 @@ export const ListAdminUsersResponse = zod.array(ListAdminUsersResponseItem)
 
 
 /**
+ * @summary Get one user's profile, wallets, and recent activity
+ */
+
+
+
+export const GetAdminUserDetailParams = zod.object({
+  "userId": zod.coerce.string().min(1)
+})
+
+export const GetAdminUserDetailResponse = zod.object({
+  "user": zod.object({
+  "id": zod.string(),
+  "email": zod.string(),
+  "firstName": zod.string().nullable(),
+  "lastName": zod.string().nullable(),
+  "country": zod.string().nullable(),
+  "verificationStatus": zod.enum(['not_started', 'pending', 'approved', 'rejected', 'additional_information_required']),
+  "verificationNote": zod.string().nullable(),
+  "accountStatus": zod.enum(['active', 'suspended']),
+  "walletCount": zod.number().int(),
+  "createdAt": zod.coerce.date()
+}),
+  "phone": zod.string().nullable(),
+  "wallets": zod.array(zod.object({
+  "id": zod.string(),
+  "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
+  "available": zod.string(),
+  "pending": zod.string(),
+  "reserved": zod.string(),
+  "status": zod.enum(['active', 'restricted'])
+})),
+  "transactions": zod.array(zod.object({
+  "id": zod.string(),
+  "reference": zod.string(),
+  "type": zod.enum(['simulation_credit', 'admin_funding', 'transfer_in', 'transfer_out', 'external_transfer', 'external_transfer_in', 'deposit_request', 'withdrawal_request', 'exchange_request']),
+  "status": zod.enum(['completed', 'pending', 'failed', 'reversed']),
+  "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
+  "amount": zod.string(),
+  "fee": zod.string(),
+  "counterparty": zod.string().nullable(),
+  "description": zod.string(),
+  "mode": zod.enum(['simulation']),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
  * @summary Suspend or reactivate a user with a documented reason
  */
 

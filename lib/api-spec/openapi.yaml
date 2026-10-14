@@ -400,6 +400,31 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+  /bank/admin/users/{userId}:
+    get:
+      operationId: getAdminUserDetail
+      tags: [admin]
+      summary: Get one user's profile, wallets, and recent activity
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: User management detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUserDetail"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /bank/admin/users/{userId}/status:
     patch:
       operationId: updateAdminUserStatus
@@ -854,6 +879,18 @@ components:
         walletCount: { type: integer }
         createdAt: { type: string, format: date-time }
       required: [id, email, firstName, lastName, country, verificationStatus, verificationNote, accountStatus, walletCount, createdAt]
+    AdminUserDetail:
+      type: object
+      properties:
+        user: { $ref: "#/components/schemas/AdminUser" }
+        phone: { type: ["string", "null"] }
+        wallets:
+          type: array
+          items: { $ref: "#/components/schemas/Wallet" }
+        transactions:
+          type: array
+          items: { $ref: "#/components/schemas/BankTransaction" }
+      required: [user, phone, wallets, transactions]
     AdminUserStatusInput:
       type: object
       properties:

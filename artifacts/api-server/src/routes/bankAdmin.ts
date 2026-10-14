@@ -12,6 +12,8 @@ import {
   GetAdminIdentityDocumentContentParams,
   GetAdminAccessResponse,
   GetAdminSummaryResponse,
+  GetAdminUserDetailParams,
+  GetAdminUserDetailResponse,
   ListAdminLedgerQueryParams,
   ListAdminLedgerResponse,
   ListAdminIdentityDocumentsParams,
@@ -39,6 +41,8 @@ import {
   balanceForWallet,
   createReference,
   ensureBankUser,
+  getWalletsForUser,
+  listUserTransactions,
   parseAmountToMinor,
   toBankTransaction,
   userWallet,
@@ -259,6 +263,50 @@ router.get("/bank/admin/users", requireAdmin, async (req, res): Promise<void> =>
     ),
   );
 });
+
+router.get(
+  "/bank/admin/users/:userId",
+  requireAdmin,
+  async (req, res): Promise<void> => {
+    const params = GetAdminUserDetailParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const [user] = await db
+      .select()
+      .from(bankUsersTable)
+      .where(eq(bankUsersTable.id, params.data.userId))
+      .limit(1);
+    if (!user) {
+      res.status(404).json({ error: "User record not found." });
+      return;
+    }
+    const [wallets, transactions] = await Promise.all([
+      getWalletsForUser(user.id),
+      listUserTransactions(user.id, { limit: 50 }),
+    ]);
+    res.json(
+      GetAdminUserDetailResponse.parse({
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          country: user.country,
+          verificationStatus: user.verificationStatus,
+          verificationNote: user.verificationNote,
+          accountStatus: user.accountStatus,
+          walletCount: wallets.length,
+          createdAt: user.createdAt.toISOString(),
+        },
+        phone: user.phone,
+        wallets,
+        transactions,
+      }),
+    );
+  },
+);
 
 router.patch(
   "/bank/admin/users/:userId/status",
