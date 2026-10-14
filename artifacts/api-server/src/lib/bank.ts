@@ -175,6 +175,7 @@ export function toBankTransaction(
 ) {
   let type:
     | "simulation_credit"
+    | "admin_funding"
     | "transfer_in"
     | "transfer_out"
     | "external_transfer"

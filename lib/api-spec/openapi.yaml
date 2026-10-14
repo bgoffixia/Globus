@@ -301,6 +301,41 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+  /bank/admin/users/{userId}/funding:
+    post:
+      operationId: createAdminFunding
+      tags: [admin]
+      summary: Add a simulated balance credit to a user wallet
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminFundingInput"
+      responses:
+        "201":
+          description: Simulated funding transaction recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BankTransaction"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
   /bank/admin/ledger:
     get:
       operationId: listAdminLedger
@@ -387,7 +422,7 @@ components:
       enum: [completed, pending, failed, reversed]
     TransactionType:
       type: string
-      enum: [simulation_credit, transfer_in, transfer_out, external_transfer, deposit_request, withdrawal_request, exchange_request]
+      enum: [simulation_credit, admin_funding, transfer_in, transfer_out, external_transfer, deposit_request, withdrawal_request, exchange_request]
     Wallet:
       type: object
       properties:
@@ -526,4 +561,12 @@ components:
         accountStatus: { type: string, enum: [active, suspended] }
         reason: { type: string, minLength: 5, maxLength: 500 }
       required: [accountStatus, reason]
+    AdminFundingInput:
+      type: object
+      properties:
+        currency: { $ref: "#/components/schemas/CurrencyCode" }
+        amount: { type: string, pattern: "^[0-9]{1,12}(\\.[0-9]{1,2})?$" }
+        reason: { type: string, minLength: 5, maxLength: 500 }
+        idempotencyKey: { type: string, minLength: 16, maxLength: 100 }
+      required: [currency, amount, reason, idempotencyKey]
 

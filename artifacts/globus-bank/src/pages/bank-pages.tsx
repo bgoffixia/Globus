@@ -10,13 +10,16 @@ import {
   CircleHelp,
   Clock3,
   Copy,
+  FileText,
   Globe2,
   LockKeyhole,
+  Printer,
   RefreshCw,
   Search,
   ShieldCheck,
   Sparkles,
   WalletCards,
+  X,
 } from 'lucide-react';
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -30,6 +33,7 @@ import {
   getListAdminUsersQueryKey,
   getListBankTransactionsQueryKey,
   getListBankWalletsQueryKey,
+  useCreateAdminFunding,
   useCreateBankTransfer,
   useCreateExternalTransfer,
   useCreateSimulationRequest,
@@ -45,7 +49,7 @@ import {
   useUpdateAdminUserStatus,
   useUpdateBankProfile,
 } from '@workspace/api-client-react';
-import type { BankTransaction, Wallet } from '@workspace/api-client-react';
+import type { AdminUser, BankTransaction, Wallet } from '@workspace/api-client-react';
 
 const currencies = ['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD'] as const;
 type Currency = typeof currencies[number];
@@ -299,6 +303,7 @@ export function SendPage() {
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [success, setSuccess] = useState<BankTransaction | null>(null);
+  const [receipt, setReceipt] = useState<BankTransaction | null>(null);
   const [message, setMessage] = useState('');
   const available = Number(walletsQuery.data?.find(item => item.currency === currency)?.available ?? 0);
   const pending = memberTransfer.isPending || externalTransfer.isPending;
@@ -383,7 +388,7 @@ export function SendPage() {
             <Field label="Note (optional)"><input maxLength={140} value={description} onChange={event => setDescription(event.target.value)} placeholder="What’s this transfer for?" className={inputClass} /></Field>
           </div>
           {(message || hasError) && <p role="alert" className="mt-5 rounded-lg bg-[#fff1ef] px-4 py-3 text-[11px] text-[#a24940]">{message || 'Please check the transfer details and try again.'}</p>}
-          {success && <div role="status" className="mt-5 rounded-xl border border-[#cfe5db] bg-[#f1f8f4] p-4 text-[12px] text-[#417461]"><p className="font-bold">Simulated {success.type === 'external_transfer' ? 'external' : 'member'} transfer recorded</p><p className="mt-1">Reference {success.reference} · {humanize(success.status)}</p><p className="mt-1">No real funds moved and no external account was credited.</p></div>}
+          {success && <div role="status" className="mt-5 rounded-xl border border-[#cfe5db] bg-[#f1f8f4] p-4 text-[12px] text-[#417461]"><p className="font-bold">Simulated {success.type === 'external_transfer' ? 'external' : 'member'} transfer recorded</p><p className="mt-1">Reference {success.reference} · {humanize(success.status)}</p><p className="mt-1">No real funds moved and no external account was credited.</p><button type="button" onClick={() => setReceipt(success)} className="mt-3 inline-flex items-center gap-2 rounded-lg border border-[#bfd8cc] bg-white px-3 py-2 text-[10px] font-bold text-[#3d725d] hover:bg-[#f7fbf8]"><FileText size={14} /> View receipt</button></div>}
           <button disabled={pending || !amount || Number(amount) <= 0 || Number(amount) > available || (destinationType === 'external' && (!recipientName.trim() || !destinationCountry.trim()))} className="mt-7 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#142f51] text-[12px] font-bold text-white transition hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">{pending ? 'Recording simulation…' : 'Simulate transfer'} <ArrowRight size={15} /></button>
         </form>
         <aside className="rounded-[22px] bg-[#eaf0f4] p-6">
@@ -392,6 +397,7 @@ export function SendPage() {
           <ul className="mt-5 space-y-4 text-[11px] leading-5 text-[#60748a]"><li className="flex gap-2"><Check size={15} className="mt-0.5 shrink-0 text-[#43888b]" /> Member transfers require a registered Globus account.</li><li className="flex gap-2"><Check size={15} className="mt-0.5 shrink-0 text-[#43888b]" /> External recipient details are labels only; no bank account is used.</li><li className="flex gap-2"><Check size={15} className="mt-0.5 shrink-0 text-[#43888b]" /> The ledger records a fictional transaction; no provider is connected.</li></ul>
         </aside>
       </div>
+      {receipt && <ReceiptDialog transaction={receipt} onClose={() => setReceipt(null)} />}
     </>
   );
 }

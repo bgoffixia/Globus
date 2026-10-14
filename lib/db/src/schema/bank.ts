@@ -21,6 +21,7 @@ export const bankCurrencyEnum = pgEnum("bank_currency_code", [
 
 export const bankTransactionTypeEnum = pgEnum("bank_transaction_type", [
   "simulation_credit",
+  "admin_funding",
   "external_transfer",
   "sandbox_credit",
   "transfer",

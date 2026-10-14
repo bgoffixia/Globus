@@ -7,6 +7,7 @@
  */
 
 export * from './adminAccess';
+export * from './adminFundingInput';
 export * from './adminSummary';
 export * from './adminSummaryProviderStatus';
 export * from './adminUser';

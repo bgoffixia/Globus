@@ -21,6 +21,7 @@ import type {
 
 import type {
   AdminAccess,
+  AdminFundingInput,
   AdminSummary,
   AdminUser,
   AdminUserStatusInput,
@@ -1141,6 +1142,95 @@ export const useUpdateAdminUserStatus = <TError = ErrorType<BadRequestResponse |
         TContext
       > => {
       return useMutation(getUpdateAdminUserStatusMutationOptions(options));
+    }
+
+export const getCreateAdminFundingUrl = (userId: string,) => {
+
+
+
+
+  return `/api/bank/admin/users/${userId}/funding`
+}
+
+/**
+ * @summary Add a simulated balance credit to a user wallet
+ */
+export const createAdminFunding = async (userId: string,
+    adminFundingInput: AdminFundingInput, options?: Parameters<typeof customFetch>[1]): Promise<BankTransaction> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<BankTransaction>(getCreateAdminFundingUrl(userId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(adminFundingInput)
+  }
+);}
+
+
+
+
+
+export const getCreateAdminFundingMutationKey = () => ['createAdminFunding'] as const;
+
+export const getCreateAdminFundingMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAdminFunding>>, TError,CreateAdminFundingMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createAdminFunding>>, TError,CreateAdminFundingMutationVariables, TContext> => {
+
+const mutationKey = getCreateAdminFundingMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createAdminFunding>>, CreateAdminFundingMutationVariables> = (props) => {
+          const {userId,data} = props ?? {};
+
+          return  createAdminFunding(userId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateAdminFundingMutationResult = NonNullable<Awaited<ReturnType<typeof createAdminFunding>>>
+    export type CreateAdminFundingMutationBody = BodyType<AdminFundingInput>
+    export type CreateAdminFundingMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>
+    export type CreateAdminFundingMutationVariables = {userId: string;data: BodyType<AdminFundingInput>}
+
+    /**
+ * @summary Add a simulated balance credit to a user wallet
+ */
+export const useCreateAdminFunding = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAdminFunding>>, TError,CreateAdminFundingMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createAdminFunding>>,
+        TError,
+        CreateAdminFundingMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateAdminFundingMutationOptions(options));
     }
 
 export const getListAdminLedgerUrl = (params?: ListAdminLedgerParams,) => {

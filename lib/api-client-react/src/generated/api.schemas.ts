@@ -40,6 +40,7 @@ export type TransactionType = typeof TransactionType[keyof typeof TransactionTyp
 
 export const TransactionType = {
   simulation_credit: 'simulation_credit',
+  admin_funding: 'admin_funding',
   transfer_in: 'transfer_in',
   transfer_out: 'transfer_out',
   external_transfer: 'external_transfer',
@@ -312,6 +313,22 @@ export interface AdminUserStatusInput {
      * @maxLength 500
      */
   reason: string;
+}
+
+export interface AdminFundingInput {
+  currency: CurrencyCode;
+  /** @pattern ^[0-9]{1,12}(\.[0-9]{1,2})?$ */
+  amount: string;
+  /**
+     * @minLength 5
+     * @maxLength 500
+     */
+  reason: string;
+  /**
+     * @minLength 16
+     * @maxLength 100
+     */
+  idempotencyKey: string;
 }
 
 /**

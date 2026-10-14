@@ -1,7 +1,10 @@
 import { Router, type IRouter, type RequestHandler } from "express";
 import { getAuth } from "@clerk/express";
-import { and, count, desc, eq, ilike, or } from "drizzle-orm";
+import { and, count, desc, eq, ilike, or, sql } from "drizzle-orm";
 import {
+  CreateAdminFundingBody,
+  CreateAdminFundingParams,
+  CreateAdminFundingResponse,
   GetAdminAccessResponse,
   GetAdminSummaryResponse,
   ListAdminLedgerQueryParams,
@@ -14,13 +17,20 @@ import {
 } from "@workspace/api-zod";
 import {
   bankAuditLogsTable,
+  bankLedgerEntriesTable,
   bankSandboxRequestsTable,
   bankTransactionsTable,
   bankUsersTable,
   bankWalletsTable,
   db,
 } from "@workspace/db";
-import { toBankTransaction } from "../lib/bank";
+import {
+  createReference,
+  ensureBankUser,
+  parseAmountToMinor,
+  toBankTransaction,
+  userWallet,
+} from "../lib/bank";
 
 const router: IRouter = Router();
 
@@ -230,6 +240,160 @@ router.patch(
         walletCount: walletCount?.value ?? 0,
         createdAt: result.createdAt.toISOString(),
       }),
+    );
+  },
+);
+
+router.post(
+  "/bank/admin/users/:userId/funding",
+  requireAdmin,
+  async (req, res): Promise<void> => {
+    const params = CreateAdminFundingParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+
+    const parsed = CreateAdminFundingBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+
+    const actorUserId = getAuth(req).userId;
+    if (!actorUserId) {
+      res.status(401).json({ error: "Sign in to access your Globus account." });
+      return;
+    }
+
+    const reason = parsed.data.reason.trim();
+    if (reason.length < 5) {
+      res.status(400).json({ error: "Enter a funding reason of at least five characters." });
+      return;
+    }
+
+    let amountMinor: bigint;
+    try {
+      amountMinor = parseAmountToMinor(parsed.data.amount);
+    } catch (error) {
+      res.status(400).json({
+        error: error instanceof Error ? error.message : "Enter a valid funding amount.",
+      });
+      return;
+    }
+
+    if (amountMinor <= 0n || amountMinor > 100_000_000n) {
+      res.status(400).json({ error: "Funding must be greater than zero and no more than 1,000,000.00." });
+      return;
+    }
+
+    await ensureBankUser(actorUserId);
+    const description = `Admin simulation funding — ${reason}`;
+    const result = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtext(${parsed.data.idempotencyKey})::bigint)`,
+      );
+
+      const [duplicate] = await tx
+        .select()
+        .from(bankTransactionsTable)
+        .where(eq(bankTransactionsTable.idempotencyKey, parsed.data.idempotencyKey))
+        .limit(1);
+      if (duplicate) {
+        const sameRequest =
+          duplicate.initiatedByUserId === actorUserId &&
+          duplicate.toUserId === params.data.userId &&
+          duplicate.type === "admin_funding" &&
+          duplicate.currency === parsed.data.currency &&
+          duplicate.amountMinor === amountMinor &&
+          duplicate.description === description;
+        return sameRequest
+          ? { transaction: duplicate }
+          : { error: "That request reference is already in use." };
+      }
+
+      const [target] = await tx
+        .select()
+        .from(bankUsersTable)
+        .where(eq(bankUsersTable.id, params.data.userId))
+        .for("update");
+      if (!target) {
+        return { notFound: true as const };
+      }
+      if (target.accountStatus !== "active") {
+        return { error: "Only active user accounts can receive simulated funding." };
+      }
+
+      const wallet = await userWallet(tx, target.id, parsed.data.currency);
+      if (!wallet || wallet.status !== "active") {
+        return { error: "An active wallet for the selected currency is unavailable." };
+      }
+      await tx
+        .select({ id: bankWalletsTable.id })
+        .from(bankWalletsTable)
+        .where(eq(bankWalletsTable.id, wallet.id))
+        .for("update");
+
+      const [transaction] = await tx
+        .insert(bankTransactionsTable)
+        .values({
+          reference: createReference(),
+          idempotencyKey: parsed.data.idempotencyKey,
+          initiatedByUserId: actorUserId,
+          toUserId: target.id,
+          toWalletId: wallet.id,
+          type: "admin_funding",
+          status: "completed",
+          currency: parsed.data.currency,
+          amountMinor,
+          feeMinor: 0n,
+          counterparty: "Globus operations",
+          description,
+          mode: "simulation",
+        })
+        .returning();
+
+      await tx.insert(bankLedgerEntriesTable).values([
+        {
+          transactionId: transaction.id,
+          accountCode: `simulation:admin-funding:${parsed.data.currency}`,
+          currency: parsed.data.currency,
+          side: "debit",
+          amountMinor,
+        },
+        {
+          transactionId: transaction.id,
+          walletId: wallet.id,
+          accountCode: `wallet:${wallet.id}`,
+          currency: parsed.data.currency,
+          side: "credit",
+          amountMinor,
+        },
+      ]);
+
+      await tx.insert(bankAuditLogsTable).values({
+        actorUserId,
+        targetUserId: target.id,
+        action: "fund_user",
+        reason,
+      });
+
+      return { transaction };
+    });
+
+    if ("notFound" in result) {
+      res.status(404).json({ error: "User record not found." });
+      return;
+    }
+    if ("error" in result) {
+      res.status(409).json({ error: result.error });
+      return;
+    }
+
+    res.status(201).json(
+      CreateAdminFundingResponse.parse(
+        toBankTransaction(result.transaction, params.data.userId),
+      ),
     );
   },
 );

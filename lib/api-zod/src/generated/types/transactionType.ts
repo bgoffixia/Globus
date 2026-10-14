@@ -11,6 +11,7 @@ export type TransactionType = typeof TransactionType[keyof typeof TransactionTyp
 
 export const TransactionType = {
   simulation_credit: 'simulation_credit',
+  admin_funding: 'admin_funding',
   transfer_in: 'transfer_in',
   transfer_out: 'transfer_out',
   external_transfer: 'external_transfer',
