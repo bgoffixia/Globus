@@ -10,6 +10,8 @@ export * from './adminAccess';
 export * from './adminFundingInput';
 export * from './adminSummary';
 export * from './adminSummaryProviderStatus';
+export * from './adminTransactionDeleteInput';
+export * from './adminTransactionDeleteResult';
 export * from './adminUser';
 export * from './adminUserAccountStatus';
 export * from './adminUserStatusInput';

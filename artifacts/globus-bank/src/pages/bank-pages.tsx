@@ -19,6 +19,7 @@ import {
   Search,
   ShieldCheck,
   Sparkles,
+  Trash2,
   WalletCards,
   X,
 } from 'lucide-react';
@@ -40,6 +41,7 @@ import {
   useCreateExternalTransfer,
   useCreateIncomingExternalTransfer,
   useCreateSimulationRequest,
+  useDeleteAdminTransaction,
   useGetAdminAccess,
   useGetAdminSummary,
   useGetBankDashboard,
@@ -306,6 +308,8 @@ export function SendPage() {
   const [recipientEmail, setRecipientEmail] = useState('');
   const [recipientName, setRecipientName] = useState('');
   const [destinationCountry, setDestinationCountry] = useState('');
+  const [bankName, setBankName] = useState('');
+  const [accountNumber, setAccountNumber] = useState('');
   const [currency, setCurrency] = useState<Currency>('USD');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
@@ -324,6 +328,8 @@ export function SendPage() {
       setRecipientEmail('');
       setRecipientName('');
       setDestinationCountry('');
+      setBankName('');
+      setAccountNumber('');
       setAmount('');
       setDescription('');
       queryClient.invalidateQueries({ queryKey: getGetBankDashboardQueryKey() });
@@ -335,10 +341,13 @@ export function SendPage() {
     };
     const idempotencyKey = crypto.randomUUID();
     if (destinationType === 'external') {
+      const normalizedAccountNumber = accountNumber.replace(/[^a-z0-9]/gi, '').toUpperCase();
       externalTransfer.mutate({
         data: {
           recipientName: recipientName.trim(),
           destinationCountry: destinationCountry.trim(),
+          bankName: bankName.trim(),
+          accountNumberLast4: normalizedAccountNumber.slice(-4),
           currency,
           amount,
           ...(description.trim() ? { description: description.trim() } : {}),
@@ -373,7 +382,7 @@ export function SendPage() {
                 </label>
                 <label className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-3 text-[11px] font-semibold ${destinationType === 'external' ? 'border-[#77aeb0] bg-[#f0f8f8] text-[#2e6870]' : 'border-[#dfe6ec] text-[#667a8e]'}`}>
                   <input type="radio" name="destination-type" value="external" checked={destinationType === 'external'} onChange={() => setDestinationType('external')} />
-                  External recipient
+                  International transfer
                 </label>
               </div>
             </fieldset>
@@ -384,8 +393,10 @@ export function SendPage() {
                 <div className="grid gap-5 sm:grid-cols-2">
                   <Field label="Recipient name"><input required maxLength={120} value={recipientName} onChange={event => setRecipientName(event.target.value)} placeholder="Recipient name" className={inputClass} /></Field>
                   <Field label="Destination country"><input required minLength={2} maxLength={80} value={destinationCountry} onChange={event => setDestinationCountry(event.target.value)} placeholder="Country or region" className={inputClass} /></Field>
+                  <Field label="Bank name"><input required maxLength={120} value={bankName} onChange={event => setBankName(event.target.value)} placeholder="Receiving bank" className={inputClass} /></Field>
+                  <Field label="Account number / IBAN"><input required type="text" inputMode="text" autoComplete="off" minLength={4} maxLength={34} pattern="[A-Za-z0-9 -]{4,34}" value={accountNumber} onChange={event => setAccountNumber(event.target.value)} placeholder="Test account details only" className={inputClass} /></Field>
                 </div>
-                <p className="-mt-2 text-[10px] leading-4 text-[#8391a0]">Name and country are simulation labels only. Do not enter bank or payment account details.</p>
+                <p className="-mt-2 text-[10px] leading-4 text-[#8391a0]">Simulation only—use test details, not a real account. Only the last four account characters are retained; no bank is contacted or credited.</p>
               </>
             )}
             <div className="grid gap-5 sm:grid-cols-2">
@@ -396,12 +407,12 @@ export function SendPage() {
           </div>
           {(message || hasError) && <p role="alert" className="mt-5 rounded-lg bg-[#fff1ef] px-4 py-3 text-[11px] text-[#a24940]">{message || 'Please check the transfer details and try again.'}</p>}
           {success && <div role="status" className="mt-5 rounded-xl border border-[#cfe5db] bg-[#f1f8f4] p-4 text-[12px] text-[#417461]"><p className="font-bold">Simulated {success.type === 'external_transfer' ? 'external' : 'member'} transfer recorded</p><p className="mt-1">Reference {success.reference} · {humanize(success.status)}</p><p className="mt-1">No real funds moved and no external account was credited.</p><button type="button" onClick={() => setReceipt(success)} className="mt-3 inline-flex items-center gap-2 rounded-lg border border-[#bfd8cc] bg-white px-3 py-2 text-[10px] font-bold text-[#3d725d] hover:bg-[#f7fbf8]"><FileText size={14} /> View receipt</button></div>}
-          <button disabled={pending || !amount || Number(amount) <= 0 || Number(amount) > available || (destinationType === 'external' && (!recipientName.trim() || !destinationCountry.trim()))} className="mt-7 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#142f51] text-[12px] font-bold text-white transition hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">{pending ? 'Recording simulation…' : 'Simulate transfer'} <ArrowRight size={15} /></button>
+            <button disabled={pending || !amount || Number(amount) <= 0 || Number(amount) > available || (destinationType === 'external' && (!recipientName.trim() || !destinationCountry.trim() || !bankName.trim() || accountNumber.replace(/[^a-z0-9]/gi, '').length < 4))} className="mt-7 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#142f51] text-[12px] font-bold text-white transition hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">{pending ? 'Recording simulation…' : 'Simulate transfer'} <ArrowRight size={15} /></button>
         </form>
         <aside className="rounded-[22px] bg-[#eaf0f4] p-6">
           <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[#638092]">Simulation only</p>
           <h2 className="bank-display mt-3 text-[23px] font-semibold leading-tight text-[#213a55]">Explore the transfer flow without moving money.</h2>
-          <ul className="mt-5 space-y-4 text-[11px] leading-5 text-[#60748a]"><li className="flex gap-2"><Check size={15} className="mt-0.5 shrink-0 text-[#43888b]" /> Member transfers require a registered Globus account.</li><li className="flex gap-2"><Check size={15} className="mt-0.5 shrink-0 text-[#43888b]" /> External recipient details are labels only; no bank account is used.</li><li className="flex gap-2"><Check size={15} className="mt-0.5 shrink-0 text-[#43888b]" /> The ledger records a fictional transaction; no provider is connected.</li></ul>
+          <ul className="mt-5 space-y-4 text-[11px] leading-5 text-[#60748a]"><li className="flex gap-2"><Check size={15} className="mt-0.5 shrink-0 text-[#43888b]" /> Member transfers require a registered Globus account.</li><li className="flex gap-2"><Check size={15} className="mt-0.5 shrink-0 text-[#43888b]" /> International recipient details are simulated; only the account’s last four characters are retained.</li><li className="flex gap-2"><Check size={15} className="mt-0.5 shrink-0 text-[#43888b]" /> The ledger records a fictional transaction; no provider is connected.</li></ul>
         </aside>
       </div>
       {receipt && <ReceiptDialog transaction={receipt} onClose={() => setReceipt(null)} />}
@@ -693,15 +704,19 @@ export function AdminPage() {
   const [fundTarget, setFundTarget] = useState<AdminUser | null>(null);
   const [fundCurrency, setFundCurrency] = useState<Currency>('USD');
   const [fundAmount, setFundAmount] = useState('');
+  const [fundSenderName, setFundSenderName] = useState('');
+  const [fundDescription, setFundDescription] = useState('');
   const [fundReason, setFundReason] = useState('');
   const [fundingError, setFundingError] = useState('');
   const [fundingSuccess, setFundingSuccess] = useState<BankTransaction | null>(null);
+  const [deleteError, setDeleteError] = useState('');
   const params = useMemo(() => ({ ...(search.trim() ? { search: search.trim() } : {}), limit: 100 }), [search]);
   const users = useListAdminUsers(params, { query: { queryKey: getListAdminUsersQueryKey(params), enabled: !!access.data?.allowed } });
   const ledgerParams = { limit: 100 };
   const ledger = useListAdminLedger(ledgerParams, { query: { queryKey: getListAdminLedgerQueryKey(ledgerParams), enabled: !!access.data?.allowed } });
   const update = useUpdateAdminUserStatus();
   const funding = useCreateAdminFunding();
+  const deletion = useDeleteAdminTransaction();
   if (access.isLoading) return <PageSkeleton />;
   if (access.isError || !access.data?.allowed) return <Failure title="Operations access is restricted" text="This area is only available to authorized Globus operations staff." retry={() => access.refetch()} />;
   const setStatus = (userId: string, accountStatus: 'active' | 'suspended') => {
@@ -726,6 +741,8 @@ export function AdminPage() {
       data: {
         currency: fundCurrency,
         amount: fundAmount,
+        senderName: fundSenderName.trim(),
+        description: fundDescription.trim(),
         reason: fundReason.trim(),
         idempotencyKey: crypto.randomUUID(),
       },
@@ -733,6 +750,8 @@ export function AdminPage() {
       onSuccess: transaction => {
         setFundingSuccess(transaction);
         setFundAmount('');
+        setFundSenderName('');
+        setFundDescription('');
         setFundReason('');
         queryClient.invalidateQueries({ queryKey: getListAdminLedgerQueryKey() });
         queryClient.invalidateQueries({ queryKey: getGetAdminSummaryQueryKey() });
@@ -742,6 +761,32 @@ export function AdminPage() {
         queryClient.invalidateQueries({ queryKey: getListBankTransactionsQueryKey() });
       },
       onError: error => setFundingError(error instanceof Error ? error.message : 'Simulated funding could not be recorded.'),
+    });
+  };
+  const deleteLedgerTransaction = (transaction: BankTransaction) => {
+    const confirmed = window.confirm(
+      `Permanently delete transaction ${transaction.reference}? Its ledger entries will be removed and affected wallet balances will change. This cannot be undone.`,
+    );
+    if (!confirmed) return;
+    const reason = window.prompt('Enter a reason for permanently deleting this transaction (at least 5 characters).');
+    if (!reason || reason.trim().length < 5) {
+      if (reason !== null) setDeleteError('Enter a deletion reason of at least five characters.');
+      return;
+    }
+    setDeleteError('');
+    deletion.mutate({
+      transactionId: transaction.id,
+      data: { reason: reason.trim() },
+    }, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListAdminLedgerQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getGetAdminSummaryQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getListAdminUsersQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getGetBankDashboardQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getListBankWalletsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getListBankTransactionsQueryKey() });
+      },
+      onError: error => setDeleteError(error instanceof Error ? error.message : 'The transaction could not be deleted.'),
     });
   };
   return (
@@ -759,16 +804,18 @@ export function AdminPage() {
       {fundTarget && <section className="mt-6 rounded-[20px] border border-[#dfe7ec] bg-white p-5 sm:p-7">
         <div className="mb-5 flex items-start justify-between gap-4">
           <div><p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#55868b]">Simulation only</p><h2 className="mt-1 text-[15px] font-bold text-[#29425c]">Fund a user wallet</h2><p className="mt-1 text-[11px] text-[#7e8d9c]">{[fundTarget.firstName, fundTarget.lastName].filter(Boolean).join(' ') || 'Globus member'} · {fundTarget.email}</p></div>
-          <button type="button" aria-label="Close funding form" onClick={() => { setFundTarget(null); setFundingError(''); setFundingSuccess(null); }} className="rounded-lg p-2 text-[#6d8092] hover:bg-[#f1f5f7]"><X size={16} /></button>
+          <button type="button" aria-label="Close funding form" onClick={() => { setFundTarget(null); setFundingError(''); setFundingSuccess(null); setFundSenderName(''); setFundDescription(''); setFundReason(''); }} className="rounded-lg p-2 text-[#6d8092] hover:bg-[#f1f5f7]"><X size={16} /></button>
         </div>
         <p className="mb-5 rounded-lg border border-[#d9e8e9] bg-[#f2f8f8] px-4 py-3 text-[10px] leading-4 text-[#4e777a]">This posts fictional value to the selected currency wallet and writes an audit record. No real funds are sent. Maximum per entry: 1,000,000.00.</p>
         <form onSubmit={submitFunding} className="grid gap-4 sm:grid-cols-2">
           <Field label="Currency"><select value={fundCurrency} onChange={event => setFundCurrency(event.target.value as Currency)} className={inputClass}>{currencies.map(item => <option key={item} value={item}>{item} · {currencyNames[item]}</option>)}</select></Field>
           <Field label="Amount"><input required inputMode="decimal" pattern="[0-9]+(\.[0-9]{1,2})?" min="0.01" max="1000000" value={fundAmount} onChange={event => setFundAmount(event.target.value)} placeholder="0.00" className={inputClass} /></Field>
+          <Field label="Sender / source name"><input required maxLength={120} value={fundSenderName} onChange={event => setFundSenderName(event.target.value)} placeholder="Globus operations" className={inputClass} /></Field>
+          <Field label="Transaction description"><input required maxLength={240} value={fundDescription} onChange={event => setFundDescription(event.target.value)} placeholder="Reason shown in transaction activity" className={inputClass} /></Field>
           <div className="sm:col-span-2"><Field label="Reason (recorded in the audit log)"><textarea required minLength={5} maxLength={500} rows={3} value={fundReason} onChange={event => setFundReason(event.target.value)} placeholder="Reason for this simulated credit" className={`${inputClass} h-auto py-3`} /></Field></div>
           {fundingError && <p role="alert" className="sm:col-span-2 rounded-lg bg-[#fff1ef] px-4 py-3 text-[11px] text-[#a24940]">{fundingError}</p>}
           {fundingSuccess && <p role="status" className="sm:col-span-2 rounded-lg border border-[#cfe5db] bg-[#f1f8f4] px-4 py-3 text-[11px] text-[#417461]">Simulated funding recorded · {fundingSuccess.reference}</p>}
-          <div className="sm:col-span-2"><button disabled={funding.isPending || !fundAmount || !fundReason.trim()} className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#142f51] px-5 text-[11px] font-bold text-white hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">{funding.isPending ? 'Recording funding…' : 'Record simulated funding'} <ArrowRight size={14} /></button></div>
+          <div className="sm:col-span-2"><button disabled={funding.isPending || !fundAmount || !fundSenderName.trim() || !fundDescription.trim() || !fundReason.trim()} className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#142f51] px-5 text-[11px] font-bold text-white hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">{funding.isPending ? 'Recording funding…' : 'Record simulated funding'} <ArrowRight size={14} /></button></div>
         </form>
       </section>}
       <section className="mt-7 overflow-hidden rounded-[20px] border border-[#e1e8ee] bg-white">
@@ -776,8 +823,9 @@ export function AdminPage() {
         {users.isLoading ? <ListSkeleton /> : users.isError ? <InlineError text="User records are unavailable." retry={() => users.refetch()} /> : users.data?.length ? <div className="overflow-x-auto"><table className="w-full min-w-[820px] text-left"><thead className="bg-[#f7f9fa] text-[9px] uppercase tracking-[.13em] text-[#8291a0]"><tr><th className="px-6 py-3">Member</th><th className="px-4 py-3">Region</th><th className="px-4 py-3">Verification</th><th className="px-4 py-3">Account</th><th className="px-4 py-3">Wallets</th><th className="px-6 py-3 text-right">Actions</th></tr></thead><tbody>{users.data.map(user => <tr key={user.id} className="border-t border-[#edf0f2] text-[11px] text-[#445a71]"><td className="px-6 py-4"><b className="block text-[#2d435c]">{[user.firstName, user.lastName].filter(Boolean).join(' ') || 'Globus member'}</b><span className="mt-1 block text-[10px] text-[#8a97a5]">{user.email}</span></td><td className="px-4 py-4">{user.country || '—'}</td><td className="px-4 py-4">{humanize(user.verificationStatus)}</td><td className="px-4 py-4">{humanize(user.accountStatus)}</td><td className="px-4 py-4">{user.walletCount}</td><td className="px-6 py-4 text-right"><div className="flex justify-end gap-2"><button disabled={user.accountStatus !== 'active'} onClick={() => { setFundTarget(user); setFundingError(''); setFundingSuccess(null); }} className="rounded-lg bg-[#eff7f7] px-3 py-2 text-[10px] font-bold text-[#36777c] hover:bg-[#e2f1f1] disabled:cursor-not-allowed disabled:opacity-40">Fund</button><button disabled={update.isPending} onClick={() => setStatus(user.id, user.accountStatus === 'active' ? 'suspended' : 'active')} className="rounded-lg border border-[#dfe6eb] px-3 py-2 text-[10px] font-bold text-[#3f5c75] hover:bg-[#f4f7f8] disabled:opacity-50">{user.accountStatus === 'active' ? 'Suspend' : 'Reactivate'}</button></div></td></tr>)}</tbody></table></div> : <EmptyState title="No users found" text="Try another email or name." />}
       </section>
       <section className="mt-6 overflow-hidden rounded-[20px] border border-[#e1e8ee] bg-white">
-        <div className="border-b border-[#edf0f3] px-5 py-4 sm:px-7"><h2 className="text-[14px] font-bold text-[#28405c]">Ledger review</h2><p className="mt-1 text-[10px] text-[#8592a1]">Recorded simulated activity; no provider settlement is implied.</p></div>
-        {ledger.isLoading ? <ListSkeleton /> : ledger.isError ? <InlineError text="Ledger records are unavailable." retry={() => ledger.refetch()} /> : ledger.data?.length ? <TransactionList transactions={ledger.data} /> : <EmptyState title="Ledger is clear" text="There are no recorded transactions to review." />}
+        <div className="border-b border-[#edf0f3] px-5 py-4 sm:px-7"><h2 className="text-[14px] font-bold text-[#28405c]">Ledger review</h2><p className="mt-1 text-[10px] text-[#8592a1]">Review completed activity and pending simulation requests. Permanent deletion removes the transaction and its ledger entries; a reason is recorded in the audit log, and deletions that would create a negative wallet balance are blocked.</p></div>
+        {deleteError && <p role="alert" className="border-b border-[#edf0f3] bg-[#fff1ef] px-5 py-3 text-[11px] text-[#a24940]">{deleteError}</p>}
+        {ledger.isLoading ? <ListSkeleton /> : ledger.isError ? <InlineError text="Ledger records are unavailable." retry={() => ledger.refetch()} /> : ledger.data?.length ? <TransactionList transactions={ledger.data} onDelete={deleteLedgerTransaction} deletePending={deletion.isPending} /> : <EmptyState title="Ledger is clear" text="There are no recorded transactions to review." />}
       </section>
     </>
   );
@@ -842,7 +890,15 @@ function WalletMini({ wallet }: { wallet: Wallet }) {
   return <div className="flex items-center justify-between rounded-xl bg-[#f6f8fa] px-3.5 py-3"><span><b className="block text-[11px] text-[#3b5168]">{wallet.currency}</b><small className="mt-1 block text-[9px] text-[#8b98a5]">{currencyNames[wallet.currency]}</small></span><span className="text-[11px] font-semibold text-[#3e566e]">{formatMoney(Number(wallet.available), wallet.currency)}</span></div>;
 }
 
-function TransactionList({ transactions }: { transactions: BankTransaction[] }) {
+function TransactionList({
+  transactions,
+  onDelete,
+  deletePending = false,
+}: {
+  transactions: BankTransaction[];
+  onDelete?: (transaction: BankTransaction) => void;
+  deletePending?: boolean;
+}) {
   const [receipt, setReceipt] = useState<BankTransaction | null>(null);
   return <>
     <div>{transactions.map(transaction => {
@@ -853,6 +909,7 @@ function TransactionList({ transactions }: { transactions: BankTransaction[] }) 
         <div className="min-w-0 flex-1"><p className="truncate text-[11px] font-semibold text-[#334a63]">{transaction.description || humanize(transaction.type)}</p><p className="mt-1 truncate text-[9px] text-[#8996a4]">{transaction.counterparty || 'Simulation ledger'} · {formatDate(transaction.createdAt)} · {transaction.mode}</p></div>
         <div className="shrink-0 text-right"><p className={`text-[11px] font-bold ${isIncoming ? 'text-[#417f69]' : 'text-[#3c5269]'}`}>{isIncoming ? '+' : '−'}{formatMoney(Number(transaction.amount), transaction.currency)}</p><p className={`mt-1 text-[9px] capitalize ${transaction.status === 'completed' ? 'text-[#4f8c75]' : 'text-[#9b8050]'}`}>{humanize(transaction.status)}</p></div>
         {canPrintReceipt && <button type="button" onClick={() => setReceipt(transaction)} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#dfe7eb] px-2.5 py-2 text-[9px] font-bold text-[#4a667e] hover:bg-[#f5f8f9]" aria-label={`View receipt ${transaction.reference}`}><FileText size={13} /><span className="hidden sm:inline">Receipt</span></button>}
+        {onDelete && <button type="button" disabled={deletePending} onClick={() => onDelete(transaction)} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#ead8d5] px-2.5 py-2 text-[9px] font-bold text-[#a24940] hover:bg-[#fff7f5] disabled:cursor-not-allowed disabled:opacity-50" aria-label={`Permanently delete transaction ${transaction.reference}`}><Trash2 size={13} /><span className="hidden sm:inline">Delete</span></button>}
       </div>;
     })}</div>
     {receipt && <ReceiptDialog transaction={receipt} onClose={() => setReceipt(null)} />}

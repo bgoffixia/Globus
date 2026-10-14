@@ -381,8 +381,17 @@ router.post("/bank/external-transfers", async (req, res): Promise<void> => {
 
   const recipientName = parsed.data.recipientName.trim();
   const destinationCountry = parsed.data.destinationCountry.trim();
-  if (!recipientName || !destinationCountry) {
-    res.status(400).json({ error: "Enter the recipient name and destination country." });
+  const bankName = parsed.data.bankName.trim();
+  const accountNumberLast4 = parsed.data.accountNumberLast4.trim().toUpperCase();
+  if (
+    !recipientName ||
+    !destinationCountry ||
+    !bankName ||
+    !/^[A-Z0-9]{4}$/.test(accountNumberLast4)
+  ) {
+    res.status(400).json({
+      error: "Enter the recipient, destination country, bank name, and last four account characters.",
+    });
     return;
   }
 
@@ -452,7 +461,7 @@ router.post("/bank/external-transfers", async (req, res): Promise<void> => {
         currency: parsed.data.currency,
         amountMinor,
         feeMinor: 0n,
-        counterparty: `${recipientName} · ${destinationCountry}`,
+        counterparty: `${recipientName} · ${bankName} · ****${accountNumberLast4} · ${destinationCountry}`,
         description: parsed.data.description?.trim() || "Simulated external transfer",
         mode: "simulation",
       })

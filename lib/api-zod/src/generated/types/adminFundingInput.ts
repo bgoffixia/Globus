@@ -12,6 +12,16 @@ export interface AdminFundingInput {
   /** @pattern ^[0-9]{1,12}(\.[0-9]{1,2})?$ */
   amount: string;
   /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  senderName: string;
+  /**
+     * @minLength 1
+     * @maxLength 240
+     */
+  description: string;
+  /**
      * @minLength 5
      * @maxLength 500
      */

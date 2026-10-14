@@ -18,6 +18,13 @@ export interface ExternalTransferInput {
      * @maxLength 80
      */
   destinationCountry: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  bankName: string;
+  /** @pattern ^[A-Z0-9]{4}$ */
+  accountNumberLast4: string;
   currency: CurrencyCode;
   /** @pattern ^[0-9]{1,12}(\.[0-9]{1,2})?$ */
   amount: string;

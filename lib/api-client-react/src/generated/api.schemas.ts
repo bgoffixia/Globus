@@ -181,6 +181,13 @@ export interface ExternalTransferInput {
      * @maxLength 80
      */
   destinationCountry: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  bankName: string;
+  /** @pattern ^[A-Z0-9]{4}$ */
+  accountNumberLast4: string;
   currency: CurrencyCode;
   /** @pattern ^[0-9]{1,12}(\.[0-9]{1,2})?$ */
   amount: string;
@@ -344,6 +351,16 @@ export interface AdminFundingInput {
   /** @pattern ^[0-9]{1,12}(\.[0-9]{1,2})?$ */
   amount: string;
   /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  senderName: string;
+  /**
+     * @minLength 1
+     * @maxLength 240
+     */
+  description: string;
+  /**
      * @minLength 5
      * @maxLength 500
      */
@@ -353,6 +370,20 @@ export interface AdminFundingInput {
      * @maxLength 100
      */
   idempotencyKey: string;
+}
+
+export interface AdminTransactionDeleteInput {
+  /**
+     * @minLength 5
+     * @maxLength 500
+     */
+  reason: string;
+}
+
+export interface AdminTransactionDeleteResult {
+  transactionId: string;
+  reference: string;
+  deleted: true;
 }
 
 /**

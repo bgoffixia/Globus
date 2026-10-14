@@ -199,6 +199,9 @@ export const createExternalTransferBodyRecipientNameMax = 120;
 export const createExternalTransferBodyDestinationCountryMin = 2;
 export const createExternalTransferBodyDestinationCountryMax = 80;
 
+export const createExternalTransferBodyBankNameMax = 120;
+
+export const createExternalTransferBodyAccountNumberLast4RegExp = new RegExp('^[A-Z0-9]{4}$');
 export const createExternalTransferBodyAmountRegExp = new RegExp('^[0-9]{1,12}(\\.[0-9]{1,2})?$');
 export const createExternalTransferBodyDescriptionMax = 140;
 
@@ -210,6 +213,8 @@ export const createExternalTransferBodyIdempotencyKeyMax = 100;
 export const CreateExternalTransferBody = zod.object({
   "recipientName": zod.string().min(1).max(createExternalTransferBodyRecipientNameMax),
   "destinationCountry": zod.string().min(createExternalTransferBodyDestinationCountryMin).max(createExternalTransferBodyDestinationCountryMax),
+  "bankName": zod.string().min(1).max(createExternalTransferBodyBankNameMax),
+  "accountNumberLast4": zod.string().regex(createExternalTransferBodyAccountNumberLast4RegExp),
   "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
   "amount": zod.string().regex(createExternalTransferBodyAmountRegExp),
   "description": zod.string().max(createExternalTransferBodyDescriptionMax).optional(),
@@ -396,6 +401,10 @@ export const CreateAdminFundingParams = zod.object({
 })
 
 export const createAdminFundingBodyAmountRegExp = new RegExp('^[0-9]{1,12}(\\.[0-9]{1,2})?$');
+export const createAdminFundingBodySenderNameMax = 120;
+
+export const createAdminFundingBodyDescriptionMax = 240;
+
 export const createAdminFundingBodyReasonMin = 5;
 export const createAdminFundingBodyReasonMax = 500;
 
@@ -407,6 +416,8 @@ export const createAdminFundingBodyIdempotencyKeyMax = 100;
 export const CreateAdminFundingBody = zod.object({
   "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
   "amount": zod.string().regex(createAdminFundingBodyAmountRegExp),
+  "senderName": zod.string().min(1).max(createAdminFundingBodySenderNameMax),
+  "description": zod.string().min(1).max(createAdminFundingBodyDescriptionMax),
   "reason": zod.string().min(createAdminFundingBodyReasonMin).max(createAdminFundingBodyReasonMax),
   "idempotencyKey": zod.string().min(createAdminFundingBodyIdempotencyKeyMin).max(createAdminFundingBodyIdempotencyKeyMax)
 })
@@ -453,5 +464,31 @@ export const ListAdminLedgerResponseItem = zod.object({
   "createdAt": zod.coerce.date()
 })
 export const ListAdminLedgerResponse = zod.array(ListAdminLedgerResponseItem)
+
+
+/**
+ * @summary Permanently delete a transaction and its ledger entries
+ */
+
+
+
+export const DeleteAdminTransactionParams = zod.object({
+  "transactionId": zod.coerce.string().min(1)
+})
+
+export const deleteAdminTransactionBodyReasonMin = 5;
+export const deleteAdminTransactionBodyReasonMax = 500;
+
+
+
+export const DeleteAdminTransactionBody = zod.object({
+  "reason": zod.string().min(deleteAdminTransactionBodyReasonMin).max(deleteAdminTransactionBodyReasonMax)
+})
+
+export const DeleteAdminTransactionResponse = zod.object({
+  "transactionId": zod.string(),
+  "reference": zod.string(),
+  "deleted": zod.literal(true)
+})
 
 

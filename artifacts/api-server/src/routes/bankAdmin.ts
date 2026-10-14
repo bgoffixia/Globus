@@ -1,10 +1,13 @@
 import { Router, type IRouter, type RequestHandler } from "express";
 import { getAuth } from "@clerk/express";
-import { and, count, desc, eq, ilike, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import {
   CreateAdminFundingBody,
   CreateAdminFundingParams,
   CreateAdminFundingResponse,
+  DeleteAdminTransactionBody,
+  DeleteAdminTransactionParams,
+  DeleteAdminTransactionResponse,
   GetAdminAccessResponse,
   GetAdminSummaryResponse,
   ListAdminLedgerQueryParams,
@@ -25,6 +28,7 @@ import {
   db,
 } from "@workspace/db";
 import {
+  balanceForWallet,
   createReference,
   ensureBankUser,
   parseAmountToMinor,
@@ -267,8 +271,14 @@ router.post(
     }
 
     const reason = parsed.data.reason.trim();
+    const senderName = parsed.data.senderName.trim();
+    const description = parsed.data.description.trim();
     if (reason.length < 5) {
       res.status(400).json({ error: "Enter a funding reason of at least five characters." });
+      return;
+    }
+    if (!senderName || !description) {
+      res.status(400).json({ error: "Enter a sender name and transaction description." });
       return;
     }
 
@@ -288,7 +298,6 @@ router.post(
     }
 
     await ensureBankUser(actorUserId);
-    const description = `Admin simulation funding — ${reason}`;
     const result = await db.transaction(async (tx) => {
       await tx.execute(
         sql`select pg_advisory_xact_lock(hashtext(${parsed.data.idempotencyKey})::bigint)`,
@@ -306,6 +315,7 @@ router.post(
           duplicate.type === "admin_funding" &&
           duplicate.currency === parsed.data.currency &&
           duplicate.amountMinor === amountMinor &&
+          duplicate.counterparty === senderName &&
           duplicate.description === description;
         return sameRequest
           ? { transaction: duplicate }
@@ -347,7 +357,7 @@ router.post(
           currency: parsed.data.currency,
           amountMinor,
           feeMinor: 0n,
-          counterparty: "Globus operations",
+          counterparty: senderName,
           description,
           mode: "simulation",
         })
@@ -405,15 +415,14 @@ router.get("/bank/admin/ledger", requireAdmin, async (req, res): Promise<void> =
     return;
   }
 
-  const clauses = [eq(bankTransactionsTable.status, "completed")];
-  if (parsed.data.currency) {
-    clauses.push(eq(bankTransactionsTable.currency, parsed.data.currency));
-  }
-
   const rows = await db
     .select()
     .from(bankTransactionsTable)
-    .where(and(...clauses))
+    .where(
+      parsed.data.currency
+        ? eq(bankTransactionsTable.currency, parsed.data.currency)
+        : undefined,
+    )
     .orderBy(desc(bankTransactionsTable.createdAt))
     .limit(parsed.data.limit ?? 50);
 
@@ -428,5 +437,119 @@ router.get("/bank/admin/ledger", requireAdmin, async (req, res): Promise<void> =
     ),
   );
 });
+
+router.delete(
+  "/bank/admin/transactions/:transactionId",
+  requireAdmin,
+  async (req, res): Promise<void> => {
+    const params = DeleteAdminTransactionParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+
+    const parsed = DeleteAdminTransactionBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+
+    const actorUserId = getAuth(req).userId;
+    if (!actorUserId) {
+      res.status(401).json({ error: "Sign in to access your Globus account." });
+      return;
+    }
+    const reason = parsed.data.reason.trim();
+    if (reason.length < 5) {
+      res.status(400).json({ error: "Enter a deletion reason of at least five characters." });
+      return;
+    }
+
+    await ensureBankUser(actorUserId);
+    const result = await db.transaction(async (tx) => {
+      const [transaction] = await tx
+        .select()
+        .from(bankTransactionsTable)
+        .where(eq(bankTransactionsTable.id, params.data.transactionId))
+        .for("update");
+      if (!transaction) {
+        return { notFound: true as const };
+      }
+      const entries = await tx
+        .select()
+        .from(bankLedgerEntriesTable)
+        .where(eq(bankLedgerEntriesTable.transactionId, transaction.id));
+      const walletIds = [
+        ...new Set(
+          entries.flatMap((entry) => (entry.walletId ? [entry.walletId] : [])),
+        ),
+      ].sort();
+      if (walletIds.length > 0) {
+        await tx
+          .select({ id: bankWalletsTable.id })
+          .from(bankWalletsTable)
+          .where(inArray(bankWalletsTable.id, walletIds))
+          .orderBy(asc(bankWalletsTable.id))
+          .for("update");
+      }
+
+      const creditsToRemove = new Map<string, bigint>();
+      for (const entry of entries) {
+        if (entry.walletId && entry.side === "credit") {
+          creditsToRemove.set(
+            entry.walletId,
+            (creditsToRemove.get(entry.walletId) ?? 0n) + entry.amountMinor,
+          );
+        }
+      }
+      for (const [walletId, amountMinor] of creditsToRemove) {
+        if ((await balanceForWallet(tx, walletId)) < amountMinor) {
+          return {
+            error:
+              "This transaction has already been spent from an affected wallet. Delete later activity first to avoid a negative simulated balance.",
+          };
+        }
+      }
+
+      await tx
+        .delete(bankSandboxRequestsTable)
+        .where(eq(bankSandboxRequestsTable.transactionId, transaction.id));
+      await tx
+        .delete(bankLedgerEntriesTable)
+        .where(eq(bankLedgerEntriesTable.transactionId, transaction.id));
+      await tx
+        .delete(bankTransactionsTable)
+        .where(eq(bankTransactionsTable.id, transaction.id));
+      await tx.insert(bankAuditLogsTable).values({
+        actorUserId,
+        targetUserId:
+          transaction.fromUserId ??
+          transaction.toUserId ??
+          transaction.initiatedByUserId,
+        action: "delete_transaction",
+        reason: `Transaction ${transaction.reference}: ${reason}`,
+      });
+
+      return { deleted: true as const, reference: transaction.reference };
+    });
+
+    if ("notFound" in result) {
+      res.status(404).json({ error: "Transaction not found." });
+      return;
+    }
+    if ("error" in result) {
+      res.status(409).json({ error: result.error });
+      return;
+    }
+
+    res.json(
+      DeleteAdminTransactionResponse.parse({
+        transactionId: params.data.transactionId,
+        reference: result.reference,
+        deleted: result.deleted,
+      }),
+    );
+  },
+);
 
 export default router;
