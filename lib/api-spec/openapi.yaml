@@ -3,13 +3,17 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Sandbox-first Globus Bank API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: bank
+    description: Authenticated wallet and banking operations
+  - name: admin
+    description: Privileged administrative operations
 paths:
   /healthz:
     get:
@@ -24,7 +28,319 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /bank/me:
+    get:
+      operationId: getBankProfile
+      tags: [bank]
+      summary: Get the authenticated user's Globus Bank profile
+      responses:
+        "200":
+          description: Profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BankProfile"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /bank/dashboard:
+    get:
+      operationId: getBankDashboard
+      tags: [bank]
+      summary: Get the user's balances and recent sandbox activity
+      responses:
+        "200":
+          description: Dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BankDashboard"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /bank/wallets:
+    get:
+      operationId: listBankWallets
+      tags: [bank]
+      summary: List the authenticated user's currency wallets
+      responses:
+        "200":
+          description: Currency wallets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Wallet"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /bank/transactions:
+    get:
+      operationId: listBankTransactions
+      tags: [bank]
+      summary: Search the authenticated user's transaction history
+      parameters:
+        - name: currency
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/CurrencyCode"
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/TransactionStatus"
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 100
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+      responses:
+        "200":
+          description: Matching transactions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BankTransaction"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /bank/profile:
+    put:
+      operationId: updateBankProfile
+      tags: [bank]
+      summary: Save user profile and accept the account terms
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BankProfileInput"
+      responses:
+        "200":
+          description: Saved profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BankProfile"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /bank/transfers:
+    post:
+      operationId: createBankTransfer
+      tags: [bank]
+      summary: Transfer sandbox funds to another registered Globus user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransferInput"
+      responses:
+        "201":
+          description: Posted sandbox transfer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BankTransaction"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /bank/sandbox-requests:
+    post:
+      operationId: createSandboxRequest
+      tags: [bank]
+      summary: Record a sandbox deposit, withdrawal, or exchange request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SandboxRequestInput"
+      responses:
+        "201":
+          description: Recorded sandbox request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SandboxRequest"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /bank/admin/access:
+    get:
+      operationId: getAdminAccess
+      tags: [admin]
+      summary: Check whether the signed-in user has administrator access
+      responses:
+        "200":
+          description: Admin access state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminAccess"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /bank/admin/summary:
+    get:
+      operationId: getAdminSummary
+      tags: [admin]
+      summary: Get operational totals from stored sandbox records
+      responses:
+        "200":
+          description: Admin summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSummary"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /bank/admin/users:
+    get:
+      operationId: listAdminUsers
+      tags: [admin]
+      summary: Search and list user records
+      parameters:
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 100
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        "200":
+          description: User records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminUser"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /bank/admin/users/{userId}/status:
+    patch:
+      operationId: updateAdminUserStatus
+      tags: [admin]
+      summary: Suspend or reactivate a user with a documented reason
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminUserStatusInput"
+      responses:
+        "200":
+          description: Updated account status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /bank/admin/ledger:
+    get:
+      operationId: listAdminLedger
+      tags: [admin]
+      summary: Review posted ledger transactions
+      parameters:
+        - name: currency
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/CurrencyCode"
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        "200":
+          description: Recent ledger transactions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BankTransaction"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
 components:
+  responses:
+    BadRequest:
+      description: Invalid input
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Sign in is required
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: The current user is not authorized
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: The requested record was not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Conflict:
+      description: The operation conflicts with current account or balance state
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
   schemas:
     HealthStatus:
       type: object
@@ -33,4 +349,147 @@ components:
           type: string
       required:
         - status
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+    CurrencyCode:
+      type: string
+      enum: [USD, EUR, GBP, NGN, CAD, AUD]
+    TransactionStatus:
+      type: string
+      enum: [completed, pending, failed, reversed]
+    TransactionType:
+      type: string
+      enum: [sandbox_credit, transfer_in, transfer_out, deposit_request, withdrawal_request, exchange_request]
+    Wallet:
+      type: object
+      properties:
+        id: { type: string }
+        currency: { $ref: "#/components/schemas/CurrencyCode" }
+        available: { type: string }
+        pending: { type: string }
+        reserved: { type: string }
+        status: { type: string, enum: [active, restricted] }
+      required: [id, currency, available, pending, reserved, status]
+    BankProfile:
+      type: object
+      properties:
+        id: { type: string }
+        email: { type: string }
+        firstName: { type: ["string", "null"] }
+        lastName: { type: ["string", "null"] }
+        phone: { type: ["string", "null"] }
+        country: { type: ["string", "null"] }
+        verificationStatus: { type: string, enum: [not_started, pending, approved, rejected, additional_information_required] }
+        accountStatus: { type: string, enum: [active, suspended] }
+        createdAt: { type: string, format: date-time }
+      required: [id, email, firstName, lastName, phone, country, verificationStatus, accountStatus, createdAt]
+    BankProfileInput:
+      type: object
+      properties:
+        firstName: { type: string, minLength: 1, maxLength: 80 }
+        lastName: { type: string, minLength: 1, maxLength: 80 }
+        phone: { type: string, minLength: 3, maxLength: 32 }
+        country: { type: string, minLength: 2, maxLength: 80 }
+        acceptedTerms: { type: boolean, const: true }
+      required: [firstName, lastName, phone, country, acceptedTerms]
+    BankTransaction:
+      type: object
+      properties:
+        id: { type: string }
+        reference: { type: string }
+        type: { $ref: "#/components/schemas/TransactionType" }
+        status: { $ref: "#/components/schemas/TransactionStatus" }
+        currency: { $ref: "#/components/schemas/CurrencyCode" }
+        amount: { type: string }
+        fee: { type: string }
+        counterparty: { type: ["string", "null"] }
+        description: { type: string }
+        mode: { type: string, enum: [sandbox] }
+        createdAt: { type: string, format: date-time }
+      required: [id, reference, type, status, currency, amount, fee, counterparty, description, mode, createdAt]
+    BankDashboard:
+      type: object
+      properties:
+        profile: { $ref: "#/components/schemas/BankProfile" }
+        wallets:
+          type: array
+          items: { $ref: "#/components/schemas/Wallet" }
+        recentTransactions:
+          type: array
+          items: { $ref: "#/components/schemas/BankTransaction" }
+        referenceCurrency: { $ref: "#/components/schemas/CurrencyCode" }
+        sandboxMode: { type: boolean, const: true }
+      required: [profile, wallets, recentTransactions, referenceCurrency, sandboxMode]
+    TransferInput:
+      type: object
+      properties:
+        recipientEmail: { type: string, format: email }
+        currency: { $ref: "#/components/schemas/CurrencyCode" }
+        amount: { type: string, pattern: "^[0-9]{1,12}(\\.[0-9]{1,2})?$" }
+        description: { type: string, maxLength: 140 }
+        idempotencyKey: { type: string, minLength: 16, maxLength: 100 }
+      required: [recipientEmail, currency, amount, idempotencyKey]
+    SandboxRequestInput:
+      type: object
+      properties:
+        type: { type: string, enum: [deposit, withdrawal, exchange] }
+        currency: { $ref: "#/components/schemas/CurrencyCode" }
+        destinationCurrency: { anyOf: [{ $ref: "#/components/schemas/CurrencyCode" }, { type: "null" }] }
+        amount: { type: string, pattern: "^[0-9]{1,12}(\\.[0-9]{1,2})?$" }
+        idempotencyKey: { type: string, minLength: 16, maxLength: 100 }
+      required: [type, currency, amount, idempotencyKey]
+    SandboxRequest:
+      type: object
+      properties:
+        id: { type: string }
+        reference: { type: string }
+        type: { type: string, enum: [deposit, withdrawal, exchange] }
+        currency: { $ref: "#/components/schemas/CurrencyCode" }
+        destinationCurrency: { type: ["string", "null"] }
+        amount: { type: string }
+        status: { type: string, enum: [pending_provider_setup] }
+        message: { type: string }
+        createdAt: { type: string, format: date-time }
+      required: [id, reference, type, currency, destinationCurrency, amount, status, message, createdAt]
+    AdminAccess:
+      type: object
+      properties:
+        allowed: { type: boolean }
+        roles:
+          type: array
+          items: { type: string }
+      required: [allowed, roles]
+    AdminSummary:
+      type: object
+      properties:
+        registeredUsers: { type: integer }
+        activeWallets: { type: integer }
+        pendingSandboxRequests: { type: integer }
+        ledgerTransactions: { type: integer }
+        sandboxMode: { type: boolean, const: true }
+        providerStatus: { type: string, enum: [not_configured] }
+      required: [registeredUsers, activeWallets, pendingSandboxRequests, ledgerTransactions, sandboxMode, providerStatus]
+    AdminUser:
+      type: object
+      properties:
+        id: { type: string }
+        email: { type: string }
+        firstName: { type: ["string", "null"] }
+        lastName: { type: ["string", "null"] }
+        country: { type: ["string", "null"] }
+        verificationStatus: { type: string, enum: [not_started, pending, approved, rejected, additional_information_required] }
+        accountStatus: { type: string, enum: [active, suspended] }
+        walletCount: { type: integer }
+        createdAt: { type: string, format: date-time }
+      required: [id, email, firstName, lastName, country, verificationStatus, accountStatus, walletCount, createdAt]
+    AdminUserStatusInput:
+      type: object
+      properties:
+        accountStatus: { type: string, enum: [active, suspended] }
+        reason: { type: string, minLength: 5, maxLength: 500 }
+      required: [accountStatus, reason]
 

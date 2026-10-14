@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Globus Bank"
+description = "A sandbox-first multi-currency wallet and online banking experience with user and administrator portals, ledger-backed wallet activities, and clear disclosures about what is simulated versus provider-backed."
+version = "1.0.0"
+id = "artifacts/globus-bank"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24083
+
+[services.development]
+run = "pnpm --filter @workspace/globus-bank run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/globus-bank", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/globus-bank/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24083"
+BASE_PATH = "/"
