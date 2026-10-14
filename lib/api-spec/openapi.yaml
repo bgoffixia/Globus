@@ -3,7 +3,7 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: Sandbox-first Globus Bank API
+  description: Simulation-only Globus wallet API
 servers:
   - url: /api
     description: Base API path
@@ -46,7 +46,7 @@ paths:
     get:
       operationId: getBankDashboard
       tags: [bank]
-      summary: Get the user's balances and recent sandbox activity
+      summary: Get the user's simulated balances and recent activity
       responses:
         "200":
           description: Dashboard data
@@ -139,7 +139,7 @@ paths:
     post:
       operationId: createBankTransfer
       tags: [bank]
-      summary: Transfer sandbox funds to another registered Globus user
+      summary: Simulate a transfer to another registered Globus user
       requestBody:
         required: true
         content:
@@ -148,7 +148,7 @@ paths:
               $ref: "#/components/schemas/TransferInput"
       responses:
         "201":
-          description: Posted sandbox transfer
+          description: Posted simulated transfer
           content:
             application/json:
               schema:
@@ -159,24 +159,48 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "409":
           $ref: "#/components/responses/Conflict"
-  /bank/sandbox-requests:
+  /bank/external-transfers:
     post:
-      operationId: createSandboxRequest
+      operationId: createExternalTransfer
       tags: [bank]
-      summary: Record a sandbox deposit, withdrawal, or exchange request
+      summary: Simulate a transfer to an external recipient
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/SandboxRequestInput"
+              $ref: "#/components/schemas/ExternalTransferInput"
       responses:
         "201":
-          description: Recorded sandbox request
+          description: Posted simulated external transfer
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SandboxRequest"
+                $ref: "#/components/schemas/BankTransaction"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /bank/simulation-requests:
+    post:
+      operationId: createSimulationRequest
+      tags: [bank]
+      summary: Record a simulated deposit, withdrawal, or exchange request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SimulationRequestInput"
+      responses:
+        "201":
+          description: Recorded simulated request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SimulationRequest"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -199,7 +223,7 @@ paths:
     get:
       operationId: getAdminSummary
       tags: [admin]
-      summary: Get operational totals from stored sandbox records
+      summary: Get operational totals from stored simulation records
       responses:
         "200":
           description: Admin summary
@@ -363,7 +387,7 @@ components:
       enum: [completed, pending, failed, reversed]
     TransactionType:
       type: string
-      enum: [sandbox_credit, transfer_in, transfer_out, deposit_request, withdrawal_request, exchange_request]
+      enum: [simulation_credit, sandbox_credit, transfer_in, transfer_out, external_transfer, deposit_request, withdrawal_request, exchange_request]
     Wallet:
       type: object
       properties:
@@ -408,7 +432,7 @@ components:
         fee: { type: string }
         counterparty: { type: ["string", "null"] }
         description: { type: string }
-        mode: { type: string, enum: [sandbox] }
+        mode: { type: string, enum: [simulation] }
         createdAt: { type: string, format: date-time }
       required: [id, reference, type, status, currency, amount, fee, counterparty, description, mode, createdAt]
     BankDashboard:
@@ -422,8 +446,8 @@ components:
           type: array
           items: { $ref: "#/components/schemas/BankTransaction" }
         referenceCurrency: { $ref: "#/components/schemas/CurrencyCode" }
-        sandboxMode: { type: boolean, const: true }
-      required: [profile, wallets, recentTransactions, referenceCurrency, sandboxMode]
+        simulationMode: { type: boolean, const: true }
+      required: [profile, wallets, recentTransactions, referenceCurrency, simulationMode]
     TransferInput:
       type: object
       properties:
@@ -433,7 +457,17 @@ components:
         description: { type: string, maxLength: 140 }
         idempotencyKey: { type: string, minLength: 16, maxLength: 100 }
       required: [recipientEmail, currency, amount, idempotencyKey]
-    SandboxRequestInput:
+    ExternalTransferInput:
+      type: object
+      properties:
+        recipientName: { type: string, minLength: 1, maxLength: 120 }
+        destinationCountry: { type: string, minLength: 2, maxLength: 80 }
+        currency: { $ref: "#/components/schemas/CurrencyCode" }
+        amount: { type: string, pattern: "^[0-9]{1,12}(\\.[0-9]{1,2})?$" }
+        description: { type: string, maxLength: 140 }
+        idempotencyKey: { type: string, minLength: 16, maxLength: 100 }
+      required: [recipientName, destinationCountry, currency, amount, idempotencyKey]
+    SimulationRequestInput:
       type: object
       properties:
         type: { type: string, enum: [deposit, withdrawal, exchange] }
@@ -442,7 +476,7 @@ components:
         amount: { type: string, pattern: "^[0-9]{1,12}(\\.[0-9]{1,2})?$" }
         idempotencyKey: { type: string, minLength: 16, maxLength: 100 }
       required: [type, currency, amount, idempotencyKey]
-    SandboxRequest:
+    SimulationRequest:
       type: object
       properties:
         id: { type: string }
@@ -468,11 +502,11 @@ components:
       properties:
         registeredUsers: { type: integer }
         activeWallets: { type: integer }
-        pendingSandboxRequests: { type: integer }
+        pendingProviderRequests: { type: integer }
         ledgerTransactions: { type: integer }
-        sandboxMode: { type: boolean, const: true }
+        simulationMode: { type: boolean, const: true }
         providerStatus: { type: string, enum: [not_configured] }
-      required: [registeredUsers, activeWallets, pendingSandboxRequests, ledgerTransactions, sandboxMode, providerStatus]
+      required: [registeredUsers, activeWallets, pendingProviderRequests, ledgerTransactions, simulationMode, providerStatus]
     AdminUser:
       type: object
       properties:
