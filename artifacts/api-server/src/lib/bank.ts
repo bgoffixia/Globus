@@ -208,7 +208,9 @@ export function toBankTransaction(
     amount: formatMinorAmount(transaction.amountMinor),
     fee: formatMinorAmount(transaction.feeMinor),
     counterparty:
-      transaction.counterparty === "Globus sandbox ledger"
+      transaction.type === "transfer" && transaction.toUserId === viewerUserId
+        ? "Globus member"
+        : transaction.counterparty === "Globus sandbox ledger"
         ? "Simulation ledger"
         : transaction.counterparty,
     description,

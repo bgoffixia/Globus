@@ -7,11 +7,13 @@ Globus Bank is a simulation-only multi-currency wallet experience. It is softwar
 - Clerk email sign-in and sign-up, with a server-side Globus profile.
 - USD, EUR, GBP, NGN, CAD and AUD wallets backed by a double-entry ledger.
 - Simulated starting value and member-to-member or external-recipient transfers.
+- Admin-only simulated wallet funding with a recorded reason and audit entry.
+- Printable simulation receipts for completed transfers, available again from activity history.
 - Transaction search, user profile settings, and recorded provider-setup requests.
 - Server-authorized operations summary, account status actions, and ledger review.
 - Public about, help, fees, privacy, terms and contact pages.
 
-Member and external-recipient transfers update fictional ledger records only. External recipient name and country are labels; no bank details are collected, and no outside account is credited. Deposits, withdrawals and currency exchanges are **not connected to a provider**; their forms record simulated requests only.
+Member, incoming and external-recipient transfers and admin funding update fictional ledger records only. External party names and countries are labels; no bank details are collected, and no outside account is credited. Receipts are printable records of simulated activity, not proof of payment. Deposits, withdrawals and currency exchanges are **not connected to a provider**; their forms record simulated requests only.
 
 ## Run and configure
 

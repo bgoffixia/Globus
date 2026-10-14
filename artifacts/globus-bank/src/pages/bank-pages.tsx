@@ -628,11 +628,18 @@ export function AdminPage() {
   const summary = useGetAdminSummary({ query: { queryKey: getGetAdminSummaryQueryKey(), enabled: !!access.data?.allowed, retry: false } });
   const [search, setSearch] = useState('');
   const [statusError, setStatusError] = useState('');
+  const [fundTarget, setFundTarget] = useState<AdminUser | null>(null);
+  const [fundCurrency, setFundCurrency] = useState<Currency>('USD');
+  const [fundAmount, setFundAmount] = useState('');
+  const [fundReason, setFundReason] = useState('');
+  const [fundingError, setFundingError] = useState('');
+  const [fundingSuccess, setFundingSuccess] = useState<BankTransaction | null>(null);
   const params = useMemo(() => ({ ...(search.trim() ? { search: search.trim() } : {}), limit: 100 }), [search]);
   const users = useListAdminUsers(params, { query: { queryKey: getListAdminUsersQueryKey(params), enabled: !!access.data?.allowed } });
   const ledgerParams = { limit: 100 };
   const ledger = useListAdminLedger(ledgerParams, { query: { queryKey: getListAdminLedgerQueryKey(ledgerParams), enabled: !!access.data?.allowed } });
   const update = useUpdateAdminUserStatus();
+  const funding = useCreateAdminFunding();
   if (access.isLoading) return <PageSkeleton />;
   if (access.isError || !access.data?.allowed) return <Failure title="Operations access is restricted" text="This area is only available to authorized Globus operations staff." retry={() => access.refetch()} />;
   const setStatus = (userId: string, accountStatus: 'active' | 'suspended') => {
@@ -647,6 +654,34 @@ export function AdminPage() {
       onError: error => setStatusError(error instanceof Error ? error.message : 'The account status could not be updated.'),
     });
   };
+  const submitFunding = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!fundTarget) return;
+    setFundingError('');
+    setFundingSuccess(null);
+    funding.mutate({
+      userId: fundTarget.id,
+      data: {
+        currency: fundCurrency,
+        amount: fundAmount,
+        reason: fundReason.trim(),
+        idempotencyKey: crypto.randomUUID(),
+      },
+    }, {
+      onSuccess: transaction => {
+        setFundingSuccess(transaction);
+        setFundAmount('');
+        setFundReason('');
+        queryClient.invalidateQueries({ queryKey: getListAdminLedgerQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getGetAdminSummaryQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getListAdminUsersQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getGetBankDashboardQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getListBankWalletsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getListBankTransactionsQueryKey() });
+      },
+      onError: error => setFundingError(error instanceof Error ? error.message : 'Simulated funding could not be recorded.'),
+    });
+  };
   return (
     <>
       <PageHeading eyebrow="Restricted operations" title="Operations overview" subtitle="Review platform totals, registered users and the simulated ledger." />
@@ -659,9 +694,24 @@ export function AdminPage() {
       </div>
       <div className="mt-5 flex flex-wrap items-center gap-3 rounded-xl border border-[#d9e7e8] bg-[#eff7f7] px-4 py-3 text-[11px] text-[#48767b]"><ShieldCheck size={15} /> Simulation mode {summary.data?.simulationMode ? 'is active' : 'status unavailable'} <span className="text-[#adc0c2]">/</span> Provider {humanize(summary.data?.providerStatus)}</div>
       {statusError && <p role="alert" className="mt-3 rounded-lg bg-[#fff1ef] px-4 py-3 text-[11px] text-[#a24940]">{statusError}</p>}
+      {fundTarget && <section className="mt-6 rounded-[20px] border border-[#dfe7ec] bg-white p-5 sm:p-7">
+        <div className="mb-5 flex items-start justify-between gap-4">
+          <div><p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#55868b]">Simulation only</p><h2 className="mt-1 text-[15px] font-bold text-[#29425c]">Fund a user wallet</h2><p className="mt-1 text-[11px] text-[#7e8d9c]">{[fundTarget.firstName, fundTarget.lastName].filter(Boolean).join(' ') || 'Globus member'} · {fundTarget.email}</p></div>
+          <button type="button" aria-label="Close funding form" onClick={() => { setFundTarget(null); setFundingError(''); setFundingSuccess(null); }} className="rounded-lg p-2 text-[#6d8092] hover:bg-[#f1f5f7]"><X size={16} /></button>
+        </div>
+        <p className="mb-5 rounded-lg border border-[#d9e8e9] bg-[#f2f8f8] px-4 py-3 text-[10px] leading-4 text-[#4e777a]">This posts fictional value to the selected currency wallet and writes an audit record. No real funds are sent. Maximum per entry: 1,000,000.00.</p>
+        <form onSubmit={submitFunding} className="grid gap-4 sm:grid-cols-2">
+          <Field label="Currency"><select value={fundCurrency} onChange={event => setFundCurrency(event.target.value as Currency)} className={inputClass}>{currencies.map(item => <option key={item} value={item}>{item} · {currencyNames[item]}</option>)}</select></Field>
+          <Field label="Amount"><input required inputMode="decimal" pattern="[0-9]+(\.[0-9]{1,2})?" min="0.01" max="1000000" value={fundAmount} onChange={event => setFundAmount(event.target.value)} placeholder="0.00" className={inputClass} /></Field>
+          <div className="sm:col-span-2"><Field label="Reason (recorded in the audit log)"><textarea required minLength={5} maxLength={500} rows={3} value={fundReason} onChange={event => setFundReason(event.target.value)} placeholder="Reason for this simulated credit" className={`${inputClass} h-auto py-3`} /></Field></div>
+          {fundingError && <p role="alert" className="sm:col-span-2 rounded-lg bg-[#fff1ef] px-4 py-3 text-[11px] text-[#a24940]">{fundingError}</p>}
+          {fundingSuccess && <p role="status" className="sm:col-span-2 rounded-lg border border-[#cfe5db] bg-[#f1f8f4] px-4 py-3 text-[11px] text-[#417461]">Simulated funding recorded · {fundingSuccess.reference}</p>}
+          <div className="sm:col-span-2"><button disabled={funding.isPending || !fundAmount || !fundReason.trim()} className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#142f51] px-5 text-[11px] font-bold text-white hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">{funding.isPending ? 'Recording funding…' : 'Record simulated funding'} <ArrowRight size={14} /></button></div>
+        </form>
+      </section>}
       <section className="mt-7 overflow-hidden rounded-[20px] border border-[#e1e8ee] bg-white">
         <div className="flex flex-col gap-3 border-b border-[#edf0f3] px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7"><div><h2 className="text-[14px] font-bold text-[#28405c]">Registered users</h2><p className="mt-1 text-[10px] text-[#8592a1]">Account status changes require a documented reason.</p></div><label className="relative"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8996a4]" /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search users" className="h-10 w-full rounded-lg border border-[#e0e7ec] bg-white pl-9 pr-3 text-[11px] outline-none sm:w-[240px]" /></label></div>
-        {users.isLoading ? <ListSkeleton /> : users.isError ? <InlineError text="User records are unavailable." retry={() => users.refetch()} /> : users.data?.length ? <div className="overflow-x-auto"><table className="w-full min-w-[740px] text-left"><thead className="bg-[#f7f9fa] text-[9px] uppercase tracking-[.13em] text-[#8291a0]"><tr><th className="px-6 py-3">Member</th><th className="px-4 py-3">Region</th><th className="px-4 py-3">Verification</th><th className="px-4 py-3">Account</th><th className="px-4 py-3">Wallets</th><th className="px-6 py-3 text-right">Action</th></tr></thead><tbody>{users.data.map(user => <tr key={user.id} className="border-t border-[#edf0f2] text-[11px] text-[#445a71]"><td className="px-6 py-4"><b className="block text-[#2d435c]">{[user.firstName, user.lastName].filter(Boolean).join(' ') || 'Globus member'}</b><span className="mt-1 block text-[10px] text-[#8a97a5]">{user.email}</span></td><td className="px-4 py-4">{user.country || '—'}</td><td className="px-4 py-4">{humanize(user.verificationStatus)}</td><td className="px-4 py-4">{humanize(user.accountStatus)}</td><td className="px-4 py-4">{user.walletCount}</td><td className="px-6 py-4 text-right"><button disabled={update.isPending} onClick={() => setStatus(user.id, user.accountStatus === 'active' ? 'suspended' : 'active')} className="rounded-lg border border-[#dfe6eb] px-3 py-2 text-[10px] font-bold text-[#3f5c75] hover:bg-[#f4f7f8] disabled:opacity-50">{user.accountStatus === 'active' ? 'Suspend' : 'Reactivate'}</button></td></tr>)}</tbody></table></div> : <EmptyState title="No users found" text="Try another email or name." />}
+        {users.isLoading ? <ListSkeleton /> : users.isError ? <InlineError text="User records are unavailable." retry={() => users.refetch()} /> : users.data?.length ? <div className="overflow-x-auto"><table className="w-full min-w-[820px] text-left"><thead className="bg-[#f7f9fa] text-[9px] uppercase tracking-[.13em] text-[#8291a0]"><tr><th className="px-6 py-3">Member</th><th className="px-4 py-3">Region</th><th className="px-4 py-3">Verification</th><th className="px-4 py-3">Account</th><th className="px-4 py-3">Wallets</th><th className="px-6 py-3 text-right">Actions</th></tr></thead><tbody>{users.data.map(user => <tr key={user.id} className="border-t border-[#edf0f2] text-[11px] text-[#445a71]"><td className="px-6 py-4"><b className="block text-[#2d435c]">{[user.firstName, user.lastName].filter(Boolean).join(' ') || 'Globus member'}</b><span className="mt-1 block text-[10px] text-[#8a97a5]">{user.email}</span></td><td className="px-4 py-4">{user.country || '—'}</td><td className="px-4 py-4">{humanize(user.verificationStatus)}</td><td className="px-4 py-4">{humanize(user.accountStatus)}</td><td className="px-4 py-4">{user.walletCount}</td><td className="px-6 py-4 text-right"><div className="flex justify-end gap-2"><button disabled={user.accountStatus !== 'active'} onClick={() => { setFundTarget(user); setFundingError(''); setFundingSuccess(null); }} className="rounded-lg bg-[#eff7f7] px-3 py-2 text-[10px] font-bold text-[#36777c] hover:bg-[#e2f1f1] disabled:cursor-not-allowed disabled:opacity-40">Fund</button><button disabled={update.isPending} onClick={() => setStatus(user.id, user.accountStatus === 'active' ? 'suspended' : 'active')} className="rounded-lg border border-[#dfe6eb] px-3 py-2 text-[10px] font-bold text-[#3f5c75] hover:bg-[#f4f7f8] disabled:opacity-50">{user.accountStatus === 'active' ? 'Suspend' : 'Reactivate'}</button></div></td></tr>)}</tbody></table></div> : <EmptyState title="No users found" text="Try another email or name." />}
       </section>
       <section className="mt-6 overflow-hidden rounded-[20px] border border-[#e1e8ee] bg-white">
         <div className="border-b border-[#edf0f3] px-5 py-4 sm:px-7"><h2 className="text-[14px] font-bold text-[#28405c]">Ledger review</h2><p className="mt-1 text-[10px] text-[#8592a1]">Recorded simulated activity; no provider settlement is implied.</p></div>
@@ -731,20 +781,39 @@ function WalletMini({ wallet }: { wallet: Wallet }) {
 }
 
 function TransactionList({ transactions }: { transactions: BankTransaction[] }) {
-  return <div>{transactions.map(transaction => {
-    const isIncoming = transaction.type === 'transfer_in' || transaction.type === 'external_transfer_in' || transaction.type === 'simulation_credit';
-    return <div key={transaction.id} className="flex items-center gap-3 border-b border-[#edf0f2] px-5 py-4 last:border-0 sm:gap-4 sm:px-7">
-      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${isIncoming ? 'bg-[#edf7f3] text-[#4d8c72]' : 'bg-[#f0f4f7] text-[#658097]'}`}>{isIncoming ? <ArrowDownLeft size={16} /> : <ArrowUpRight size={16} />}</span>
-      <div className="min-w-0 flex-1"><p className="truncate text-[11px] font-semibold text-[#334a63]">{transaction.description || humanize(transaction.type)}</p><p className="mt-1 truncate text-[9px] text-[#8996a4]">{transaction.counterparty || 'Simulation ledger'} · {formatDate(transaction.createdAt)} · {transaction.mode}</p></div>
-      <div className="shrink-0 text-right"><p className={`text-[11px] font-bold ${isIncoming ? 'text-[#417f69]' : 'text-[#3c5269]'}`}>{isIncoming ? '+' : '−'}{formatMoney(Number(transaction.amount), transaction.currency)}</p><p className={`mt-1 text-[9px] capitalize ${transaction.status === 'completed' ? 'text-[#4f8c75]' : 'text-[#9b8050]'}`}>{humanize(transaction.status)}</p></div>
-    </div>;
-  })}</div>;
+  const [receipt, setReceipt] = useState<BankTransaction | null>(null);
+  return <>
+    <div>{transactions.map(transaction => {
+      const isIncoming = transaction.type === 'transfer_in' || transaction.type === 'external_transfer_in' || transaction.type === 'simulation_credit' || transaction.type === 'admin_funding';
+      const canPrintReceipt = transaction.status === 'completed' && (
+        transaction.type === 'transfer_out' ||
+        transaction.type === 'transfer_in' ||
+        transaction.type === 'external_transfer' ||
+        transaction.type === 'external_transfer_in'
+      );
+      return <div key={transaction.id} className="flex items-center gap-3 border-b border-[#edf0f2] px-5 py-4 last:border-0 sm:gap-4 sm:px-7">
+        <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${isIncoming ? 'bg-[#edf7f3] text-[#4d8c72]' : 'bg-[#f0f4f7] text-[#658097]'}`}>{isIncoming ? <ArrowDownLeft size={16} /> : <ArrowUpRight size={16} />}</span>
+        <div className="min-w-0 flex-1"><p className="truncate text-[11px] font-semibold text-[#334a63]">{transaction.description || humanize(transaction.type)}</p><p className="mt-1 truncate text-[9px] text-[#8996a4]">{transaction.counterparty || 'Simulation ledger'} · {formatDate(transaction.createdAt)} · {transaction.mode}</p></div>
+        <div className="shrink-0 text-right"><p className={`text-[11px] font-bold ${isIncoming ? 'text-[#417f69]' : 'text-[#3c5269]'}`}>{isIncoming ? '+' : '−'}{formatMoney(Number(transaction.amount), transaction.currency)}</p><p className={`mt-1 text-[9px] capitalize ${transaction.status === 'completed' ? 'text-[#4f8c75]' : 'text-[#9b8050]'}`}>{humanize(transaction.status)}</p></div>
+        {canPrintReceipt && <button type="button" onClick={() => setReceipt(transaction)} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#dfe7eb] px-2.5 py-2 text-[9px] font-bold text-[#4a667e] hover:bg-[#f5f8f9]" aria-label={`View receipt ${transaction.reference}`}><FileText size={13} /><span className="hidden sm:inline">Receipt</span></button>}
+      </div>;
+    })}</div>
+    {receipt && <ReceiptDialog transaction={receipt} onClose={() => setReceipt(null)} />}
+  </>;
 }
 
 function ReceiptDialog({ transaction, onClose }: { transaction: BankTransaction; onClose: () => void }) {
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [onClose]);
+
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center bg-[#10243c]/55 p-4 backdrop-blur-sm"
+      className="receipt-backdrop fixed inset-0 z-50 grid place-items-center bg-[#10243c]/55 p-4 backdrop-blur-sm"
       onMouseDown={event => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -752,27 +821,30 @@ function ReceiptDialog({ transaction, onClose }: { transaction: BankTransaction;
       <section
         aria-labelledby="receipt-title"
         aria-modal="true"
-        className="w-full max-w-md rounded-[22px] bg-white p-6 shadow-2xl sm:p-8"
+        className="receipt-dialog w-full max-w-md rounded-[22px] bg-white p-6 shadow-2xl sm:p-8"
         role="dialog"
       >
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[#518c91]">Simulation receipt</p>
-            <h2 id="receipt-title" className="bank-display mt-2 text-[24px] font-semibold text-[#203851]">{humanize(transaction.type)}</h2>
+        <article className="receipt-print">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[#518c91]">Simulation receipt</p>
+              <h2 id="receipt-title" className="bank-display mt-2 text-[24px] font-semibold text-[#203851]">{humanize(transaction.type)}</h2>
+            </div>
+            <button type="button" aria-label="Close receipt" onClick={onClose} className="receipt-screen-only grid h-9 w-9 shrink-0 place-items-center rounded-lg text-[#718196] hover:bg-[#f1f4f6]"><X size={17} /></button>
           </div>
-          <button type="button" aria-label="Close receipt" onClick={onClose} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-[#718196] hover:bg-[#f1f4f6]"><X size={17} /></button>
-        </div>
-        <p className="mt-5 border-b border-dashed border-[#dfe6eb] pb-5 text-[28px] font-semibold tracking-[-.04em] text-[#203851]">{formatMoney(Number(transaction.amount), transaction.currency)}</p>
-        <dl className="mt-5 space-y-4 text-[11px]">
-          <div className="flex justify-between gap-4"><dt className="text-[#8492a1]">Reference</dt><dd className="break-all text-right font-mono font-semibold text-[#40566e]">{transaction.reference}</dd></div>
-          <div className="flex justify-between gap-4"><dt className="text-[#8492a1]">Description</dt><dd className="text-right font-semibold text-[#40566e]">{transaction.description || humanize(transaction.type)}</dd></div>
-          <div className="flex justify-between gap-4"><dt className="text-[#8492a1]">Source or recipient</dt><dd className="text-right font-semibold text-[#40566e]">{transaction.counterparty || 'Simulation ledger'}</dd></div>
-          <div className="flex justify-between gap-4"><dt className="text-[#8492a1]">Recorded</dt><dd className="text-right font-semibold text-[#40566e]">{formatDate(transaction.createdAt)}</dd></div>
-          <div className="flex justify-between gap-4"><dt className="text-[#8492a1]">Status</dt><dd className="text-right font-semibold capitalize text-[#40566e]">{humanize(transaction.status)}</dd></div>
-        </dl>
-        <div className="mt-6 flex items-center justify-between border-t border-[#edf0f2] pt-5">
+          <p className="mt-5 border-b border-dashed border-[#dfe6eb] pb-5 text-[28px] font-semibold tracking-[-.04em] text-[#203851]">{formatMoney(Number(transaction.amount), transaction.currency)}</p>
+          <dl className="mt-5 space-y-4 text-[11px]">
+            <div className="flex justify-between gap-4"><dt className="text-[#8492a1]">Reference</dt><dd className="break-all text-right font-mono font-semibold text-[#40566e]">{transaction.reference}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-[#8492a1]">Description</dt><dd className="text-right font-semibold text-[#40566e]">{transaction.description || humanize(transaction.type)}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-[#8492a1]">Source or recipient</dt><dd className="text-right font-semibold text-[#40566e]">{transaction.counterparty || 'Simulation ledger'}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-[#8492a1]">Recorded</dt><dd className="text-right font-semibold text-[#40566e]">{formatDate(transaction.createdAt)}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-[#8492a1]">Status</dt><dd className="text-right font-semibold capitalize text-[#40566e]">{humanize(transaction.status)} · simulated</dd></div>
+          </dl>
+          <p className="mt-5 rounded-lg border border-[#e5ecef] bg-[#f7f9fa] p-3 text-[9px] leading-4 text-[#718294]">This receipt records fictional activity only. It is not proof of payment; no real funds moved and no external account was credited.</p>
+        </article>
+        <div className="receipt-actions mt-6 flex items-center justify-between border-t border-[#edf0f2] pt-5">
           <span className="text-[9px] font-bold uppercase tracking-[.13em] text-[#56837f]">Simulation only</span>
-          <button type="button" onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-lg bg-[#142f51] px-4 py-2.5 text-[10px] font-bold text-white hover:bg-[#1b4269]"><Printer size={14} /> Print</button>
+          <button type="button" onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-lg bg-[#142f51] px-4 py-2.5 text-[10px] font-bold text-white hover:bg-[#1b4269]"><Printer size={14} /> Print / Save PDF</button>
         </div>
       </section>
     </div>
