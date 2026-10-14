@@ -1,6 +1,6 @@
-# [Project name]
+# Globus Bank
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+A sandbox-first multi-currency wallet experience for exploring ledger-backed account activity without implying that test records are real money or that Globus is a licensed bank.
 
 ## Run & Operate
 
@@ -22,15 +22,23 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/globus-bank/` — responsive web app and public information pages
+- `artifacts/api-server/` — Clerk-authenticated API, user operations, ledger posting and restricted admin routes
+- `lib/db/src/schema/bank.ts` — PostgreSQL banking tables and enums
+- `lib/api-spec/openapi.yaml` — source of truth for typed API contracts
+- `artifacts/globus-bank/docs/` — API reference, security checklist and recovery instructions
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Clerk handles sign-in; the API creates a Globus profile and currency wallets on first account access.
+- Sandbox account value is ledger-posted only in development. Sandbox transfers are blocked when `NODE_ENV=production`.
+- Deposits, withdrawals and exchanges create provider-setup requests only; they never change wallet balances.
+- Administrator API access is controlled by the server-side `GLOBUS_ADMIN_CLERK_IDS` allowlist.
+- Money values are stored in integer minor units, and balances are derived from double-entry ledger entries.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+Public Globus information pages, Clerk sign-in, a multi-currency account dashboard, wallet and transaction views, member-to-member sandbox transfers, recorded provider-setup requests, account settings, and an allowlisted operations area.
 
 ## User preferences
 
