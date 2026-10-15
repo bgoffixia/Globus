@@ -17,6 +17,8 @@ import {
   ListAdminLedgerRequestsResponse,
   ListAdminLedgerQueryParams,
   ListAdminLedgerResponse,
+  ListAdminTransactionStatusHistoryParams,
+  ListAdminTransactionStatusHistoryResponse,
   ListAdminIdentityDocumentsParams,
   ListAdminIdentityDocumentsResponse,
   ListAdminUsersQueryParams,
@@ -1061,6 +1063,125 @@ router.get("/bank/admin/ledger", requireAdmin, async (req, res): Promise<void> =
     ),
   );
 });
+
+router.get(
+  "/bank/admin/transactions/:transactionId/status-history",
+  requireAdmin,
+  async (req, res): Promise<void> => {
+    const params = ListAdminTransactionStatusHistoryParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+
+    const [transaction] = await db
+      .select({
+        id: bankTransactionsTable.id,
+        reference: bankTransactionsTable.reference,
+      })
+      .from(bankTransactionsTable)
+      .where(eq(bankTransactionsTable.id, params.data.transactionId));
+    if (!transaction) {
+      res.status(404).json({ error: "Transaction not found." });
+      return;
+    }
+
+    const reasonPrefix = `Transaction ${transaction.reference}: `;
+    const auditRows = await db
+      .select()
+      .from(bankAuditLogsTable)
+      .where(
+        and(
+          eq(bankAuditLogsTable.action, "override_transaction_status"),
+          sql`left(${bankAuditLogsTable.reason}, ${reasonPrefix.length}) = ${reasonPrefix}`,
+        ),
+      )
+      .orderBy(asc(bankAuditLogsTable.createdAt), asc(bankAuditLogsTable.id));
+
+    const userIds = [
+      ...new Set(
+        auditRows.flatMap((row) => [row.actorUserId, row.targetUserId]),
+      ),
+    ];
+    const users = userIds.length
+      ? await db
+          .select({
+            id: bankUsersTable.id,
+            email: bankUsersTable.email,
+            firstName: bankUsersTable.firstName,
+            lastName: bankUsersTable.lastName,
+          })
+          .from(bankUsersTable)
+          .where(inArray(bankUsersTable.id, userIds))
+      : [];
+    const usersById = new Map(users.map((user) => [user.id, user]));
+    const history = new Map<
+      string,
+      {
+        actor: NonNullable<ReturnType<typeof usersById.get>>;
+        timestamp: Date;
+        previousStatus: string;
+        newStatus: string;
+        reason: string;
+        affectedMembers: Map<string, NonNullable<ReturnType<typeof usersById.get>>>;
+      }
+    >();
+
+    for (const row of auditRows) {
+      const actor = usersById.get(row.actorUserId);
+      const affectedMember = usersById.get(row.targetUserId);
+      const details = row.reason.slice(reasonPrefix.length);
+      const match =
+        /^(pending|completed|failed|reversed) → (pending|completed|failed|reversed)\. ([\s\S]*)$/.exec(
+          details,
+        );
+      if (!actor || !affectedMember || !match) {
+        req.log.error(
+          { transactionId: transaction.id, auditLogId: row.id },
+          "Could not read transaction status audit entry",
+        );
+        res.status(500).json({ error: "Transaction status history is unavailable." });
+        return;
+      }
+
+      const eventKey = `${row.createdAt.toISOString()}|${row.actorUserId}|${row.reason}`;
+      let event = history.get(eventKey);
+      if (!event) {
+        event = {
+          actor,
+          timestamp: row.createdAt,
+          previousStatus: match[1],
+          newStatus: match[2],
+          reason: match[3],
+          affectedMembers: new Map(),
+        };
+        history.set(eventKey, event);
+      }
+      event.affectedMembers.set(affectedMember.id, affectedMember);
+    }
+
+    res.json(
+      ListAdminTransactionStatusHistoryResponse.parse(
+        [...history.values()].map((event) => ({
+          actorName:
+            [event.actor.firstName, event.actor.lastName].filter(Boolean).join(" ") ||
+            event.actor.email,
+          actorEmail: event.actor.email,
+          timestamp: event.timestamp.toISOString(),
+          previousStatus: event.previousStatus,
+          newStatus: event.newStatus,
+          reason: event.reason,
+          affectedMembers: [...event.affectedMembers.values()].map((user) => ({
+            name:
+              [user.firstName, user.lastName].filter(Boolean).join(" ") ||
+              user.email,
+            email: user.email,
+          })),
+        })),
+      ),
+    );
+  },
+);
 
 router.patch(
   "/bank/admin/transactions/:transactionId",

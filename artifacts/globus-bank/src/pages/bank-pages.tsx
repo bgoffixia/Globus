@@ -15,6 +15,7 @@ import {
   Download,
   FileText,
   Globe2,
+  History,
   LockKeyhole,
   Printer,
   RefreshCw,
@@ -38,6 +39,7 @@ import {
   getHealthCheckQueryKey,
   getListAdminLedgerQueryKey,
   getListAdminLedgerRequestsQueryKey,
+  getListAdminTransactionStatusHistoryQueryKey,
   getListAdminIdentityDocumentsQueryKey,
   getListAdminUsersQueryKey,
   getListMyIdentityDocumentsQueryKey,
@@ -57,6 +59,7 @@ import {
   useHealthCheck,
   useListAdminLedger,
   useListAdminLedgerRequests,
+  useListAdminTransactionStatusHistory,
   useListAdminIdentityDocuments,
   useListAdminUsers,
   useListMyIdentityDocuments,
@@ -1505,6 +1508,7 @@ function TransactionList({
   statusPending?: boolean;
 }) {
   const [receipt, setReceipt] = useState<BankTransaction | null>(null);
+  const [historyTarget, setHistoryTarget] = useState<BankTransaction | null>(null);
   return <>
     <div>{transactions.map(transaction => {
       const isIncoming = transaction.type === 'transfer_in' || transaction.type === 'external_transfer_in' || transaction.type === 'simulation_credit' || transaction.type === 'admin_funding';
@@ -1514,12 +1518,70 @@ function TransactionList({
         <div className="min-w-0 flex-1"><p className="truncate text-[11px] font-semibold text-[#334a63]">{transaction.description || transactionDisplayType(transaction)}</p><p className="mt-1 truncate text-[9px] text-[#8996a4]">{transaction.counterparty || 'Internal ledger'} · {formatDate(transaction.createdAt)} · Internal ledger</p></div>
         <div className="shrink-0 text-right"><p className={`text-[11px] font-bold ${isIncoming ? 'text-[#417f69]' : 'text-[#3c5269]'}`}>{isIncoming ? '+' : '−'}{formatMoney(Number(transaction.amount), transaction.currency)}</p><p className={`mt-1 text-[9px] capitalize ${transaction.status === 'completed' ? 'text-[#4f8c75]' : 'text-[#9b8050]'}`}>{humanize(transaction.status)}</p></div>
         {canPrintReceipt && <button type="button" onClick={() => setReceipt(transaction)} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#dfe7eb] px-2.5 py-2 text-[9px] font-bold text-[#4a667e] hover:bg-[#f5f8f9]" aria-label={`View receipt ${transaction.reference}`}><FileText size={13} /><span className="hidden sm:inline">Receipt</span></button>}
+        {onStatusOverride && <button type="button" onClick={() => setHistoryTarget(transaction)} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#dfe7eb] px-2.5 py-2 text-[9px] font-bold text-[#4a667e] hover:bg-[#f5f8f9]" aria-label={`View status history for ${transaction.reference}`}><History size={13} /><span className="hidden sm:inline">History</span></button>}
         {onStatusOverride && transaction.type !== 'deposit_request' && transaction.type !== 'withdrawal_request' && <button type="button" disabled={statusPending} onClick={() => onStatusOverride(transaction)} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#dfe7eb] px-2.5 py-2 text-[9px] font-bold text-[#4a667e] hover:bg-[#f5f8f9] disabled:cursor-not-allowed disabled:opacity-50" aria-label={`Override status for ${transaction.reference}`}><RefreshCw size={13} /><span className="hidden sm:inline">Status</span></button>}
         {onDelete && <button type="button" disabled={deletePending} onClick={() => onDelete(transaction)} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#ead8d5] px-2.5 py-2 text-[9px] font-bold text-[#a24940] hover:bg-[#fff7f5] disabled:cursor-not-allowed disabled:opacity-50" aria-label={`Permanently delete transaction ${transaction.reference}`}><Trash2 size={13} /><span className="hidden sm:inline">Delete</span></button>}
       </div>;
     })}</div>
     {receipt && <ReceiptDialog transaction={receipt} onClose={() => setReceipt(null)} />}
+    {historyTarget && <TransactionStatusHistoryDialog transaction={historyTarget} onClose={() => setHistoryTarget(null)} />}
   </>;
+}
+
+function TransactionStatusHistoryDialog({
+  transaction,
+  onClose,
+}: {
+  transaction: BankTransaction;
+  onClose: () => void;
+}) {
+  const history = useListAdminTransactionStatusHistory(transaction.id, {
+    query: {
+      queryKey: getListAdminTransactionStatusHistoryQueryKey(transaction.id),
+      retry: false,
+    },
+  });
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#14263e]/55 p-4"
+      onMouseDown={event => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <section role="dialog" aria-modal="true" aria-labelledby="transaction-status-history-title" className="max-h-[85dvh] w-full max-w-2xl overflow-y-auto rounded-[22px] border border-[#dfe7ec] bg-white p-5 shadow-2xl sm:p-7">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#55868b]">Administrator audit record</p>
+            <h2 id="transaction-status-history-title" className="mt-1 text-[16px] font-bold text-[#29425c]">Status change history</h2>
+            <p className="mt-1 break-all text-[10px] text-[#7e8d9c]">{transaction.reference}</p>
+          </div>
+          <button type="button" aria-label="Close status history" onClick={onClose} className="rounded-lg p-2 text-[#6d8092] hover:bg-[#f1f5f7]"><X size={16} /></button>
+        </div>
+        <p className="mt-4 rounded-lg border border-[#e5e9ed] bg-[#f7f9fa] px-4 py-3 text-[10px] leading-4 text-[#64798e]">This is a read-only audit history. Viewing it does not change the transaction or wallet balances.</p>
+        <div className="mt-5">
+          {history.isLoading ? <ListSkeleton /> : history.isError ? <InlineError text="Status history is unavailable." retry={() => history.refetch()} /> : history.data?.length ? (
+            <ol className="space-y-3">
+              {history.data.map((entry, index) => (
+                <li key={`${entry.timestamp}-${entry.actorEmail}-${index}`} className="rounded-xl border border-[#e5ebef] p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-[11px] font-bold text-[#344b64]">{humanize(entry.previousStatus)} <ArrowRight size={12} className="mx-1 inline text-[#73939a]" /> {humanize(entry.newStatus)}</p>
+                    <time className="text-[9px] text-[#8291a0]" dateTime={entry.timestamp}>{formatDateTime(entry.timestamp)}</time>
+                  </div>
+                  <p className="mt-2 text-[10px] text-[#5a7086]">Changed by <b className="text-[#344b64]">{entry.actorName}</b> · {entry.actorEmail}</p>
+                  <p className="mt-3 whitespace-pre-wrap text-[10px] leading-5 text-[#61758a]"><b className="text-[#40566e]">Reason:</b> {entry.reason}</p>
+                  <p className="mt-3 text-[9px] text-[#8492a0]">Affected member{entry.affectedMembers.length === 1 ? '' : 's'}: {entry.affectedMembers.map(member => `${member.name} (${member.email})`).join(', ')}</p>
+                </li>
+              ))}
+            </ol>
+          ) : <EmptyState title="No status changes recorded" text="This transaction has not had an administrator status override." />}
+        </div>
+        <div className="mt-5 flex justify-end border-t border-[#edf0f2] pt-4">
+          <button type="button" onClick={onClose} className="rounded-xl border border-[#dfe6eb] px-4 py-3 text-[10px] font-bold text-[#546b80] hover:bg-[#f5f8f9]">Close</button>
+        </div>
+      </section>
+    </div>
+  );
 }
 
 function TransactionStatusDialog({
@@ -1692,6 +1754,12 @@ function formatDate(value?: string) {
   if (!value) return '—';
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(date);
+}
+
+function formatDateTime(value?: string) {
+  if (!value) return '—';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(date);
 }
 
 const inputClass = 'h-11 w-full rounded-xl border border-[#dfe6eb] bg-white px-3.5 text-[12px] font-normal text-[#344b64] outline-none transition placeholder:text-[#a0acb7] focus:border-[#77aeb0] focus:ring-2 focus:ring-[#77aeb0]/15';

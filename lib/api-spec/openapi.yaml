@@ -666,6 +666,33 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+  /bank/admin/transactions/{transactionId}/status-history:
+    get:
+      operationId: listAdminTransactionStatusHistory
+      tags: [admin]
+      summary: View a transaction's status override history
+      parameters:
+        - name: transactionId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: Read-only status override history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminTransactionStatusChange"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /bank/admin/transactions/{transactionId}:
     patch:
       operationId: updateAdminTransactionStatus
@@ -1032,6 +1059,25 @@ components:
         status: { $ref: "#/components/schemas/TransactionStatus" }
         reason: { type: string, minLength: 5, maxLength: 500 }
       required: [status, reason]
+    AdminTransactionStatusChange:
+      type: object
+      properties:
+        actorName: { type: string }
+        actorEmail: { type: string, format: email }
+        timestamp: { type: string, format: date-time }
+        previousStatus: { $ref: "#/components/schemas/TransactionStatus" }
+        newStatus: { $ref: "#/components/schemas/TransactionStatus" }
+        reason: { type: string }
+        affectedMembers:
+          type: array
+          items: { $ref: "#/components/schemas/AdminTransactionAffectedMember" }
+      required: [actorName, actorEmail, timestamp, previousStatus, newStatus, reason, affectedMembers]
+    AdminTransactionAffectedMember:
+      type: object
+      properties:
+        name: { type: string }
+        email: { type: string, format: email }
+      required: [name, email]
     AdminTransactionDeleteResult:
       type: object
       properties:
