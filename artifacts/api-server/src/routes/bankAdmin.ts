@@ -324,11 +324,12 @@ router.patch(
       return;
     }
 
-    const actorUserId = getAuth(req).userId;
-    if (!actorUserId) {
+    const authenticatedClerkId = getAuth(req).userId;
+    if (!authenticatedClerkId) {
       res.status(401).json({ error: "Sign in to access your Globus account." });
       return;
     }
+    const actorUserId = (await ensureBankUser(authenticatedClerkId)).id;
     if (params.data.userId === actorUserId) {
       res.status(400).json({ error: "Administrators cannot change their own account status." });
       return;
@@ -524,11 +525,12 @@ router.patch(
       res.status(400).json({ error: parsed.error.message });
       return;
     }
-    const actorUserId = getAuth(req).userId;
-    if (!actorUserId) {
+    const authenticatedClerkId = getAuth(req).userId;
+    if (!authenticatedClerkId) {
       res.status(401).json({ error: "Sign in to access your Globus account." });
       return;
     }
+    const actorUserId = (await ensureBankUser(authenticatedClerkId)).id;
     if (params.data.userId === actorUserId) {
       res.status(400).json({ error: "Administrators cannot review their own identity." });
       return;
@@ -549,7 +551,6 @@ router.patch(
       return;
     }
 
-    await ensureBankUser(actorUserId);
     let result: Awaited<ReturnType<typeof runIdentityReview>>;
     try {
       result = await runIdentityReview({
@@ -607,11 +608,12 @@ router.post(
       return;
     }
 
-    const actorUserId = getAuth(req).userId;
-    if (!actorUserId) {
+    const authenticatedClerkId = getAuth(req).userId;
+    if (!authenticatedClerkId) {
       res.status(401).json({ error: "Sign in to access your Globus account." });
       return;
     }
+    const actorUserId = (await ensureBankUser(authenticatedClerkId)).id;
 
     const reason = parsed.data.reason.trim();
     const senderName = parsed.data.senderName.trim();
@@ -640,7 +642,6 @@ router.post(
       return;
     }
 
-    await ensureBankUser(actorUserId);
     const result = await db.transaction(async (tx) => {
       await tx.execute(
         sql`select pg_advisory_xact_lock(hashtext(${parsed.data.idempotencyKey})::bigint)`,
@@ -797,18 +798,18 @@ router.delete(
       return;
     }
 
-    const actorUserId = getAuth(req).userId;
-    if (!actorUserId) {
+    const authenticatedClerkId = getAuth(req).userId;
+    if (!authenticatedClerkId) {
       res.status(401).json({ error: "Sign in to access your Globus account." });
       return;
     }
+    const actorUserId = (await ensureBankUser(authenticatedClerkId)).id;
     const reason = parsed.data.reason.trim();
     if (reason.length < 5) {
       res.status(400).json({ error: "Enter a deletion reason of at least five characters." });
       return;
     }
 
-    await ensureBankUser(actorUserId);
     const result = await db.transaction(async (tx) => {
       const [transaction] = await tx
         .select()

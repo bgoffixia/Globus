@@ -51,29 +51,72 @@ export async function ensureBankUser(clerkUserId: string) {
 
   const clerk = clerkClient;
   const identity = await clerk.users.getUser(clerkUserId);
-  const primaryEmail = identity.emailAddresses.find(
+  const primaryEmailRecord = identity.emailAddresses.find(
     (email) => email.id === identity.primaryEmailAddressId,
-  )?.emailAddress;
+  );
+  const primaryEmail = primaryEmailRecord?.emailAddress;
 
-  if (!primaryEmail) {
+  if (!primaryEmail || primaryEmailRecord?.verification?.status !== "verified") {
     throw new Error("A verified email address is required for a Globus account.");
   }
 
   return db.transaction(async (tx) => {
+    const [existingByEmail] = await tx
+      .select()
+      .from(bankUsersTable)
+      .where(sql`lower(${bankUsersTable.email}) = ${primaryEmail.toLowerCase()}`)
+      .limit(1);
+
+    if (existingByEmail) {
+      await tx
+        .insert(bankWalletsTable)
+        .values(
+          currencies.map((currency) => ({
+            userId: existingByEmail.id,
+            currency,
+          })),
+        )
+        .onConflictDoNothing();
+      return existingByEmail;
+    }
+
     const [user] = await tx
       .insert(bankUsersTable)
       .values({ id: clerkUserId, email: primaryEmail })
-      .onConflictDoUpdate({
-        target: bankUsersTable.id,
-        set: { email: primaryEmail, updatedAt: new Date() },
-      })
+      .onConflictDoNothing()
       .returning();
+
+    // Another sign-in can create the same verified email concurrently. Reuse
+    // that canonical row instead of attempting a second profile or balance.
+    const [resolvedUser] = user
+      ? [user]
+      : await tx
+          .select()
+          .from(bankUsersTable)
+          .where(sql`lower(${bankUsersTable.email}) = ${primaryEmail.toLowerCase()}`)
+          .limit(1);
+    if (!resolvedUser) {
+      throw new Error("Could not resolve the Globus account for this email.");
+    }
+
+    if (!user) {
+      await tx
+        .insert(bankWalletsTable)
+        .values(
+          currencies.map((currency) => ({
+            userId: resolvedUser.id,
+            currency,
+          })),
+        )
+        .onConflictDoNothing();
+      return resolvedUser;
+    }
 
     await tx
       .insert(bankWalletsTable)
       .values(
         currencies.map((currency) => ({
-          userId: clerkUserId,
+          userId: resolvedUser.id,
           currency,
         })),
       )
@@ -84,7 +127,7 @@ export async function ensureBankUser(clerkUserId: string) {
       .from(bankWalletsTable)
       .where(
         and(
-          eq(bankWalletsTable.userId, clerkUserId),
+          eq(bankWalletsTable.userId, resolvedUser.id),
           eq(bankWalletsTable.currency, "USD"),
         ),
       )
@@ -94,9 +137,9 @@ export async function ensureBankUser(clerkUserId: string) {
       .insert(bankTransactionsTable)
       .values({
         reference: createReference(),
-        idempotencyKey: `sandbox-welcome:${clerkUserId}`,
-        initiatedByUserId: clerkUserId,
-        toUserId: clerkUserId,
+        idempotencyKey: `sandbox-welcome:${resolvedUser.id}`,
+        initiatedByUserId: resolvedUser.id,
+        toUserId: resolvedUser.id,
         toWalletId: usdWallet.id,
         type: "simulation_credit",
         status: "completed",
@@ -131,7 +174,7 @@ export async function ensureBankUser(clerkUserId: string) {
       ]);
     }
 
-    return user;
+    return resolvedUser;
   });
 }
 

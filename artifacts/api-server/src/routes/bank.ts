@@ -160,16 +160,16 @@ router.get("/bank/me", async (req, res): Promise<void> => {
 });
 
 router.get("/bank/dashboard", async (req, res): Promise<void> => {
-  const userId = getAuth(req).userId;
-  if (!userId) {
+  const authUserId = getAuth(req).userId;
+  if (!authUserId) {
     res.status(401).json({ error: "Sign in to access your Globus account." });
     return;
   }
 
-  const profile = await getOrCreateBankUser(userId);
+  const profile = await getOrCreateBankUser(authUserId);
   const [wallets, recentTransactions] = await Promise.all([
-    getWalletsForUser(userId),
-    getRecentTransactions(userId),
+    getWalletsForUser(profile.id),
+    getRecentTransactions(profile.id),
   ]);
 
   res.json(
@@ -195,31 +195,31 @@ router.get("/bank/dashboard", async (req, res): Promise<void> => {
 });
 
 router.get("/bank/wallets", async (req, res): Promise<void> => {
-  const userId = getAuth(req).userId;
-  if (!userId) {
+  const authUserId = getAuth(req).userId;
+  if (!authUserId) {
     res.status(401).json({ error: "Sign in to access your Globus account." });
     return;
   }
 
-  await getOrCreateBankUser(userId);
-  res.json(ListBankWalletsResponse.parse(await getWalletsForUser(userId)));
+  const user = await getOrCreateBankUser(authUserId);
+  res.json(ListBankWalletsResponse.parse(await getWalletsForUser(user.id)));
 });
 
 router.get("/bank/transactions", async (req, res): Promise<void> => {
-  const userId = getAuth(req).userId;
-  if (!userId) {
+  const authUserId = getAuth(req).userId;
+  if (!authUserId) {
     res.status(401).json({ error: "Sign in to access your Globus account." });
     return;
   }
 
-  await getOrCreateBankUser(userId);
+  const user = await getOrCreateBankUser(authUserId);
   const parsed = ListBankTransactionsQueryParams.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
 
-  const transactions = await listUserTransactions(userId, {
+  const transactions = await listUserTransactions(user.id, {
     currency: parsed.data.currency,
     status: parsed.data.status,
     search: parsed.data.search,
@@ -230,8 +230,8 @@ router.get("/bank/transactions", async (req, res): Promise<void> => {
 });
 
 router.put("/bank/profile", async (req, res): Promise<void> => {
-  const userId = getAuth(req).userId;
-  if (!userId) {
+  const authUserId = getAuth(req).userId;
+  if (!authUserId) {
     res.status(401).json({ error: "Sign in to access your Globus account." });
     return;
   }
@@ -242,7 +242,7 @@ router.put("/bank/profile", async (req, res): Promise<void> => {
     return;
   }
 
-  const currentUser = await getOrCreateBankUser(userId);
+  const currentUser = await getOrCreateBankUser(authUserId);
   const [user] = await db
     .update(bankUsersTable)
     .set({
@@ -273,16 +273,16 @@ router.put("/bank/profile", async (req, res): Promise<void> => {
 });
 
 router.get("/bank/verification/documents", async (req, res): Promise<void> => {
-  const userId = getAuth(req).userId;
-  if (!userId) {
+  const authUserId = getAuth(req).userId;
+  if (!authUserId) {
     res.status(401).json({ error: "Sign in to access your Globus account." });
     return;
   }
-  await getOrCreateBankUser(userId);
+  const user = await getOrCreateBankUser(authUserId);
   const documents = await db
     .select()
     .from(bankIdentityDocumentsTable)
-    .where(eq(bankIdentityDocumentsTable.userId, userId))
+    .where(eq(bankIdentityDocumentsTable.userId, user.id))
     .orderBy(desc(bankIdentityDocumentsTable.createdAt));
   res.json(
     ListMyIdentityDocumentsResponse.parse(
@@ -294,8 +294,8 @@ router.get("/bank/verification/documents", async (req, res): Promise<void> => {
 router.post(
   "/bank/verification/documents/upload-url",
   async (req, res): Promise<void> => {
-    const userId = getAuth(req).userId;
-    if (!userId) {
+    const authUserId = getAuth(req).userId;
+    if (!authUserId) {
       res.status(401).json({ error: "Sign in to access your Globus account." });
       return;
     }
@@ -304,7 +304,7 @@ router.post(
       res.status(400).json({ error: parsed.error.message });
       return;
     }
-    await getOrCreateBankUser(userId);
+    const account = await getOrCreateBankUser(authUserId);
 
     let upload: { uploadUrl: string; objectPath: string };
     try {
@@ -319,7 +319,7 @@ router.post(
       const [user] = await tx
         .select()
         .from(bankUsersTable)
-        .where(eq(bankUsersTable.id, userId))
+        .where(eq(bankUsersTable.id, account.id))
         .for("update");
       if (!user) {
         return { notFound: true as const };
@@ -330,14 +330,14 @@ router.post(
       const [documentCount] = await tx
         .select({ value: count() })
         .from(bankIdentityDocumentsTable)
-        .where(eq(bankIdentityDocumentsTable.userId, userId));
+        .where(eq(bankIdentityDocumentsTable.userId, user.id));
       if ((documentCount?.value ?? 0) >= 5) {
         return { error: "Remove an existing document before uploading another. You can upload up to five." };
       }
       const [document] = await tx
         .insert(bankIdentityDocumentsTable)
         .values({
-          userId,
+          userId: user.id,
           objectPath: upload.objectPath,
           contentType: parsed.data.contentType,
           sizeBytes: parsed.data.sizeBytes,
@@ -372,18 +372,19 @@ router.post(
       res.status(400).json({ error: params.error.message });
       return;
     }
-    const userId = getAuth(req).userId;
-    if (!userId) {
+    const authUserId = getAuth(req).userId;
+    if (!authUserId) {
       res.status(401).json({ error: "Sign in to access your Globus account." });
       return;
     }
+    const user = await getOrCreateBankUser(authUserId);
     const [document] = await db
       .select()
       .from(bankIdentityDocumentsTable)
       .where(
         and(
           eq(bankIdentityDocumentsTable.id, params.data.documentId),
-          eq(bankIdentityDocumentsTable.userId, userId),
+          eq(bankIdentityDocumentsTable.userId, user.id),
         ),
       )
       .limit(1);
@@ -396,7 +397,6 @@ router.post(
       return;
     }
 
-    const user = await getOrCreateBankUser(userId);
     if (user.verificationStatus === "approved" || user.verificationStatus === "pending") {
       res.status(409).json({ error: "Documents cannot be changed while verification is pending or approved." });
       return;
@@ -419,7 +419,7 @@ router.post(
           .where(
             and(
               eq(bankIdentityDocumentsTable.id, document.id),
-              eq(bankIdentityDocumentsTable.userId, userId),
+              eq(bankIdentityDocumentsTable.userId, user.id),
               eq(bankIdentityDocumentsTable.status, "uploading"),
             ),
           );
@@ -436,7 +436,7 @@ router.post(
     let result: Awaited<ReturnType<typeof completeIdentityDocument>>;
     try {
       result = await completeIdentityDocument({
-        userId,
+        userId: user.id,
         documentId: document.id,
         sealUpload: async (uploadPath) => {
           sealedObjectPath = await sealIdentityDocumentUpload(uploadPath);
@@ -483,16 +483,17 @@ router.delete(
       res.status(400).json({ error: params.error.message });
       return;
     }
-    const userId = getAuth(req).userId;
-    if (!userId) {
+    const authUserId = getAuth(req).userId;
+    if (!authUserId) {
       res.status(401).json({ error: "Sign in to access your Globus account." });
       return;
     }
+    const profile = await getOrCreateBankUser(authUserId);
     const result = await db.transaction(async (tx) => {
       const [user] = await tx
         .select()
         .from(bankUsersTable)
-        .where(eq(bankUsersTable.id, userId))
+        .where(eq(bankUsersTable.id, profile.id))
         .for("update");
       const [document] = await tx
         .select()
@@ -500,7 +501,7 @@ router.delete(
         .where(
           and(
             eq(bankIdentityDocumentsTable.id, params.data.documentId),
-            eq(bankIdentityDocumentsTable.userId, userId),
+            eq(bankIdentityDocumentsTable.userId, profile.id),
           ),
         )
         .for("update");
@@ -520,8 +521,8 @@ router.delete(
         .delete(bankIdentityDocumentsTable)
         .where(eq(bankIdentityDocumentsTable.id, document.id));
       await tx.insert(bankAuditLogsTable).values({
-        actorUserId: userId,
-        targetUserId: userId,
+        actorUserId: profile.id,
+        targetUserId: profile.id,
         action: "remove_identity_document",
         reason: "Member removed an identity document before review.",
       });
@@ -548,17 +549,17 @@ router.post(
       res.status(400).json({ error: parsed.error.message });
       return;
     }
-    const userId = getAuth(req).userId;
-    if (!userId) {
+    const authUserId = getAuth(req).userId;
+    if (!authUserId) {
       res.status(401).json({ error: "Sign in to access your Globus account." });
       return;
     }
-    await getOrCreateBankUser(userId);
+    const profile = await getOrCreateBankUser(authUserId);
     const result = await db.transaction(async (tx) => {
       const [user] = await tx
         .select()
         .from(bankUsersTable)
-        .where(eq(bankUsersTable.id, userId))
+        .where(eq(bankUsersTable.id, profile.id))
         .for("update");
       if (!user) {
         return { notFound: true as const };
@@ -569,7 +570,7 @@ router.post(
       const documents = await tx
         .select({ status: bankIdentityDocumentsTable.status })
         .from(bankIdentityDocumentsTable)
-        .where(eq(bankIdentityDocumentsTable.userId, userId));
+        .where(eq(bankIdentityDocumentsTable.userId, user.id));
       if (documents.some((document) => document.status === "uploading")) {
         return { error: "Finish or remove each in-progress upload before submitting for review." };
       }
@@ -584,11 +585,11 @@ router.post(
           verificationNote: null,
           updatedAt: new Date(),
         })
-        .where(eq(bankUsersTable.id, userId))
+        .where(eq(bankUsersTable.id, profile.id))
         .returning();
       await tx.insert(bankAuditLogsTable).values({
-        actorUserId: userId,
-        targetUserId: userId,
+        actorUserId: profile.id,
+        targetUserId: profile.id,
         action: "submit_identity_documents",
         reason: `Member submitted ${uploadedCount} identity document(s) for review.`,
       });
@@ -620,8 +621,8 @@ router.post(
 );
 
 router.post("/bank/transfers", async (req, res): Promise<void> => {
-  const userId = getAuth(req).userId;
-  if (!userId) {
+  const authUserId = getAuth(req).userId;
+  if (!authUserId) {
     res.status(401).json({ error: "Sign in to access your Globus account." });
     return;
   }
@@ -632,7 +633,8 @@ router.post("/bank/transfers", async (req, res): Promise<void> => {
     return;
   }
 
-  const sender = await getOrCreateBankUser(userId);
+  const sender = await getOrCreateBankUser(authUserId);
+  const userId = sender.id;
   if (sender.accountStatus !== "active") {
     res.status(409).json({ error: "This account is currently restricted." });
     return;
@@ -791,8 +793,8 @@ router.post("/bank/transfers", async (req, res): Promise<void> => {
 });
 
 router.post("/bank/external-transfers", async (req, res): Promise<void> => {
-  const userId = getAuth(req).userId;
-  if (!userId) {
+  const authUserId = getAuth(req).userId;
+  if (!authUserId) {
     res.status(401).json({ error: "Sign in to access your Globus account." });
     return;
   }
@@ -819,7 +821,8 @@ router.post("/bank/external-transfers", async (req, res): Promise<void> => {
     return;
   }
 
-  const sender = await getOrCreateBankUser(userId);
+  const sender = await getOrCreateBankUser(authUserId);
+  const userId = sender.id;
   if (sender.accountStatus !== "active") {
     res.status(409).json({ error: "This account is currently restricted." });
     return;
@@ -925,8 +928,8 @@ router.post("/bank/external-transfers", async (req, res): Promise<void> => {
 });
 
 router.post("/bank/incoming-external-transfers", async (req, res): Promise<void> => {
-  const userId = getAuth(req).userId;
-  if (!userId) {
+  const authUserId = getAuth(req).userId;
+  if (!authUserId) {
     res.status(401).json({ error: "Sign in to access your Globus account." });
     return;
   }
@@ -944,7 +947,8 @@ router.post("/bank/incoming-external-transfers", async (req, res): Promise<void>
     return;
   }
 
-  const user = await getOrCreateBankUser(userId);
+  const user = await getOrCreateBankUser(authUserId);
+  const userId = user.id;
   if (user.accountStatus !== "active") {
     res.status(409).json({ error: "This account is currently restricted." });
     return;
@@ -1047,8 +1051,8 @@ router.post("/bank/incoming-external-transfers", async (req, res): Promise<void>
 });
 
 router.post("/bank/simulation-requests", async (req, res): Promise<void> => {
-  const userId = getAuth(req).userId;
-  if (!userId) {
+  const authUserId = getAuth(req).userId;
+  if (!authUserId) {
     res.status(401).json({ error: "Sign in to access your Globus account." });
     return;
   }
@@ -1059,7 +1063,8 @@ router.post("/bank/simulation-requests", async (req, res): Promise<void> => {
     return;
   }
 
-  const user = await getOrCreateBankUser(userId);
+  const user = await getOrCreateBankUser(authUserId);
+  const userId = user.id;
   if (user.accountStatus !== "active") {
     res.status(409).json({ error: "This account is currently restricted." });
     return;
@@ -1167,7 +1172,7 @@ router.post("/bank/simulation-requests", async (req, res): Promise<void> => {
     const [sandboxRequest] = await tx
       .insert(bankSandboxRequestsTable)
       .values({
-        userId,
+          userId: user.id,
         transactionId: transaction.id,
         reference,
         idempotencyKey: parsed.data.idempotencyKey,
