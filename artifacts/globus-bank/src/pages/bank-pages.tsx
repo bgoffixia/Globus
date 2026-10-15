@@ -586,7 +586,7 @@ export function InternationalTransferPage() {
               {exchangeRate ? (
                 <>
                   <p className="mt-2 text-[18px] font-bold text-[#203851]">{convertedAmount === null ? '—' : formatMoney(Number(convertedAmount), destinationCurrency)}</p>
-                  <p className="mt-1 text-[10px] text-[#6f8193]">1 {sourceCurrency} = {exchangeRate} {destinationCurrency}</p>
+                  <p className="mt-1 text-[10px] text-[#6f8193]">1 {sourceCurrency} = {formatExchangeRate(exchangeRate)} {destinationCurrency}</p>
                   <p className="mt-1 text-[9px] text-[#8996a3]">{configuredRate ? `Rate updated ${formatDate(configuredRate.updatedAt)}` : 'Same-currency rate'}</p>
                 </>
               ) : (
@@ -2175,6 +2175,15 @@ function previewConversionAmount(amount: string, rate: string): string | null {
   const rateScaled = BigInt(rateMatch[1]) * scale + BigInt((rateMatch[2] ?? '').padEnd(10, '0'));
   const converted = (minor * rateScaled + scale / 2n) / scale;
   return `${converted / 100n}.${(converted % 100n).toString().padStart(2, '0')}`;
+}
+
+function formatExchangeRate(rate: string): string {
+  const match = /^(\d+)(?:\.(\d+))?$/.exec(rate.trim());
+  if (!match) return rate;
+
+  const integer = match[1].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  const fraction = (match[2] ?? '').replace(/0+$/, '');
+  return fraction ? `${integer}.${fraction}` : integer;
 }
 
 function formatMoney(amount: number, currency: string) {
