@@ -95,6 +95,20 @@ const currencyNames: Record<Currency, string> = {
   AUD: 'Australian dollar',
 };
 
+function currencyFromQuery(): Currency | null {
+  if (typeof window === 'undefined') return null;
+  const value = new URLSearchParams(window.location.search).get('currency');
+  return currencies.find(currency => currency === value) ?? null;
+}
+
+function preferredCurrencyFromQuery(): Currency {
+  return currencyFromQuery() ?? 'USD';
+}
+
+function currencyActionHref(path: string, currency: Currency) {
+  return `${path}?currency=${encodeURIComponent(currency)}`;
+}
+
 export function HomePage() {
   const health = useHealthCheck({ query: { queryKey: getHealthCheckQueryKey(), retry: false } });
   return (
@@ -230,23 +244,85 @@ export function DashboardPage() {
   const adminAccess = useGetAdminAccess({
     query: { queryKey: getGetAdminAccessQueryKey(), retry: false },
   });
+  const [selectedCurrency, setSelectedCurrency] = useState<Currency | null>(null);
   const dash = query.data;
-  const referenceBalance = dash ? dash.wallets.find(wallet => wallet.currency === dash.referenceCurrency) : undefined;
+  const selectedWallet = dash?.wallets.find(wallet => wallet.currency === selectedCurrency)
+    ?? dash?.wallets.find(wallet => wallet.currency === dash.referenceCurrency)
+    ?? dash?.wallets[0];
+  const actionCurrency = (selectedWallet?.currency ?? dash?.referenceCurrency ?? 'USD') as Currency;
+  const recentTransactions = dash?.recentTransactions.filter(
+    transaction => !selectedWallet || transaction.currency === selectedWallet.currency,
+  ) ?? [];
   if (query.isLoading) return <PageSkeleton />;
   if (query.isError) return <Failure title="Your overview isn’t available" retry={() => query.refetch()} />;
   return (
     <>
-      <PageHeading eyebrow="Your overview" title={`Good to see you${dash?.profile.firstName ? `, ${dash.profile.firstName}` : ''}.`} subtitle="A clear view of your internal wallets and recent ledger activity." />
-      <div className="mt-7 grid gap-5 xl:grid-cols-[1.32fr_.68fr]">
-        <section className="balance-panel relative overflow-hidden rounded-[22px] p-6 text-white sm:p-8">
+      <PageHeading eyebrow="Your dashboard" title={`Good to see you${dash?.profile.firstName ? `, ${dash.profile.firstName}` : ''}.`} subtitle="Your currency wallets, quick actions, and recent activity in one place." />
+
+      <section className="mt-6 rounded-[22px] border border-[#e2e9ef] bg-white p-4 sm:p-5">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[#589198]">Quick actions</p>
+            <p className="mt-1 text-[11px] text-[#8190a0]">Shortcuts use {actionCurrency} where a wallet currency applies.</p>
+          </div>
+          {selectedWallet && <span className="rounded-full bg-[#eff5f6] px-3 py-1.5 text-[10px] font-bold text-[#456c73]">Active wallet · {selectedWallet.currency}</span>}
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-4">
+          <ActionTile href={currencyActionHref('/send', actionCurrency)} icon={<ArrowUpRight size={17} />} label="Send" testId="dashboard-quick-send" />
+          <ActionTile href="/receive" icon={<ArrowDownLeft size={17} />} label="Receive" testId="dashboard-quick-receive" />
+          <ActionTile href={currencyActionHref('/add-money', actionCurrency)} icon={<WalletCards size={17} />} label="Deposit request" testId="dashboard-quick-deposit" />
+          <ActionTile href={currencyActionHref('/withdraw', actionCurrency)} icon={<ArrowDownLeft size={17} />} label="Withdrawal request" testId="dashboard-quick-withdraw" />
+          <ActionTile href={currencyActionHref('/international-transfer', actionCurrency)} icon={<Globe2 size={17} />} label="International" testId="dashboard-quick-international" />
+          <ActionTile href="/wallets" icon={<WalletCards size={17} />} label="All wallets" testId="dashboard-quick-wallets" />
+          <ActionTile href="/transactions" icon={<History size={17} />} label="Activity" testId="dashboard-quick-activity" />
+          {adminAccess.data?.allowed && <ActionTile href="/admin" icon={<ShieldCheck size={17} />} label="Admin panel" testId="dashboard-quick-admin" />}
+        </div>
+      </section>
+
+      <div className="mt-5 grid gap-5 xl:grid-cols-[1.32fr_.68fr]">
+        <section className="balance-panel relative min-w-0 overflow-hidden rounded-[22px] p-5 text-white sm:p-7">
           <div className="absolute -right-12 -top-16 h-64 w-64 rounded-full border border-white/[.08]" />
           <div className="absolute -right-3 -top-7 h-44 w-44 rounded-full border border-white/[.08]" />
           <div className="relative flex items-start justify-between gap-4">
-            <div><p className="text-[11px] font-medium text-[#cad9e4]">{dash?.referenceCurrency} ledger balance</p><div className="bank-display mt-3 text-[40px] font-semibold tracking-[-.06em] sm:text-[54px]">{referenceBalance ? formatMoney(Number(referenceBalance.available), referenceBalance.currency) : '—'}</div><p className="mt-2 text-[11px] text-[#b5c7d4]">Internal Globus ledger · no outside funds held</p></div>
-            <span className="inline-flex shrink-0 items-center gap-2 rounded-full border border-white/15 bg-white/[.08] px-3 py-2 text-[9px] font-bold uppercase tracking-[.13em] text-[#d9e7eb]"><span className="h-1.5 w-1.5 rounded-full bg-[#8fd2cf]" /> Internal ledger</span>
+            <div className="min-w-0">
+              <p className="text-[10px] font-medium text-[#cad9e4]">{selectedWallet ? `${currencyNames[selectedWallet.currency]} · available` : 'Available balance'}</p>
+              <div data-testid="dashboard-active-wallet-balance" className="bank-display mt-2 break-words text-[clamp(2rem,8vw,3.4rem)] font-semibold tracking-[-.06em]">{selectedWallet ? formatMoney(Number(selectedWallet.available), selectedWallet.currency) : '—'}</div>
+              {selectedWallet && <p className="mt-1 text-[11px] text-[#b5c7d4]">{selectedWallet.currency} wallet</p>}
+            </div>
+            {selectedWallet && <span className="inline-flex shrink-0 items-center gap-2 rounded-full border border-white/15 bg-white/[.08] px-3 py-2 text-[9px] font-bold uppercase tracking-[.13em] text-[#d9e7eb]"><span className="h-1.5 w-1.5 rounded-full bg-[#8fd2cf]" /> {selectedWallet.currency}</span>}
           </div>
-          <div className="relative mt-8 flex flex-wrap gap-2">
-            {dash?.wallets.slice(0, 6).map(wallet => <span key={wallet.id} className="rounded-lg border border-white/10 bg-white/[.07] px-3 py-2 text-[10px] font-semibold text-[#e0e9ee]">{wallet.currency} <span className="ml-1 text-[#b7cad5]">{formatMoney(Number(wallet.available), wallet.currency)}</span></span>)}
+          <div className="relative mt-6 border-t border-white/10 pt-4">
+            <p className="mb-2 text-[9px] font-bold uppercase tracking-[.14em] text-[#b5c7d4]">Switch wallet</p>
+            {dash?.wallets.length ? (
+              <div role="group" aria-label="Switch dashboard wallet" className="flex min-w-0 gap-2 overflow-x-auto pb-2">
+                {dash.wallets.map(wallet => {
+                  const isSelected = wallet.id === selectedWallet?.id;
+                  return (
+                    <button
+                      key={wallet.id}
+                      type="button"
+                      data-testid={`dashboard-wallet-${wallet.currency.toLowerCase()}`}
+                      aria-label={`${wallet.currency} wallet, available ${formatMoney(Number(wallet.available), wallet.currency)}`}
+                      aria-pressed={isSelected}
+                      onClick={() => setSelectedCurrency(wallet.currency as Currency)}
+                      className={`min-w-[126px] shrink-0 rounded-xl border px-3 py-2.5 text-left transition ${isSelected ? 'border-white/35 bg-white/15 text-white' : 'border-white/10 bg-white/[.06] text-[#d4e1eb] hover:bg-white/[.12]'}`}
+                    >
+                      <span className="block text-[10px] font-bold">{wallet.currency}</span>
+                      <span className="mt-1 block text-[10px] text-[#c2d2dd]">{formatMoney(Number(wallet.available), wallet.currency)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : <p className="text-[11px] text-[#c2d2dd]">No wallets are available.</p>}
+          </div>
+          {selectedWallet && (
+            <div className="relative mt-3 grid gap-x-8 border-t border-white/10 pt-3 sm:grid-cols-2">
+              <WalletAmount label="Pending" amount={selectedWallet.pending} currency={selectedWallet.currency} />
+              <WalletAmount label="Reserved" amount={selectedWallet.reserved} currency={selectedWallet.currency} />
+            </div>
+          )}
+          <div className="relative mt-3">
+            <Link href="/wallets" className="inline-flex items-center gap-1 text-[10px] font-bold text-[#d9e7eb] hover:text-white">Manage wallets <ChevronRight size={13} /></Link>
           </div>
         </section>
         <section className="rounded-[22px] border border-[#e2e9ef] bg-white p-6 sm:p-7">
@@ -261,27 +337,13 @@ export function DashboardPage() {
           <Link href="/settings" className="mt-6 inline-flex items-center gap-1.5 text-[11px] font-bold text-[#377b82]">Review profile <ChevronRight size={14} /></Link>
         </section>
       </div>
-      <div className="mt-8 grid gap-5 xl:grid-cols-[1fr_.7fr]">
-        <section className="overflow-hidden rounded-[22px] border border-[#e2e9ef] bg-white">
-          <div className="flex items-center justify-between border-b border-[#edf0f3] px-5 py-5 sm:px-7">
-            <div><h2 className="text-[16px] font-bold text-[#203851]">Recent activity</h2><p className="mt-1 text-[11px] text-[#8592a1]">Most recent recorded entries</p></div>
-            <Link href="/transactions" className="text-[11px] font-bold text-[#397d83]">View all</Link>
-          </div>
-          {dash?.recentTransactions.length ? <TransactionList transactions={dash.recentTransactions.slice(0, 5)} /> : <EmptyState title="Nothing recorded yet" text="Internal transfers and approved ledger requests will appear here." />}
-        </section>
-        <section className="rounded-[22px] border border-[#e2e9ef] bg-white p-6 sm:p-7">
-          <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[#589198]">Available actions</p>
-          <h2 className="bank-display mt-2 text-[24px] font-semibold text-[#203851]">Move at your pace.</h2>
-          <p className="mt-2 text-[12px] leading-5 text-[#79899b]">Member transfers update Globus wallets. Deposit and withdrawal requests require administrator review; no outside funds move.</p>
-          <div className="mt-6 grid grid-cols-2 gap-3">
-            <ActionTile href="/send" icon={<ArrowUpRight size={16} />} label="Send" />
-            <ActionTile href="/receive" icon={<ArrowDownLeft size={16} />} label="Receive" />
-            <ActionTile href="/add-money" icon={<WalletCards size={16} />} label="Deposit request" />
-            <ActionTile href="/exchange" icon={<ArrowLeftRight size={16} />} label="Exchange" />
-            {adminAccess.data?.allowed && <ActionTile href="/admin" icon={<ShieldCheck size={16} />} label="Admin panel" />}
-          </div>
-        </section>
-      </div>
+      <section className="mt-5 overflow-hidden rounded-[22px] border border-[#e2e9ef] bg-white">
+        <div className="flex items-center justify-between border-b border-[#edf0f3] px-5 py-5 sm:px-7">
+          <div><h2 className="text-[16px] font-bold text-[#203851]">Recent activity{selectedWallet ? ` · ${selectedWallet.currency}` : ''}</h2><p className="mt-1 text-[11px] text-[#8592a1]">Latest entries for this wallet</p></div>
+          <Link href={currencyActionHref('/transactions', actionCurrency)} className="inline-flex items-center gap-1 text-[11px] font-bold text-[#397d83]">View all <ChevronRight size={14} /></Link>
+        </div>
+        {recentTransactions.length ? <TransactionList transactions={recentTransactions.slice(0, 5)} /> : <EmptyState title="Nothing recorded yet" text="Your latest activity will appear here." />}
+      </section>
     </>
   );
 }
@@ -304,7 +366,7 @@ export function WalletsPage() {
 
 export function TransactionsPage() {
   const [search, setSearch] = useState('');
-  const [currency, setCurrency] = useState('');
+  const [currency, setCurrency] = useState(() => currencyFromQuery() ?? '');
   const params = useMemo(() => ({
     ...(search.trim() ? { search: search.trim() } : {}),
     ...(currency ? { currency: currency as Currency } : {}),
@@ -332,7 +394,7 @@ export function SendPage() {
   const walletsQuery = useListBankWallets({ query: { queryKey: getListBankWalletsQueryKey() } });
   const memberTransfer = useCreateBankTransfer();
   const [recipientEmail, setRecipientEmail] = useState('');
-  const [currency, setCurrency] = useState<Currency>('USD');
+  const [currency, setCurrency] = useState<Currency>(() => preferredCurrencyFromQuery());
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [transactionPin, setTransactionPin] = useState('');
@@ -423,7 +485,7 @@ export function InternationalTransferPage() {
   const [recipientBank, setRecipientBank] = useState('');
   const [recipientAccountName, setRecipientAccountName] = useState('');
   const [recipientAccountNumber, setRecipientAccountNumber] = useState('');
-  const [sourceCurrency, setSourceCurrency] = useState<Currency>('USD');
+  const [sourceCurrency, setSourceCurrency] = useState<Currency>(() => preferredCurrencyFromQuery());
   const [destinationCurrency, setDestinationCurrency] = useState<Currency>('EUR');
   const [amount, setAmount] = useState('');
   const [remark, setRemark] = useState('');
@@ -571,7 +633,7 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
   const profileQuery = useGetBankProfile({ query: { queryKey: getGetBankProfileQueryKey() } });
   const walletsQuery = useListBankWallets({ query: { queryKey: getListBankWalletsQueryKey() } });
   const mutation = useCreateLedgerRequest();
-  const [currency, setCurrency] = useState<Currency>('USD');
+  const [currency, setCurrency] = useState<Currency>(() => preferredCurrencyFromQuery());
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [transactionPin, setTransactionPin] = useState('');
@@ -2143,8 +2205,8 @@ function StatusLine({ label, value, positive }: { label: string; value: string; 
   return <div className="flex items-center justify-between gap-3"><span className="text-[11px] text-[#8793a1]">{label}</span><span className={`inline-flex items-center gap-1.5 text-[10px] font-bold ${positive ? 'text-[#4c836e]' : 'text-[#927944]'}`}><span className={`h-1.5 w-1.5 rounded-full ${positive ? 'bg-[#71ad8d]' : 'bg-[#d0ad5d]'}`} />{value}</span></div>;
 }
 
-function ActionTile({ href, icon, label }: { href: string; icon: ReactNode; label: string }) {
-  return <Link href={href} className="flex items-center gap-2.5 rounded-xl border border-[#e5ebef] bg-[#fbfcfd] px-3 py-3 text-[11px] font-bold text-[#3d556d] transition hover:border-[#bbd7d8] hover:bg-[#f3f9f9]"><span className="text-[#478b90]">{icon}</span>{label}</Link>;
+function ActionTile({ href, icon, label, testId }: { href: string; icon: ReactNode; label: string; testId?: string }) {
+  return <Link href={href} data-testid={testId} className="flex min-h-12 items-center gap-2.5 rounded-xl border border-[#e5ebef] bg-[#fbfcfd] px-3 py-3 text-[11px] font-bold text-[#3d556d] transition hover:border-[#bbd7d8] hover:bg-[#f3f9f9]"><span className="text-[#478b90]">{icon}</span>{label}</Link>;
 }
 
 function TrustNote({ icon, title, copy }: { icon: ReactNode; title: string; copy: string }) {
