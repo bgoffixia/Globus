@@ -37,7 +37,11 @@ export function createReference(): string {
   return `GBS-${randomUUID().replaceAll("-", "").slice(0, 14).toUpperCase()}`;
 }
 
-export async function ensureBankUser(clerkUserId: string) {
+export async function ensureBankUser(
+  clerkUserId: string,
+  loadClerkIdentity: ClerkIdentityLoader = (userId) =>
+    clerkClient.users.getUser(userId),
+) {
   const [existing] = await db
     .select()
     .from(bankUsersTable)
@@ -48,8 +52,7 @@ export async function ensureBankUser(clerkUserId: string) {
     return existing;
   }
 
-  const clerk = clerkClient;
-  const identity = await clerk.users.getUser(clerkUserId);
+  const identity = await loadClerkIdentity(clerkUserId);
   const primaryEmailRecord = identity.emailAddresses.find(
     (email) => email.id === identity.primaryEmailAddressId,
   );
@@ -412,3 +415,7 @@ export async function listUserTransactions(
 
   return rows.map((transaction) => toBankTransaction(transaction, userId));
 }
+
+export type ClerkIdentityLoader = (
+  clerkUserId: string,
+) => ReturnType<typeof clerkClient.users.getUser>;
