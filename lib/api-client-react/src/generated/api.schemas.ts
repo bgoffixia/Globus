@@ -120,6 +120,8 @@ export const TransactionType = {
   simulation_credit: 'simulation_credit',
   admin_funding: 'admin_funding',
   admin_debit: 'admin_debit',
+  admin_adjustment: 'admin_adjustment',
+  reversal: 'reversal',
   transfer_in: 'transfer_in',
   transfer_out: 'transfer_out',
   external_transfer: 'external_transfer',
@@ -513,11 +515,32 @@ export interface AdminAccess {
   roles: string[];
 }
 
+export interface AdminCurrencyTotal {
+  currency: CurrencyCode;
+  amount: string;
+}
+
+export interface AdminAuditLog {
+  id: string;
+  actorName: string;
+  actorEmail: string;
+  targetName: string;
+  targetEmail: string;
+  action: string;
+  reason: string;
+  createdAt: string;
+}
+
 export interface AdminSummary {
   registeredUsers: number;
-  activeWallets: number;
-  pendingLedgerRequests: number;
+  activeAccounts: number;
+  restrictedAccounts: number;
+  suspendedAccounts: number;
+  pendingOperations: number;
   ledgerTransactions: number;
+  creditsByCurrency: AdminCurrencyTotal[];
+  debitsByCurrency: AdminCurrencyTotal[];
+  recentActions: AdminAuditLog[];
 }
 
 export type AdminUserVerificationStatus = typeof AdminUserVerificationStatus[keyof typeof AdminUserVerificationStatus];
@@ -536,6 +559,7 @@ export type AdminUserAccountStatus = typeof AdminUserAccountStatus[keyof typeof 
 
 export const AdminUserAccountStatus = {
   active: 'active',
+  restricted: 'restricted',
   suspended: 'suspended',
 } as const;
 
@@ -557,8 +581,21 @@ export interface AdminUser {
   /** @nullable */
   verificationNote: string | null;
   accountStatus: AdminUserAccountStatus;
+  /** @nullable */
+  accountRestrictionReason: string | null;
+  /** @nullable */
+  accountRestrictionNotes: string | null;
+  /** @nullable */
+  accountRestrictedAt: string | null;
   walletCount: number;
   createdAt: string;
+}
+
+export interface AdminUserPage {
+  items: AdminUser[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 export interface AdminUserDetail {
@@ -571,8 +608,10 @@ export interface AdminUserDetail {
      */
   dateOfBirth: string | null;
   transactionPinConfigured: boolean;
+  transactionCount: number;
   wallets: Wallet[];
   transactions: BankTransaction[];
+  administrativeHistory: AdminAuditLog[];
 }
 
 export type AdminUserStatusInputAccountStatus = typeof AdminUserStatusInputAccountStatus[keyof typeof AdminUserStatusInputAccountStatus];
@@ -580,6 +619,7 @@ export type AdminUserStatusInputAccountStatus = typeof AdminUserStatusInputAccou
 
 export const AdminUserStatusInputAccountStatus = {
   active: 'active',
+  restricted: 'restricted',
   suspended: 'suspended',
 } as const;
 
@@ -590,6 +630,38 @@ export interface AdminUserStatusInput {
      * @maxLength 500
      */
   reason: string;
+  /** @maxLength 500 */
+  notes?: string;
+}
+
+export interface AdminUserProfileInput {
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  firstName?: string | null;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  lastName?: string | null;
+  /**
+     * @maxLength 40
+     * @nullable
+     */
+  phone?: string | null;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  country?: string | null;
+  /**
+     * @minLength 5
+     * @maxLength 500
+     */
+  reason: string;
+  /** @pattern ^[0-9]{6}$ */
+  transactionPin: string;
 }
 
 export type AdminIdentityVerificationInputVerificationStatus = typeof AdminIdentityVerificationInputVerificationStatus[keyof typeof AdminIdentityVerificationInputVerificationStatus];
@@ -636,6 +708,16 @@ export interface AdminFundingInput {
      */
   description: string;
   /**
+     * @maxLength 120
+     * @nullable
+     */
+  internalReference?: string | null;
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  adminNotes?: string | null;
+  /**
      * @minLength 5
      * @maxLength 500
      */
@@ -645,16 +727,6 @@ export interface AdminFundingInput {
      * @maxLength 100
      */
   idempotencyKey: string;
-  /** @pattern ^[0-9]{6}$ */
-  transactionPin: string;
-}
-
-export interface AdminTransactionDeleteInput {
-  /**
-     * @minLength 5
-     * @maxLength 500
-     */
-  reason: string;
   /** @pattern ^[0-9]{6}$ */
   transactionPin: string;
 }
@@ -685,10 +757,206 @@ export interface AdminTransactionStatusChange {
   affectedMembers: AdminTransactionAffectedMember[];
 }
 
-export interface AdminTransactionDeleteResult {
-  transactionId: string;
-  reference: string;
-  deleted: true;
+export type AdminAccountStatus = typeof AdminAccountStatus[keyof typeof AdminAccountStatus];
+
+
+export const AdminAccountStatus = {
+  active: 'active',
+  restricted: 'restricted',
+} as const;
+
+export interface AdminAccount {
+  id: string;
+  userId: string;
+  /** @nullable */
+  customerId: string | null;
+  memberName: string;
+  email: string;
+  currency: CurrencyCode;
+  balance: string;
+  status: AdminAccountStatus;
+  /** @nullable */
+  restrictionReason: string | null;
+  /** @nullable */
+  restrictionNotes: string | null;
+  /** @nullable */
+  restrictedAt: string | null;
+  createdAt: string;
+}
+
+export interface AdminAccountPage {
+  items: AdminAccount[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export type AdminWalletStatusInputStatus = typeof AdminWalletStatusInputStatus[keyof typeof AdminWalletStatusInputStatus];
+
+
+export const AdminWalletStatusInputStatus = {
+  active: 'active',
+  restricted: 'restricted',
+} as const;
+
+export interface AdminWalletStatusInput {
+  status: AdminWalletStatusInputStatus;
+  /**
+     * @minLength 5
+     * @maxLength 500
+     */
+  reason: string;
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  notes?: string | null;
+  /** @pattern ^[0-9]{6}$ */
+  transactionPin: string;
+}
+
+export interface AdminAuditLogPage {
+  items: AdminAuditLog[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export type AdminSettingsFrozenIncomingPolicy = typeof AdminSettingsFrozenIncomingPolicy[keyof typeof AdminSettingsFrozenIncomingPolicy];
+
+
+export const AdminSettingsFrozenIncomingPolicy = {
+  allow_frozen: 'allow_frozen',
+} as const;
+
+export interface AdminSettings {
+  fundingLimit: string;
+  secondApprovalThreshold: string;
+  frozenIncomingPolicy: AdminSettingsFrozenIncomingPolicy;
+  updatedAt: string;
+}
+
+export interface AdminSettingsInput {
+  /** @pattern ^[0-9]{1,12}(\.[0-9]{1,2})?$ */
+  fundingLimit: string;
+  /** @pattern ^[0-9]{1,12}(\.[0-9]{1,2})?$ */
+  secondApprovalThreshold: string;
+  /**
+     * @minLength 5
+     * @maxLength 500
+     */
+  reason: string;
+  /** @pattern ^[0-9]{6}$ */
+  transactionPin: string;
+}
+
+export interface AdminTransactionPage {
+  items: BankTransaction[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export type AdminLedgerEntrySide = typeof AdminLedgerEntrySide[keyof typeof AdminLedgerEntrySide];
+
+
+export const AdminLedgerEntrySide = {
+  debit: 'debit',
+  credit: 'credit',
+} as const;
+
+export interface AdminLedgerEntry {
+  id: string;
+  /** @nullable */
+  walletId: string | null;
+  accountCode: string;
+  currency: CurrencyCode;
+  side: AdminLedgerEntrySide;
+  amount: string;
+  createdAt: string;
+}
+
+export interface AdminTransactionDetail {
+  transaction: BankTransaction;
+  initiatorName: string;
+  initiatorEmail: string;
+  customerName: string;
+  customerEmail: string;
+  ledgerEntries: AdminLedgerEntry[];
+  /** @nullable */
+  correctionOfTransactionId: string | null;
+  /** @nullable */
+  reversalOfTransactionId: string | null;
+  /** @nullable */
+  correctionReason: string | null;
+  /** @nullable */
+  adminReference: string | null;
+  /** @nullable */
+  adminNotes: string | null;
+  statusHistory: AdminTransactionStatusChange[];
+}
+
+export type AdminTransactionCorrectionInputKind = typeof AdminTransactionCorrectionInputKind[keyof typeof AdminTransactionCorrectionInputKind];
+
+
+export const AdminTransactionCorrectionInputKind = {
+  reversal: 'reversal',
+  adjustment: 'adjustment',
+} as const;
+
+/**
+ * @nullable
+ */
+export type AdminTransactionCorrectionInputDirection = typeof AdminTransactionCorrectionInputDirection[keyof typeof AdminTransactionCorrectionInputDirection] | null;
+
+
+export const AdminTransactionCorrectionInputDirection = {
+  credit: 'credit',
+  debit: 'debit',
+} as const;
+
+export interface AdminTransactionCorrectionInput {
+  kind: AdminTransactionCorrectionInputKind;
+  /** @nullable */
+  walletId?: string | null;
+  /** @nullable */
+  direction?: AdminTransactionCorrectionInputDirection;
+  /**
+     * @nullable
+     * @pattern ^[0-9]{1,12}(\.[0-9]{1,2})?$
+     */
+  amount?: string | null;
+  /**
+     * @minLength 5
+     * @maxLength 500
+     */
+  reason: string;
+  /**
+     * @minLength 16
+     * @maxLength 100
+     */
+  idempotencyKey: string;
+  /** @pattern ^[0-9]{6}$ */
+  transactionPin: string;
+}
+
+export type AdminFundingReviewInputDecision = typeof AdminFundingReviewInputDecision[keyof typeof AdminFundingReviewInputDecision];
+
+
+export const AdminFundingReviewInputDecision = {
+  approve: 'approve',
+  reject: 'reject',
+} as const;
+
+export interface AdminFundingReviewInput {
+  decision: AdminFundingReviewInputDecision;
+  /**
+     * @minLength 5
+     * @maxLength 500
+     */
+  reason: string;
+  /** @pattern ^[0-9]{6}$ */
+  transactionPin: string;
 }
 
 /**
@@ -738,6 +1006,52 @@ export type CreateIncomingExternalTransfer410 = {
   error: string;
 };
 
+export type ListAdminAccountsParams = {
+/**
+ * @maxLength 100
+ */
+search?: string;
+currency?: CurrencyCode;
+status?: ListAdminAccountsStatus;
+/**
+ * @minimum 1
+ */
+page?: number;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+pageSize?: number;
+};
+
+export type ListAdminAccountsStatus = typeof ListAdminAccountsStatus[keyof typeof ListAdminAccountsStatus];
+
+
+export const ListAdminAccountsStatus = {
+  active: 'active',
+  restricted: 'restricted',
+} as const;
+
+export type ListAdminAuditLogsParams = {
+/**
+ * @maxLength 100
+ */
+search?: string;
+/**
+ * @maxLength 80
+ */
+action?: string;
+/**
+ * @minimum 1
+ */
+page?: number;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+pageSize?: number;
+};
+
 export type ListAdminUsersParams = {
 /**
  * @maxLength 100
@@ -748,7 +1062,33 @@ search?: string;
  * @maximum 100
  */
 limit?: number;
+/**
+ * @minimum 1
+ */
+page?: number;
+accountStatus?: ListAdminUsersAccountStatus;
+verificationStatus?: ListAdminUsersVerificationStatus;
 };
+
+export type ListAdminUsersAccountStatus = typeof ListAdminUsersAccountStatus[keyof typeof ListAdminUsersAccountStatus];
+
+
+export const ListAdminUsersAccountStatus = {
+  active: 'active',
+  restricted: 'restricted',
+  suspended: 'suspended',
+} as const;
+
+export type ListAdminUsersVerificationStatus = typeof ListAdminUsersVerificationStatus[keyof typeof ListAdminUsersVerificationStatus];
+
+
+export const ListAdminUsersVerificationStatus = {
+  not_started: 'not_started',
+  pending: 'pending',
+  approved: 'approved',
+  rejected: 'rejected',
+  additional_information_required: 'additional_information_required',
+} as const;
 
 export type ListAdminLedgerParams = {
 currency?: CurrencyCode;
@@ -757,5 +1097,38 @@ currency?: CurrencyCode;
  * @maximum 100
  */
 limit?: number;
+};
+
+export type ListAdminTransactionsParams = {
+/**
+ * @maxLength 100
+ */
+search?: string;
+/**
+ * @maxLength 100
+ */
+customer?: string;
+currency?: CurrencyCode;
+type?: TransactionType;
+status?: TransactionStatus;
+fromDate?: string;
+toDate?: string;
+/**
+ * @pattern ^[0-9]{1,12}(\.[0-9]{1,2})?$
+ */
+minimumAmount?: string;
+/**
+ * @pattern ^[0-9]{1,12}(\.[0-9]{1,2})?$
+ */
+maximumAmount?: string;
+/**
+ * @minimum 1
+ */
+page?: number;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+pageSize?: number;
 };
 

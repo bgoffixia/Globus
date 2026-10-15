@@ -896,6 +896,9 @@ router.post("/bank/transfers", async (req, res): Promise<void> => {
     if (!senderWallet || !receiverWallet) {
       return { error: "A wallet for the selected currency is unavailable." };
     }
+    if (senderWallet.status !== "active") {
+      return { error: "This wallet is frozen and cannot send transfers." };
+    }
 
     await tx
       .select({ id: bankWalletsTable.id })
@@ -1576,8 +1579,13 @@ router.post("/bank/ledger-requests", async (req, res): Promise<void> => {
 
     const reference = createReference();
     const wallet = await userWallet(tx, userId, parsed.data.currency);
-    if (!wallet || wallet.status !== "active") {
-      return { error: "An active wallet for the selected currency is unavailable." };
+    if (!wallet || (parsed.data.type === "withdrawal" && wallet.status !== "active")) {
+      return {
+        error:
+          parsed.data.type === "withdrawal"
+            ? "A frozen wallet cannot be used for a withdrawal."
+            : "A wallet for the selected currency is unavailable.",
+      };
     }
     await tx
       .select({ id: bankWalletsTable.id })

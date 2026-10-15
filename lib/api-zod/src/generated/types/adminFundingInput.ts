@@ -24,6 +24,16 @@ export interface AdminFundingInput {
      */
   description: string;
   /**
+     * @maxLength 120
+     * @nullable
+     */
+  internalReference?: string | null;
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  adminNotes?: string | null;
+  /**
      * @minLength 5
      * @maxLength 500
      */

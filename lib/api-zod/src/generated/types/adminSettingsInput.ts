@@ -6,7 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface AdminTransactionDeleteInput {
+export interface AdminSettingsInput {
+  /** @pattern ^[0-9]{1,12}(\.[0-9]{1,2})?$ */
+  fundingLimit: string;
+  /** @pattern ^[0-9]{1,12}(\.[0-9]{1,2})?$ */
+  secondApprovalThreshold: string;
   /**
      * @minLength 5
      * @maxLength 500

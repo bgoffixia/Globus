@@ -5,9 +5,11 @@
  * Globus internal ledger API; no external financial provider is connected
  * OpenAPI spec version: 0.1.0
  */
+import type { AdminAccount } from './adminAccount';
 
-export interface AdminTransactionDeleteResult {
-  transactionId: string;
-  reference: string;
-  deleted: true;
+export interface AdminAccountPage {
+  items: AdminAccount[];
+  total: number;
+  page: number;
+  pageSize: number;
 }

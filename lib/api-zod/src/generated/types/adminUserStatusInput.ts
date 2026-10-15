@@ -14,4 +14,6 @@ export interface AdminUserStatusInput {
      * @maxLength 500
      */
   reason: string;
+  /** @maxLength 500 */
+  notes?: string;
 }

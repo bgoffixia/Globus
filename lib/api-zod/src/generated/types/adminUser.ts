@@ -26,6 +26,12 @@ export interface AdminUser {
   /** @nullable */
   verificationNote: string | null;
   accountStatus: AdminUserAccountStatus;
+  /** @nullable */
+  accountRestrictionReason: string | null;
+  /** @nullable */
+  accountRestrictionNotes: string | null;
+  /** @nullable */
+  accountRestrictedAt: Date | null;
   walletCount: number;
   createdAt: Date;
 }

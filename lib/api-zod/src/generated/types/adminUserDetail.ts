@@ -5,6 +5,7 @@
  * Globus internal ledger API; no external financial provider is connected
  * OpenAPI spec version: 0.1.0
  */
+import type { AdminAuditLog } from './adminAuditLog';
 import type { AdminUser } from './adminUser';
 import type { BankTransaction } from './bankTransaction';
 import type { Wallet } from './wallet';
@@ -19,6 +20,8 @@ export interface AdminUserDetail {
      */
   dateOfBirth: string | null;
   transactionPinConfigured: boolean;
+  transactionCount: number;
   wallets: Wallet[];
   transactions: BankTransaction[];
+  administrativeHistory: AdminAuditLog[];
 }

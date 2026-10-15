@@ -90,7 +90,7 @@ export const GetBankDashboardResponse = zod.object({
   "recentTransactions": zod.array(zod.object({
   "id": zod.string(),
   "reference": zod.string(),
-  "type": zod.enum(['simulation_credit', 'admin_funding', 'admin_debit', 'transfer_in', 'transfer_out', 'external_transfer', 'external_transfer_in', 'deposit_request', 'withdrawal_request', 'exchange_request']),
+  "type": zod.enum(['simulation_credit', 'admin_funding', 'admin_debit', 'admin_adjustment', 'reversal', 'transfer_in', 'transfer_out', 'external_transfer', 'external_transfer_in', 'deposit_request', 'withdrawal_request', 'exchange_request']),
   "status": zod.enum(['completed', 'pending', 'failed', 'reversed']),
   "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
   "amount": zod.string(),
@@ -139,7 +139,7 @@ export const ListBankTransactionsQueryParams = zod.object({
 export const ListBankTransactionsResponseItem = zod.object({
   "id": zod.string(),
   "reference": zod.string(),
-  "type": zod.enum(['simulation_credit', 'admin_funding', 'admin_debit', 'transfer_in', 'transfer_out', 'external_transfer', 'external_transfer_in', 'deposit_request', 'withdrawal_request', 'exchange_request']),
+  "type": zod.enum(['simulation_credit', 'admin_funding', 'admin_debit', 'admin_adjustment', 'reversal', 'transfer_in', 'transfer_out', 'external_transfer', 'external_transfer_in', 'deposit_request', 'withdrawal_request', 'exchange_request']),
   "status": zod.enum(['completed', 'pending', 'failed', 'reversed']),
   "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
   "amount": zod.string(),
@@ -335,7 +335,7 @@ export const CreateBankTransferBody = zod.object({
 export const CreateBankTransferResponse = zod.object({
   "id": zod.string(),
   "reference": zod.string(),
-  "type": zod.enum(['simulation_credit', 'admin_funding', 'admin_debit', 'transfer_in', 'transfer_out', 'external_transfer', 'external_transfer_in', 'deposit_request', 'withdrawal_request', 'exchange_request']),
+  "type": zod.enum(['simulation_credit', 'admin_funding', 'admin_debit', 'admin_adjustment', 'reversal', 'transfer_in', 'transfer_out', 'external_transfer', 'external_transfer_in', 'deposit_request', 'withdrawal_request', 'exchange_request']),
   "status": zod.enum(['completed', 'pending', 'failed', 'reversed']),
   "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
   "amount": zod.string(),
@@ -591,9 +591,183 @@ export const GetAdminAccessResponse = zod.object({
  */
 export const GetAdminSummaryResponse = zod.object({
   "registeredUsers": zod.number().int(),
-  "activeWallets": zod.number().int(),
-  "pendingLedgerRequests": zod.number().int(),
-  "ledgerTransactions": zod.number().int()
+  "activeAccounts": zod.number().int(),
+  "restrictedAccounts": zod.number().int(),
+  "suspendedAccounts": zod.number().int(),
+  "pendingOperations": zod.number().int(),
+  "ledgerTransactions": zod.number().int(),
+  "creditsByCurrency": zod.array(zod.object({
+  "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
+  "amount": zod.string()
+})),
+  "debitsByCurrency": zod.array(zod.object({
+  "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
+  "amount": zod.string()
+})),
+  "recentActions": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "actorName": zod.string(),
+  "actorEmail": zod.string().email(),
+  "targetName": zod.string(),
+  "targetEmail": zod.string().email(),
+  "action": zod.string(),
+  "reason": zod.string(),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Search and page through customer currency wallets
+ */
+export const listAdminAccountsQuerySearchMax = 100;
+
+export const listAdminAccountsQueryPageDefault = 1;
+
+export const listAdminAccountsQueryPageSizeDefault = 25;
+export const listAdminAccountsQueryPageSizeMax = 100;
+
+
+
+export const ListAdminAccountsQueryParams = zod.object({
+  "search": zod.coerce.string().max(listAdminAccountsQuerySearchMax).optional(),
+  "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']).optional(),
+  "status": zod.enum(['active', 'restricted']).optional(),
+  "page": zod.coerce.number().int().min(1).default(listAdminAccountsQueryPageDefault),
+  "pageSize": zod.coerce.number().int().min(1).max(listAdminAccountsQueryPageSizeMax).default(listAdminAccountsQueryPageSizeDefault)
+})
+
+export const ListAdminAccountsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "userId": zod.string(),
+  "customerId": zod.string().nullable(),
+  "memberName": zod.string(),
+  "email": zod.string().email(),
+  "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
+  "balance": zod.string(),
+  "status": zod.enum(['active', 'restricted']),
+  "restrictionReason": zod.string().nullable(),
+  "restrictionNotes": zod.string().nullable(),
+  "restrictedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date()
+})),
+  "total": zod.number().int(),
+  "page": zod.number().int(),
+  "pageSize": zod.number().int()
+})
+
+
+/**
+ * @summary Freeze or unfreeze a wallet with an audited reason
+ */
+export const UpdateAdminWalletStatusParams = zod.object({
+  "walletId": zod.coerce.string().uuid()
+})
+
+export const updateAdminWalletStatusBodyReasonMin = 5;
+export const updateAdminWalletStatusBodyReasonMax = 500;
+
+export const updateAdminWalletStatusBodyNotesMax = 500;
+
+export const updateAdminWalletStatusBodyTransactionPinRegExp = new RegExp('^[0-9]{6}$');
+
+
+export const UpdateAdminWalletStatusBody = zod.object({
+  "status": zod.enum(['active', 'restricted']),
+  "reason": zod.string().min(updateAdminWalletStatusBodyReasonMin).max(updateAdminWalletStatusBodyReasonMax),
+  "notes": zod.string().max(updateAdminWalletStatusBodyNotesMax).nullish(),
+  "transactionPin": zod.string().regex(updateAdminWalletStatusBodyTransactionPinRegExp)
+})
+
+export const UpdateAdminWalletStatusResponse = zod.object({
+  "id": zod.string().uuid(),
+  "userId": zod.string(),
+  "customerId": zod.string().nullable(),
+  "memberName": zod.string(),
+  "email": zod.string().email(),
+  "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
+  "balance": zod.string(),
+  "status": zod.enum(['active', 'restricted']),
+  "restrictionReason": zod.string().nullable(),
+  "restrictionNotes": zod.string().nullable(),
+  "restrictedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Search and page through administrative audit events
+ */
+export const listAdminAuditLogsQuerySearchMax = 100;
+
+export const listAdminAuditLogsQueryActionMax = 80;
+
+export const listAdminAuditLogsQueryPageDefault = 1;
+
+export const listAdminAuditLogsQueryPageSizeDefault = 25;
+export const listAdminAuditLogsQueryPageSizeMax = 100;
+
+
+
+export const ListAdminAuditLogsQueryParams = zod.object({
+  "search": zod.coerce.string().max(listAdminAuditLogsQuerySearchMax).optional(),
+  "action": zod.coerce.string().max(listAdminAuditLogsQueryActionMax).optional(),
+  "page": zod.coerce.number().int().min(1).default(listAdminAuditLogsQueryPageDefault),
+  "pageSize": zod.coerce.number().int().min(1).max(listAdminAuditLogsQueryPageSizeMax).default(listAdminAuditLogsQueryPageSizeDefault)
+})
+
+export const ListAdminAuditLogsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "actorName": zod.string(),
+  "actorEmail": zod.string().email(),
+  "targetName": zod.string(),
+  "targetEmail": zod.string().email(),
+  "action": zod.string(),
+  "reason": zod.string(),
+  "createdAt": zod.coerce.date()
+})),
+  "total": zod.number().int(),
+  "page": zod.number().int(),
+  "pageSize": zod.number().int()
+})
+
+
+/**
+ * @summary Read operational funding and frozen-wallet policies
+ */
+export const GetAdminSettingsResponse = zod.object({
+  "fundingLimit": zod.string(),
+  "secondApprovalThreshold": zod.string(),
+  "frozenIncomingPolicy": zod.enum(['allow_frozen']),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update funding limits and approval settings
+ */
+export const updateAdminSettingsBodyFundingLimitRegExp = new RegExp('^[0-9]{1,12}(\\.[0-9]{1,2})?$');
+export const updateAdminSettingsBodySecondApprovalThresholdRegExp = new RegExp('^[0-9]{1,12}(\\.[0-9]{1,2})?$');
+export const updateAdminSettingsBodyReasonMin = 5;
+export const updateAdminSettingsBodyReasonMax = 500;
+
+export const updateAdminSettingsBodyTransactionPinRegExp = new RegExp('^[0-9]{6}$');
+
+
+export const UpdateAdminSettingsBody = zod.object({
+  "fundingLimit": zod.string().regex(updateAdminSettingsBodyFundingLimitRegExp),
+  "secondApprovalThreshold": zod.string().regex(updateAdminSettingsBodySecondApprovalThresholdRegExp),
+  "reason": zod.string().min(updateAdminSettingsBodyReasonMin).max(updateAdminSettingsBodyReasonMax),
+  "transactionPin": zod.string().regex(updateAdminSettingsBodyTransactionPinRegExp)
+})
+
+export const UpdateAdminSettingsResponse = zod.object({
+  "fundingLimit": zod.string(),
+  "secondApprovalThreshold": zod.string(),
+  "frozenIncomingPolicy": zod.enum(['allow_frozen']),
+  "updatedAt": zod.coerce.date()
 })
 
 
@@ -663,30 +837,42 @@ export const listAdminUsersQuerySearchMax = 100;
 export const listAdminUsersQueryLimitDefault = 50;
 export const listAdminUsersQueryLimitMax = 100;
 
+export const listAdminUsersQueryPageDefault = 1;
+
 
 
 export const ListAdminUsersQueryParams = zod.object({
   "search": zod.coerce.string().max(listAdminUsersQuerySearchMax).optional(),
-  "limit": zod.coerce.number().int().min(1).max(listAdminUsersQueryLimitMax).default(listAdminUsersQueryLimitDefault)
+  "limit": zod.coerce.number().int().min(1).max(listAdminUsersQueryLimitMax).default(listAdminUsersQueryLimitDefault),
+  "page": zod.coerce.number().int().min(1).default(listAdminUsersQueryPageDefault),
+  "accountStatus": zod.enum(['active', 'restricted', 'suspended']).optional(),
+  "verificationStatus": zod.enum(['not_started', 'pending', 'approved', 'rejected', 'additional_information_required']).optional()
 })
 
-export const listAdminUsersResponseCustomerIdRegExp = new RegExp('^[A-Z0-9]{7}$');
+export const listAdminUsersResponseItemsItemCustomerIdRegExp = new RegExp('^[A-Z0-9]{7}$');
 
 
-export const ListAdminUsersResponseItem = zod.object({
+export const ListAdminUsersResponse = zod.object({
+  "items": zod.array(zod.object({
   "id": zod.string(),
   "email": zod.string(),
-  "customerId": zod.string().regex(listAdminUsersResponseCustomerIdRegExp).nullable(),
+  "customerId": zod.string().regex(listAdminUsersResponseItemsItemCustomerIdRegExp).nullable(),
   "firstName": zod.string().nullable(),
   "lastName": zod.string().nullable(),
   "country": zod.string().nullable(),
   "verificationStatus": zod.enum(['not_started', 'pending', 'approved', 'rejected', 'additional_information_required']),
   "verificationNote": zod.string().nullable(),
-  "accountStatus": zod.enum(['active', 'suspended']),
+  "accountStatus": zod.enum(['active', 'restricted', 'suspended']),
+  "accountRestrictionReason": zod.string().nullable(),
+  "accountRestrictionNotes": zod.string().nullable(),
+  "accountRestrictedAt": zod.coerce.date().nullable(),
   "walletCount": zod.number().int(),
   "createdAt": zod.coerce.date()
+})),
+  "total": zod.number().int(),
+  "page": zod.number().int(),
+  "pageSize": zod.number().int()
 })
-export const ListAdminUsersResponse = zod.array(ListAdminUsersResponseItem)
 
 
 /**
@@ -713,13 +899,17 @@ export const GetAdminUserDetailResponse = zod.object({
   "country": zod.string().nullable(),
   "verificationStatus": zod.enum(['not_started', 'pending', 'approved', 'rejected', 'additional_information_required']),
   "verificationNote": zod.string().nullable(),
-  "accountStatus": zod.enum(['active', 'suspended']),
+  "accountStatus": zod.enum(['active', 'restricted', 'suspended']),
+  "accountRestrictionReason": zod.string().nullable(),
+  "accountRestrictionNotes": zod.string().nullable(),
+  "accountRestrictedAt": zod.coerce.date().nullable(),
   "walletCount": zod.number().int(),
   "createdAt": zod.coerce.date()
 }),
   "phone": zod.string().nullable(),
   "dateOfBirth": zod.string().regex(getAdminUserDetailResponseDateOfBirthRegExp).nullable(),
   "transactionPinConfigured": zod.boolean(),
+  "transactionCount": zod.number().int(),
   "wallets": zod.array(zod.object({
   "id": zod.string(),
   "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
@@ -731,7 +921,7 @@ export const GetAdminUserDetailResponse = zod.object({
   "transactions": zod.array(zod.object({
   "id": zod.string(),
   "reference": zod.string(),
-  "type": zod.enum(['simulation_credit', 'admin_funding', 'admin_debit', 'transfer_in', 'transfer_out', 'external_transfer', 'external_transfer_in', 'deposit_request', 'withdrawal_request', 'exchange_request']),
+  "type": zod.enum(['simulation_credit', 'admin_funding', 'admin_debit', 'admin_adjustment', 'reversal', 'transfer_in', 'transfer_out', 'external_transfer', 'external_transfer_in', 'deposit_request', 'withdrawal_request', 'exchange_request']),
   "status": zod.enum(['completed', 'pending', 'failed', 'reversed']),
   "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
   "amount": zod.string(),
@@ -739,6 +929,16 @@ export const GetAdminUserDetailResponse = zod.object({
   "counterparty": zod.string().nullable(),
   "description": zod.string(),
   "mode": zod.enum(['internal_ledger']),
+  "createdAt": zod.coerce.date()
+})),
+  "administrativeHistory": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "actorName": zod.string(),
+  "actorEmail": zod.string().email(),
+  "targetName": zod.string(),
+  "targetEmail": zod.string().email(),
+  "action": zod.string(),
+  "reason": zod.string(),
   "createdAt": zod.coerce.date()
 }))
 })
@@ -781,11 +981,14 @@ export const UpdateAdminUserStatusParams = zod.object({
 export const updateAdminUserStatusBodyReasonMin = 5;
 export const updateAdminUserStatusBodyReasonMax = 500;
 
+export const updateAdminUserStatusBodyNotesMax = 500;
+
 
 
 export const UpdateAdminUserStatusBody = zod.object({
-  "accountStatus": zod.enum(['active', 'suspended']),
-  "reason": zod.string().min(updateAdminUserStatusBodyReasonMin).max(updateAdminUserStatusBodyReasonMax)
+  "accountStatus": zod.enum(['active', 'restricted', 'suspended']),
+  "reason": zod.string().min(updateAdminUserStatusBodyReasonMin).max(updateAdminUserStatusBodyReasonMax),
+  "notes": zod.string().max(updateAdminUserStatusBodyNotesMax).optional()
 })
 
 export const updateAdminUserStatusResponseCustomerIdRegExp = new RegExp('^[A-Z0-9]{7}$');
@@ -800,7 +1003,64 @@ export const UpdateAdminUserStatusResponse = zod.object({
   "country": zod.string().nullable(),
   "verificationStatus": zod.enum(['not_started', 'pending', 'approved', 'rejected', 'additional_information_required']),
   "verificationNote": zod.string().nullable(),
-  "accountStatus": zod.enum(['active', 'suspended']),
+  "accountStatus": zod.enum(['active', 'restricted', 'suspended']),
+  "accountRestrictionReason": zod.string().nullable(),
+  "accountRestrictionNotes": zod.string().nullable(),
+  "accountRestrictedAt": zod.coerce.date().nullable(),
+  "walletCount": zod.number().int(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Edit permitted member profile fields with a documented reason
+ */
+
+
+
+export const UpdateAdminUserProfileParams = zod.object({
+  "userId": zod.coerce.string().min(1)
+})
+
+export const updateAdminUserProfileBodyFirstNameMax = 80;
+
+export const updateAdminUserProfileBodyLastNameMax = 80;
+
+export const updateAdminUserProfileBodyPhoneMax = 40;
+
+export const updateAdminUserProfileBodyCountryMax = 80;
+
+export const updateAdminUserProfileBodyReasonMin = 5;
+export const updateAdminUserProfileBodyReasonMax = 500;
+
+export const updateAdminUserProfileBodyTransactionPinRegExp = new RegExp('^[0-9]{6}$');
+
+
+export const UpdateAdminUserProfileBody = zod.object({
+  "firstName": zod.string().max(updateAdminUserProfileBodyFirstNameMax).nullish(),
+  "lastName": zod.string().max(updateAdminUserProfileBodyLastNameMax).nullish(),
+  "phone": zod.string().max(updateAdminUserProfileBodyPhoneMax).nullish(),
+  "country": zod.string().max(updateAdminUserProfileBodyCountryMax).nullish(),
+  "reason": zod.string().min(updateAdminUserProfileBodyReasonMin).max(updateAdminUserProfileBodyReasonMax),
+  "transactionPin": zod.string().regex(updateAdminUserProfileBodyTransactionPinRegExp)
+})
+
+export const updateAdminUserProfileResponseCustomerIdRegExp = new RegExp('^[A-Z0-9]{7}$');
+
+
+export const UpdateAdminUserProfileResponse = zod.object({
+  "id": zod.string(),
+  "email": zod.string(),
+  "customerId": zod.string().regex(updateAdminUserProfileResponseCustomerIdRegExp).nullable(),
+  "firstName": zod.string().nullable(),
+  "lastName": zod.string().nullable(),
+  "country": zod.string().nullable(),
+  "verificationStatus": zod.enum(['not_started', 'pending', 'approved', 'rejected', 'additional_information_required']),
+  "verificationNote": zod.string().nullable(),
+  "accountStatus": zod.enum(['active', 'restricted', 'suspended']),
+  "accountRestrictionReason": zod.string().nullable(),
+  "accountRestrictionNotes": zod.string().nullable(),
+  "accountRestrictedAt": zod.coerce.date().nullable(),
   "walletCount": zod.number().int(),
   "createdAt": zod.coerce.date()
 })
@@ -876,7 +1136,10 @@ export const UpdateAdminUserVerificationResponse = zod.object({
   "country": zod.string().nullable(),
   "verificationStatus": zod.enum(['not_started', 'pending', 'approved', 'rejected', 'additional_information_required']),
   "verificationNote": zod.string().nullable(),
-  "accountStatus": zod.enum(['active', 'suspended']),
+  "accountStatus": zod.enum(['active', 'restricted', 'suspended']),
+  "accountRestrictionReason": zod.string().nullable(),
+  "accountRestrictionNotes": zod.string().nullable(),
+  "accountRestrictedAt": zod.coerce.date().nullable(),
   "walletCount": zod.number().int(),
   "createdAt": zod.coerce.date()
 })
@@ -897,6 +1160,10 @@ export const createAdminFundingBodySenderNameMax = 120;
 
 export const createAdminFundingBodyDescriptionMax = 240;
 
+export const createAdminFundingBodyInternalReferenceMax = 120;
+
+export const createAdminFundingBodyAdminNotesMax = 500;
+
 export const createAdminFundingBodyReasonMin = 5;
 export const createAdminFundingBodyReasonMax = 500;
 
@@ -912,6 +1179,8 @@ export const CreateAdminFundingBody = zod.object({
   "amount": zod.string().regex(createAdminFundingBodyAmountRegExp),
   "senderName": zod.string().min(1).max(createAdminFundingBodySenderNameMax),
   "description": zod.string().min(1).max(createAdminFundingBodyDescriptionMax),
+  "internalReference": zod.string().max(createAdminFundingBodyInternalReferenceMax).nullish(),
+  "adminNotes": zod.string().max(createAdminFundingBodyAdminNotesMax).nullish(),
   "reason": zod.string().min(createAdminFundingBodyReasonMin).max(createAdminFundingBodyReasonMax),
   "idempotencyKey": zod.string().min(createAdminFundingBodyIdempotencyKeyMin).max(createAdminFundingBodyIdempotencyKeyMax),
   "transactionPin": zod.string().regex(createAdminFundingBodyTransactionPinRegExp)
@@ -920,7 +1189,7 @@ export const CreateAdminFundingBody = zod.object({
 export const CreateAdminFundingResponse = zod.object({
   "id": zod.string(),
   "reference": zod.string(),
-  "type": zod.enum(['simulation_credit', 'admin_funding', 'admin_debit', 'transfer_in', 'transfer_out', 'external_transfer', 'external_transfer_in', 'deposit_request', 'withdrawal_request', 'exchange_request']),
+  "type": zod.enum(['simulation_credit', 'admin_funding', 'admin_debit', 'admin_adjustment', 'reversal', 'transfer_in', 'transfer_out', 'external_transfer', 'external_transfer_in', 'deposit_request', 'withdrawal_request', 'exchange_request']),
   "status": zod.enum(['completed', 'pending', 'failed', 'reversed']),
   "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
   "amount": zod.string(),
@@ -948,7 +1217,7 @@ export const ListAdminLedgerQueryParams = zod.object({
 export const ListAdminLedgerResponseItem = zod.object({
   "id": zod.string(),
   "reference": zod.string(),
-  "type": zod.enum(['simulation_credit', 'admin_funding', 'admin_debit', 'transfer_in', 'transfer_out', 'external_transfer', 'external_transfer_in', 'deposit_request', 'withdrawal_request', 'exchange_request']),
+  "type": zod.enum(['simulation_credit', 'admin_funding', 'admin_debit', 'admin_adjustment', 'reversal', 'transfer_in', 'transfer_out', 'external_transfer', 'external_transfer_in', 'deposit_request', 'withdrawal_request', 'exchange_request']),
   "status": zod.enum(['completed', 'pending', 'failed', 'reversed']),
   "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
   "amount": zod.string(),
@@ -987,13 +1256,156 @@ export const ListAdminTransactionStatusHistoryResponse = zod.array(ListAdminTran
 
 
 /**
+ * @summary Search, filter, and page through transactions
+ */
+export const listAdminTransactionsQuerySearchMax = 100;
+
+export const listAdminTransactionsQueryCustomerMax = 100;
+
+export const listAdminTransactionsQueryMinimumAmountRegExp = new RegExp('^[0-9]{1,12}(\\.[0-9]{1,2})?$');
+export const listAdminTransactionsQueryMaximumAmountRegExp = new RegExp('^[0-9]{1,12}(\\.[0-9]{1,2})?$');
+export const listAdminTransactionsQueryPageDefault = 1;
+
+export const listAdminTransactionsQueryPageSizeDefault = 25;
+export const listAdminTransactionsQueryPageSizeMax = 100;
+
+
+
+export const ListAdminTransactionsQueryParams = zod.object({
+  "search": zod.coerce.string().max(listAdminTransactionsQuerySearchMax).optional(),
+  "customer": zod.coerce.string().max(listAdminTransactionsQueryCustomerMax).optional(),
+  "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']).optional(),
+  "type": zod.enum(['simulation_credit', 'admin_funding', 'admin_debit', 'admin_adjustment', 'reversal', 'transfer_in', 'transfer_out', 'external_transfer', 'external_transfer_in', 'deposit_request', 'withdrawal_request', 'exchange_request']).optional(),
+  "status": zod.enum(['completed', 'pending', 'failed', 'reversed']).optional(),
+  "fromDate": zod.date().optional(),
+  "toDate": zod.date().optional(),
+  "minimumAmount": zod.coerce.string().regex(listAdminTransactionsQueryMinimumAmountRegExp).optional(),
+  "maximumAmount": zod.coerce.string().regex(listAdminTransactionsQueryMaximumAmountRegExp).optional(),
+  "page": zod.coerce.number().int().min(1).default(listAdminTransactionsQueryPageDefault),
+  "pageSize": zod.coerce.number().int().min(1).max(listAdminTransactionsQueryPageSizeMax).default(listAdminTransactionsQueryPageSizeDefault)
+})
+
+export const ListAdminTransactionsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.string(),
+  "reference": zod.string(),
+  "type": zod.enum(['simulation_credit', 'admin_funding', 'admin_debit', 'admin_adjustment', 'reversal', 'transfer_in', 'transfer_out', 'external_transfer', 'external_transfer_in', 'deposit_request', 'withdrawal_request', 'exchange_request']),
+  "status": zod.enum(['completed', 'pending', 'failed', 'reversed']),
+  "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
+  "amount": zod.string(),
+  "fee": zod.string(),
+  "counterparty": zod.string().nullable(),
+  "description": zod.string(),
+  "mode": zod.enum(['internal_ledger']),
+  "createdAt": zod.coerce.date()
+})),
+  "total": zod.number().int(),
+  "page": zod.number().int(),
+  "pageSize": zod.number().int()
+})
+
+
+/**
+ * @summary Read transaction details and associated ledger entries
+ */
+export const GetAdminTransactionDetailParams = zod.object({
+  "transactionId": zod.coerce.string().uuid()
+})
+
+export const GetAdminTransactionDetailResponse = zod.object({
+  "transaction": zod.object({
+  "id": zod.string(),
+  "reference": zod.string(),
+  "type": zod.enum(['simulation_credit', 'admin_funding', 'admin_debit', 'admin_adjustment', 'reversal', 'transfer_in', 'transfer_out', 'external_transfer', 'external_transfer_in', 'deposit_request', 'withdrawal_request', 'exchange_request']),
+  "status": zod.enum(['completed', 'pending', 'failed', 'reversed']),
+  "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
+  "amount": zod.string(),
+  "fee": zod.string(),
+  "counterparty": zod.string().nullable(),
+  "description": zod.string(),
+  "mode": zod.enum(['internal_ledger']),
+  "createdAt": zod.coerce.date()
+}),
+  "initiatorName": zod.string(),
+  "initiatorEmail": zod.string().email(),
+  "customerName": zod.string(),
+  "customerEmail": zod.string().email(),
+  "ledgerEntries": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "walletId": zod.string().uuid().nullable(),
+  "accountCode": zod.string(),
+  "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
+  "side": zod.enum(['debit', 'credit']),
+  "amount": zod.string(),
+  "createdAt": zod.coerce.date()
+})),
+  "correctionOfTransactionId": zod.string().nullable(),
+  "reversalOfTransactionId": zod.string().nullable(),
+  "correctionReason": zod.string().nullable(),
+  "adminReference": zod.string().nullable(),
+  "adminNotes": zod.string().nullable(),
+  "statusHistory": zod.array(zod.object({
+  "actorName": zod.string(),
+  "actorEmail": zod.string().email(),
+  "timestamp": zod.coerce.date(),
+  "previousStatus": zod.enum(['completed', 'pending', 'failed', 'reversed']),
+  "newStatus": zod.enum(['completed', 'pending', 'failed', 'reversed']),
+  "reason": zod.string(),
+  "affectedMembers": zod.array(zod.object({
+  "name": zod.string(),
+  "email": zod.string().email()
+}))
+}))
+})
+
+
+/**
+ * @summary Reverse a posted transaction or record a compensating adjustment
+ */
+export const CreateAdminTransactionCorrectionParams = zod.object({
+  "transactionId": zod.coerce.string().uuid()
+})
+
+export const createAdminTransactionCorrectionBodyAmountRegExp = new RegExp('^[0-9]{1,12}(\\.[0-9]{1,2})?$');
+export const createAdminTransactionCorrectionBodyReasonMin = 5;
+export const createAdminTransactionCorrectionBodyReasonMax = 500;
+
+export const createAdminTransactionCorrectionBodyIdempotencyKeyMin = 16;
+export const createAdminTransactionCorrectionBodyIdempotencyKeyMax = 100;
+
+export const createAdminTransactionCorrectionBodyTransactionPinRegExp = new RegExp('^[0-9]{6}$');
+
+
+export const CreateAdminTransactionCorrectionBody = zod.object({
+  "kind": zod.enum(['reversal', 'adjustment']),
+  "walletId": zod.string().uuid().nullish(),
+  "direction": zod.union([zod.literal('credit'),zod.literal('debit'),zod.literal(null)]).nullish(),
+  "amount": zod.string().regex(createAdminTransactionCorrectionBodyAmountRegExp).nullish(),
+  "reason": zod.string().min(createAdminTransactionCorrectionBodyReasonMin).max(createAdminTransactionCorrectionBodyReasonMax),
+  "idempotencyKey": zod.string().min(createAdminTransactionCorrectionBodyIdempotencyKeyMin).max(createAdminTransactionCorrectionBodyIdempotencyKeyMax),
+  "transactionPin": zod.string().regex(createAdminTransactionCorrectionBodyTransactionPinRegExp)
+})
+
+export const CreateAdminTransactionCorrectionResponse = zod.object({
+  "id": zod.string(),
+  "reference": zod.string(),
+  "type": zod.enum(['simulation_credit', 'admin_funding', 'admin_debit', 'admin_adjustment', 'reversal', 'transfer_in', 'transfer_out', 'external_transfer', 'external_transfer_in', 'deposit_request', 'withdrawal_request', 'exchange_request']),
+  "status": zod.enum(['completed', 'pending', 'failed', 'reversed']),
+  "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
+  "amount": zod.string(),
+  "fee": zod.string(),
+  "counterparty": zod.string().nullable(),
+  "description": zod.string(),
+  "mode": zod.enum(['internal_ledger']),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
  * @summary Override a transaction status without changing ledger balances
  */
-
-
-
 export const UpdateAdminTransactionStatusParams = zod.object({
-  "transactionId": zod.coerce.string().min(1)
+  "transactionId": zod.coerce.string().uuid()
 })
 
 export const updateAdminTransactionStatusBodyReasonMin = 5;
@@ -1011,7 +1423,7 @@ export const UpdateAdminTransactionStatusBody = zod.object({
 export const UpdateAdminTransactionStatusResponse = zod.object({
   "id": zod.string(),
   "reference": zod.string(),
-  "type": zod.enum(['simulation_credit', 'admin_funding', 'admin_debit', 'transfer_in', 'transfer_out', 'external_transfer', 'external_transfer_in', 'deposit_request', 'withdrawal_request', 'exchange_request']),
+  "type": zod.enum(['simulation_credit', 'admin_funding', 'admin_debit', 'admin_adjustment', 'reversal', 'transfer_in', 'transfer_out', 'external_transfer', 'external_transfer_in', 'deposit_request', 'withdrawal_request', 'exchange_request']),
   "status": zod.enum(['completed', 'pending', 'failed', 'reversed']),
   "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
   "amount": zod.string(),
@@ -1024,30 +1436,36 @@ export const UpdateAdminTransactionStatusResponse = zod.object({
 
 
 /**
- * @summary Permanently delete a transaction and its ledger entries
+ * @summary Approve or reject funding requiring a second administrator
  */
-
-
-
-export const DeleteAdminTransactionParams = zod.object({
-  "transactionId": zod.coerce.string().min(1)
+export const ReviewAdminFundingParams = zod.object({
+  "transactionId": zod.coerce.string().uuid()
 })
 
-export const deleteAdminTransactionBodyReasonMin = 5;
-export const deleteAdminTransactionBodyReasonMax = 500;
+export const reviewAdminFundingBodyReasonMin = 5;
+export const reviewAdminFundingBodyReasonMax = 500;
 
-export const deleteAdminTransactionBodyTransactionPinRegExp = new RegExp('^[0-9]{6}$');
+export const reviewAdminFundingBodyTransactionPinRegExp = new RegExp('^[0-9]{6}$');
 
 
-export const DeleteAdminTransactionBody = zod.object({
-  "reason": zod.string().min(deleteAdminTransactionBodyReasonMin).max(deleteAdminTransactionBodyReasonMax),
-  "transactionPin": zod.string().regex(deleteAdminTransactionBodyTransactionPinRegExp)
+export const ReviewAdminFundingBody = zod.object({
+  "decision": zod.enum(['approve', 'reject']),
+  "reason": zod.string().min(reviewAdminFundingBodyReasonMin).max(reviewAdminFundingBodyReasonMax),
+  "transactionPin": zod.string().regex(reviewAdminFundingBodyTransactionPinRegExp)
 })
 
-export const DeleteAdminTransactionResponse = zod.object({
-  "transactionId": zod.string(),
+export const ReviewAdminFundingResponse = zod.object({
+  "id": zod.string(),
   "reference": zod.string(),
-  "deleted": zod.literal(true)
+  "type": zod.enum(['simulation_credit', 'admin_funding', 'admin_debit', 'admin_adjustment', 'reversal', 'transfer_in', 'transfer_out', 'external_transfer', 'external_transfer_in', 'deposit_request', 'withdrawal_request', 'exchange_request']),
+  "status": zod.enum(['completed', 'pending', 'failed', 'reversed']),
+  "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
+  "amount": zod.string(),
+  "fee": zod.string(),
+  "counterparty": zod.string().nullable(),
+  "description": zod.string(),
+  "mode": zod.enum(['internal_ledger']),
+  "createdAt": zod.coerce.date()
 })
 
 

@@ -299,6 +299,8 @@ export function toBankTransaction(
     | "simulation_credit"
     | "admin_funding"
     | "admin_debit"
+    | "admin_adjustment"
+    | "reversal"
     | "transfer_in"
     | "transfer_out"
     | "external_transfer"
@@ -424,8 +426,19 @@ export async function reservedForWallet(
         eq(bankTransactionsTable.fromWalletId, walletId),
       ),
     );
-
-  return BigInt(result.amount);
+  const [pendingAdminDebit] = await tx
+    .select({
+      amount: sql<string>`coalesce(sum(${bankTransactionsTable.amountMinor}), 0)::text`,
+    })
+    .from(bankTransactionsTable)
+    .where(
+      and(
+        inArray(bankTransactionsTable.type, ["admin_funding", "admin_adjustment"]),
+        eq(bankTransactionsTable.status, "pending"),
+        eq(bankTransactionsTable.fromWalletId, walletId),
+      ),
+    );
+  return BigInt(result.amount) + BigInt(pendingAdminDebit?.amount ?? "0");
 }
 
 export async function userWallet(

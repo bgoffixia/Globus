@@ -11,5 +11,6 @@ export type AdminUserStatusInputAccountStatus = typeof AdminUserStatusInputAccou
 
 export const AdminUserStatusInputAccountStatus = {
   active: 'active',
+  restricted: 'restricted',
   suspended: 'suspended',
 } as const;

@@ -11,5 +11,6 @@ export type AdminUserAccountStatus = typeof AdminUserAccountStatus[keyof typeof 
 
 export const AdminUserAccountStatus = {
   active: 'active',
+  restricted: 'restricted',
   suspended: 'suspended',
 } as const;

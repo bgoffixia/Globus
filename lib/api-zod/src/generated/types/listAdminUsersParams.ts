@@ -5,6 +5,8 @@
  * Globus internal ledger API; no external financial provider is connected
  * OpenAPI spec version: 0.1.0
  */
+import type { ListAdminUsersAccountStatus } from './listAdminUsersAccountStatus';
+import type { ListAdminUsersVerificationStatus } from './listAdminUsersVerificationStatus';
 
 export type ListAdminUsersParams = {
 /**
@@ -16,4 +18,10 @@ search?: string;
  * @maximum 100
  */
 limit?: number;
+/**
+ * @minimum 1
+ */
+page?: number;
+accountStatus?: ListAdminUsersAccountStatus;
+verificationStatus?: ListAdminUsersVerificationStatus;
 };

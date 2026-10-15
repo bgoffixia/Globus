@@ -5,10 +5,17 @@
  * Globus internal ledger API; no external financial provider is connected
  * OpenAPI spec version: 0.1.0
  */
+import type { AdminAuditLog } from './adminAuditLog';
+import type { AdminCurrencyTotal } from './adminCurrencyTotal';
 
 export interface AdminSummary {
   registeredUsers: number;
-  activeWallets: number;
-  pendingLedgerRequests: number;
+  activeAccounts: number;
+  restrictedAccounts: number;
+  suspendedAccounts: number;
+  pendingOperations: number;
   ledgerTransactions: number;
+  creditsByCurrency: AdminCurrencyTotal[];
+  debitsByCurrency: AdminCurrencyTotal[];
+  recentActions: AdminAuditLog[];
 }

@@ -1,19 +1,40 @@
 import { Router, type IRouter, type RequestHandler } from "express";
 import { pipeline } from "node:stream/promises";
 import { clerkClient, getAuth } from "@clerk/express";
-import { and, asc, count, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gte,
+  ilike,
+  inArray,
+  lte,
+  or,
+  sql,
+} from "drizzle-orm";
 import {
   CreateAdminFundingBody,
   CreateAdminFundingParams,
   CreateAdminFundingResponse,
-  DeleteAdminTransactionBody,
-  DeleteAdminTransactionParams,
-  DeleteAdminTransactionResponse,
+  CreateAdminTransactionCorrectionBody,
+  CreateAdminTransactionCorrectionParams,
+  CreateAdminTransactionCorrectionResponse,
   GetAdminIdentityDocumentContentParams,
   GetAdminAccessResponse,
+  GetAdminSettingsResponse,
   GetAdminSummaryResponse,
+  GetAdminTransactionDetailParams,
+  GetAdminTransactionDetailResponse,
   GetAdminUserDetailParams,
   GetAdminUserDetailResponse,
+  ListAdminAccountsQueryParams,
+  ListAdminAccountsResponse,
+  ListAdminAuditLogsQueryParams,
+  ListAdminAuditLogsResponse,
+  ListAdminTransactionsQueryParams,
+  ListAdminTransactionsResponse,
   ListAdminLedgerRequestsResponse,
   ListAdminLedgerQueryParams,
   ListAdminLedgerResponse,
@@ -29,6 +50,17 @@ import {
   UpdateAdminUserStatusBody,
   UpdateAdminUserStatusParams,
   UpdateAdminUserStatusResponse,
+  UpdateAdminUserProfileBody,
+  UpdateAdminUserProfileParams,
+  UpdateAdminUserProfileResponse,
+  UpdateAdminSettingsBody,
+  UpdateAdminSettingsResponse,
+  UpdateAdminWalletStatusBody,
+  UpdateAdminWalletStatusParams,
+  UpdateAdminWalletStatusResponse,
+  ReviewAdminFundingBody,
+  ReviewAdminFundingParams,
+  ReviewAdminFundingResponse,
   UpdateAdminTransactionStatusBody,
   UpdateAdminTransactionStatusParams,
   UpdateAdminTransactionStatusResponse,
@@ -43,6 +75,7 @@ import {
 } from "@workspace/api-zod";
 import {
   bankAuditLogsTable,
+  bankAdminSettingsTable,
   bankExchangeRatesTable,
   bankIdentityDocumentsTable,
   bankLedgerEntriesTable,
@@ -136,6 +169,20 @@ const requireAdmin: RequestHandler = async (req, res, next) => {
   }
   next();
 };
+
+async function getOrCreateAdminSettings() {
+  await db
+    .insert(bankAdminSettingsTable)
+    .values({ id: "operations" })
+    .onConflictDoNothing();
+  const [settings] = await db
+    .select()
+    .from(bankAdminSettingsTable)
+    .where(eq(bankAdminSettingsTable.id, "operations"))
+    .limit(1);
+  if (!settings) throw new Error("Administrative settings are unavailable.");
+  return settings;
+}
 
 function respondWithTransactionPinError(
   res: import("express").Response,
@@ -327,37 +374,457 @@ router.put("/bank/admin/exchange-rates", requireAdmin, async (req, res): Promise
 });
 
 router.get("/bank/admin/summary", requireAdmin, async (_req, res): Promise<void> => {
-  const [userCount, walletCount, requestCount, transactionCount] =
-    await Promise.all([
-      db.select({ value: count() }).from(bankUsersTable),
-      db
-        .select({ value: count() })
-        .from(bankWalletsTable)
-        .where(eq(bankWalletsTable.status, "active")),
-      db
-        .select({ value: count() })
-        .from(bankSandboxRequestsTable)
-        .where(
-          and(
-            inArray(bankSandboxRequestsTable.status, [
-              "pending_review",
-              "pending_provider_setup",
-            ]),
-            inArray(bankSandboxRequestsTable.type, ["deposit", "withdrawal"]),
-          ),
-        ),
-      db
-        .select({ value: count() })
-        .from(bankTransactionsTable)
-        .where(eq(bankTransactionsTable.status, "completed")),
-    ]);
-
+  const [
+    userCount,
+    accountStates,
+    pendingCount,
+    transactionCount,
+    ledgerTotals,
+    recentActions,
+  ] = await Promise.all([
+    db.select({ value: count() }).from(bankUsersTable),
+    db
+      .select({ status: bankUsersTable.accountStatus, value: count() })
+      .from(bankUsersTable)
+      .groupBy(bankUsersTable.accountStatus),
+    db
+      .select({ value: count() })
+      .from(bankTransactionsTable)
+      .where(eq(bankTransactionsTable.status, "pending")),
+    db.select({ value: count() }).from(bankTransactionsTable),
+    db
+      .select({
+        currency: bankLedgerEntriesTable.currency,
+        side: bankLedgerEntriesTable.side,
+        amount: sql<string>`coalesce(sum(${bankLedgerEntriesTable.amountMinor}), 0)::text`,
+      })
+      .from(bankLedgerEntriesTable)
+      .groupBy(bankLedgerEntriesTable.currency, bankLedgerEntriesTable.side),
+    db
+      .select()
+      .from(bankAuditLogsTable)
+      .orderBy(desc(bankAuditLogsTable.createdAt))
+      .limit(8),
+  ]);
+  const stateCount = new Map(
+    accountStates.map((row) => [row.status, Number(row.value)]),
+  );
+  const recentUserIds = [
+    ...new Set(recentActions.flatMap((row) => [row.actorUserId, row.targetUserId])),
+  ];
+  const recentUsers = recentUserIds.length
+    ? await db
+        .select({
+          id: bankUsersTable.id,
+          email: bankUsersTable.email,
+          firstName: bankUsersTable.firstName,
+          lastName: bankUsersTable.lastName,
+        })
+        .from(bankUsersTable)
+        .where(inArray(bankUsersTable.id, recentUserIds))
+    : [];
+  const userById = new Map(recentUsers.map((user) => [user.id, user]));
+  const currencies = ["USD", "EUR", "GBP", "NGN", "CAD", "AUD"] as const;
+  const amountFor = (currency: (typeof currencies)[number], side: string) =>
+    ledgerTotals.find((row) => row.currency === currency && row.side === side)
+      ?.amount ?? "0";
+  const currencyTotals = (side: "credit" | "debit") =>
+    currencies.map((currency) => ({
+      currency,
+      amount: formatMinorAmount(BigInt(amountFor(currency, side))),
+    }));
   res.json(
     GetAdminSummaryResponse.parse({
       registeredUsers: userCount[0]?.value ?? 0,
-      activeWallets: walletCount[0]?.value ?? 0,
-      pendingLedgerRequests: requestCount[0]?.value ?? 0,
+      activeAccounts: stateCount.get("active") ?? 0,
+      restrictedAccounts: stateCount.get("restricted") ?? 0,
+      suspendedAccounts: stateCount.get("suspended") ?? 0,
+      pendingOperations: pendingCount[0]?.value ?? 0,
       ledgerTransactions: transactionCount[0]?.value ?? 0,
+      creditsByCurrency: currencyTotals("credit"),
+      debitsByCurrency: currencyTotals("debit"),
+      recentActions: recentActions.map((row) => {
+        const actor = userById.get(row.actorUserId);
+        const target = userById.get(row.targetUserId);
+        return {
+          id: row.id,
+          actorName:
+            [actor?.firstName, actor?.lastName].filter(Boolean).join(" ") ||
+            actor?.email ||
+            "Unknown administrator",
+          actorEmail: actor?.email ?? "unknown@invalid.local",
+          targetName:
+            [target?.firstName, target?.lastName].filter(Boolean).join(" ") ||
+            target?.email ||
+            "Unknown member",
+          targetEmail: target?.email ?? "unknown@invalid.local",
+          action: row.action,
+          reason: row.reason,
+          createdAt: row.createdAt.toISOString(),
+        };
+      }),
+    }),
+  );
+});
+
+router.get("/bank/admin/accounts", requireAdmin, async (req, res): Promise<void> => {
+  const parsed = ListAdminAccountsQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const page = parsed.data.page ?? 1;
+  const pageSize = parsed.data.pageSize ?? 25;
+  const filters = [];
+  const search = parsed.data.search?.trim();
+  if (search) {
+    const needle = `%${search}%`;
+    filters.push(
+      or(
+        sql`${bankWalletsTable.id}::text ilike ${needle}`,
+        ilike(bankUsersTable.customerId, needle),
+        ilike(bankUsersTable.email, needle),
+        ilike(bankUsersTable.firstName, needle),
+        ilike(bankUsersTable.lastName, needle),
+      ),
+    );
+  }
+  if (parsed.data.currency) {
+    filters.push(eq(bankWalletsTable.currency, parsed.data.currency));
+  }
+  if (parsed.data.status) {
+    filters.push(eq(bankWalletsTable.status, parsed.data.status));
+  }
+  const where = filters.length ? and(...filters) : undefined;
+  const [totalRows] = await db
+    .select({ value: count() })
+    .from(bankWalletsTable)
+    .innerJoin(bankUsersTable, eq(bankWalletsTable.userId, bankUsersTable.id))
+    .where(where);
+  const rows = await db
+    .select({
+      id: bankWalletsTable.id,
+      userId: bankUsersTable.id,
+      customerId: bankUsersTable.customerId,
+      email: bankUsersTable.email,
+      firstName: bankUsersTable.firstName,
+      lastName: bankUsersTable.lastName,
+      currency: bankWalletsTable.currency,
+      status: bankWalletsTable.status,
+      restrictionReason: bankWalletsTable.restrictionReason,
+      restrictionNotes: bankWalletsTable.restrictionNotes,
+      restrictedAt: bankWalletsTable.restrictedAt,
+      createdAt: bankWalletsTable.createdAt,
+      balance: sql<string>`coalesce(sum(case when ${bankLedgerEntriesTable.side} = 'credit' then ${bankLedgerEntriesTable.amountMinor} else -${bankLedgerEntriesTable.amountMinor} end), 0)::text`,
+    })
+    .from(bankWalletsTable)
+    .innerJoin(bankUsersTable, eq(bankWalletsTable.userId, bankUsersTable.id))
+    .leftJoin(
+      bankLedgerEntriesTable,
+      eq(bankLedgerEntriesTable.walletId, bankWalletsTable.id),
+    )
+    .where(where)
+    .groupBy(
+      bankWalletsTable.id,
+      bankUsersTable.id,
+      bankUsersTable.customerId,
+      bankUsersTable.email,
+      bankUsersTable.firstName,
+      bankUsersTable.lastName,
+      bankWalletsTable.currency,
+      bankWalletsTable.status,
+      bankWalletsTable.restrictionReason,
+      bankWalletsTable.restrictionNotes,
+      bankWalletsTable.restrictedAt,
+      bankWalletsTable.createdAt,
+    )
+    .orderBy(desc(bankWalletsTable.createdAt))
+    .limit(pageSize)
+    .offset((page - 1) * pageSize);
+  res.json(
+    ListAdminAccountsResponse.parse({
+      items: rows.map((row) => ({
+        id: row.id,
+        userId: row.userId,
+        customerId: row.customerId,
+        memberName:
+          [row.firstName, row.lastName].filter(Boolean).join(" ") ||
+          "Globus member",
+        email: row.email,
+        currency: row.currency,
+        balance: formatMinorAmount(BigInt(row.balance)),
+        status: row.status as "active" | "restricted",
+        restrictionReason: row.restrictionReason,
+        restrictionNotes: row.restrictionNotes,
+        restrictedAt: row.restrictedAt?.toISOString() ?? null,
+        createdAt: row.createdAt.toISOString(),
+      })),
+      total: Number(totalRows?.value ?? 0),
+      page,
+      pageSize,
+    }),
+  );
+});
+
+router.patch(
+  "/bank/admin/wallets/:walletId",
+  requireAdmin,
+  async (req, res): Promise<void> => {
+    const params = UpdateAdminWalletStatusParams.safeParse(req.params);
+    const parsed = UpdateAdminWalletStatusBody.safeParse(req.body);
+    if (!params.success || !parsed.success) {
+      res.status(400).json({
+        error: !params.success
+          ? params.error.message
+          : parsed.error?.message ?? "Invalid request.",
+      });
+      return;
+    }
+    const clerkUserId = getAuth(req).userId;
+    if (!clerkUserId) {
+      res.status(401).json({ error: "Sign in to access your Globus account." });
+      return;
+    }
+    const actorUserId = (await ensureBankUser(clerkUserId)).id;
+    const pinResult = await verifyTransactionPin(
+      actorUserId,
+      parsed.data.transactionPin,
+    );
+    if (pinResult !== "valid") {
+      respondWithTransactionPinError(res, pinResult);
+      return;
+    }
+    const reason = parsed.data.reason.trim();
+    if (reason.length < 5) {
+      res.status(400).json({ error: "Enter a reason of at least five characters." });
+      return;
+    }
+    const result = await db.transaction(async (tx) => {
+      const [wallet] = await tx
+        .select()
+        .from(bankWalletsTable)
+        .where(eq(bankWalletsTable.id, params.data.walletId))
+        .for("update");
+      if (!wallet) return null;
+      const [user] = await tx
+        .select()
+        .from(bankUsersTable)
+        .where(eq(bankUsersTable.id, wallet.userId));
+      if (!user) return null;
+      const restricted = parsed.data.status === "restricted";
+      const [updated] = await tx
+        .update(bankWalletsTable)
+        .set({
+          status: parsed.data.status,
+          restrictionReason: restricted ? reason : null,
+          restrictionNotes: restricted ? parsed.data.notes?.trim() || null : null,
+          restrictedByUserId: restricted ? actorUserId : null,
+          restrictedAt: restricted ? new Date() : null,
+          updatedAt: new Date(),
+        })
+        .where(eq(bankWalletsTable.id, wallet.id))
+        .returning();
+      await tx.insert(bankAuditLogsTable).values({
+        actorUserId,
+        targetUserId: user.id,
+        action: restricted ? "freeze_wallet" : "unfreeze_wallet",
+        reason: `${wallet.currency} wallet ${wallet.id}: ${reason}${parsed.data.notes?.trim() ? ` Notes: ${parsed.data.notes.trim()}` : ""}`,
+      });
+      const balance = await balanceForWallet(tx, wallet.id);
+      return { wallet: updated, user, balance };
+    });
+    if (!result) {
+      res.status(404).json({ error: "Wallet account not found." });
+      return;
+    }
+    res.json(
+      UpdateAdminWalletStatusResponse.parse({
+        id: result.wallet.id,
+        userId: result.user.id,
+        customerId: result.user.customerId,
+        memberName:
+          [result.user.firstName, result.user.lastName].filter(Boolean).join(" ") ||
+          "Globus member",
+        email: result.user.email,
+        currency: result.wallet.currency,
+        balance: formatMinorAmount(result.balance),
+        status: result.wallet.status,
+        restrictionReason: result.wallet.restrictionReason,
+        restrictionNotes: result.wallet.restrictionNotes,
+        restrictedAt: result.wallet.restrictedAt?.toISOString() ?? null,
+        createdAt: result.wallet.createdAt.toISOString(),
+      }),
+    );
+  },
+);
+
+router.get("/bank/admin/audit-logs", requireAdmin, async (req, res): Promise<void> => {
+  const parsed = ListAdminAuditLogsQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const page = parsed.data.page ?? 1;
+  const pageSize = parsed.data.pageSize ?? 25;
+  const filters = [];
+  if (parsed.data.action) {
+    filters.push(ilike(bankAuditLogsTable.action, `%${parsed.data.action.trim()}%`));
+  }
+  const search = parsed.data.search?.trim();
+  if (search) {
+    const needle = `%${search}%`;
+    filters.push(
+      or(
+        ilike(bankAuditLogsTable.action, needle),
+        ilike(bankAuditLogsTable.reason, needle),
+        sql`${bankAuditLogsTable.actorUserId} in (select id from bank_users where email ilike ${needle} or customer_id ilike ${needle} or first_name ilike ${needle} or last_name ilike ${needle})`,
+        sql`${bankAuditLogsTable.targetUserId} in (select id from bank_users where email ilike ${needle} or customer_id ilike ${needle} or first_name ilike ${needle} or last_name ilike ${needle})`,
+      ),
+    );
+  }
+  const where = filters.length ? and(...filters) : undefined;
+  const [totalRows] = await db
+    .select({ value: count() })
+    .from(bankAuditLogsTable)
+    .where(where);
+  const logs = await db
+    .select()
+    .from(bankAuditLogsTable)
+    .where(where)
+    .orderBy(desc(bankAuditLogsTable.createdAt))
+    .limit(pageSize)
+    .offset((page - 1) * pageSize);
+  const userIds = [
+    ...new Set(logs.flatMap((log) => [log.actorUserId, log.targetUserId])),
+  ];
+  const users = userIds.length
+    ? await db
+        .select({
+          id: bankUsersTable.id,
+          email: bankUsersTable.email,
+          firstName: bankUsersTable.firstName,
+          lastName: bankUsersTable.lastName,
+        })
+        .from(bankUsersTable)
+        .where(inArray(bankUsersTable.id, userIds))
+    : [];
+  const userById = new Map(users.map((user) => [user.id, user]));
+  res.json(
+    ListAdminAuditLogsResponse.parse({
+      items: logs.map((log) => {
+        const actor = userById.get(log.actorUserId);
+        const target = userById.get(log.targetUserId);
+        return {
+          id: log.id,
+          actorName:
+            [actor?.firstName, actor?.lastName].filter(Boolean).join(" ") ||
+            actor?.email ||
+            "Unknown administrator",
+          actorEmail: actor?.email ?? "unknown@invalid.local",
+          targetName:
+            [target?.firstName, target?.lastName].filter(Boolean).join(" ") ||
+            target?.email ||
+            "Unknown member",
+          targetEmail: target?.email ?? "unknown@invalid.local",
+          action: log.action,
+          reason: log.reason,
+          createdAt: log.createdAt.toISOString(),
+        };
+      }),
+      total: Number(totalRows?.value ?? 0),
+      page,
+      pageSize,
+    }),
+  );
+});
+
+router.get("/bank/admin/settings", requireAdmin, async (_req, res): Promise<void> => {
+  const settings = await getOrCreateAdminSettings();
+  res.json(
+    GetAdminSettingsResponse.parse({
+      fundingLimit: settings.fundingLimit,
+      secondApprovalThreshold: settings.secondApprovalThreshold,
+      frozenIncomingPolicy: "allow_frozen",
+      updatedAt: settings.updatedAt.toISOString(),
+    }),
+  );
+});
+
+router.put("/bank/admin/settings", requireAdmin, async (req, res): Promise<void> => {
+  const parsed = UpdateAdminSettingsBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const clerkUserId = getAuth(req).userId;
+  if (!clerkUserId) {
+    res.status(401).json({ error: "Sign in to access your Globus account." });
+    return;
+  }
+  const actorUserId = (await ensureBankUser(clerkUserId)).id;
+  const pinResult = await verifyTransactionPin(actorUserId, parsed.data.transactionPin);
+  if (pinResult !== "valid") {
+    respondWithTransactionPinError(res, pinResult);
+    return;
+  }
+  let fundingLimitMinor: bigint;
+  let approvalThresholdMinor: bigint;
+  try {
+    fundingLimitMinor = parseAmountToMinor(parsed.data.fundingLimit);
+    approvalThresholdMinor = parseAmountToMinor(parsed.data.secondApprovalThreshold);
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Enter valid funding settings.",
+    });
+    return;
+  }
+  const hardCeilingMinor = 10_000_000_000n;
+  if (
+    fundingLimitMinor <= 0n ||
+    fundingLimitMinor > hardCeilingMinor ||
+    approvalThresholdMinor < 0n ||
+    approvalThresholdMinor > fundingLimitMinor
+  ) {
+    res.status(400).json({
+      error: "The maximum must be positive and no more than 100,000,000; the approval threshold must not exceed it.",
+    });
+    return;
+  }
+  const reason = parsed.data.reason.trim();
+  if (reason.length < 5) {
+    res.status(400).json({ error: "Enter an audit reason of at least five characters." });
+    return;
+  }
+  const [settings] = await db
+    .insert(bankAdminSettingsTable)
+    .values({
+      id: "operations",
+      fundingLimit: formatMinorAmount(fundingLimitMinor),
+      secondApprovalThreshold: formatMinorAmount(approvalThresholdMinor),
+      updatedByUserId: actorUserId,
+    })
+    .onConflictDoUpdate({
+      target: bankAdminSettingsTable.id,
+      set: {
+        fundingLimit: formatMinorAmount(fundingLimitMinor),
+        secondApprovalThreshold: formatMinorAmount(approvalThresholdMinor),
+        updatedByUserId: actorUserId,
+        updatedAt: new Date(),
+      },
+    })
+    .returning();
+  await db.insert(bankAuditLogsTable).values({
+    actorUserId,
+    targetUserId: actorUserId,
+    action: "update_admin_settings",
+    reason: `Funding cap ${settings.fundingLimit}; second approval threshold ${settings.secondApprovalThreshold}. ${reason}`,
+  });
+  res.json(
+    UpdateAdminSettingsResponse.parse({
+      fundingLimit: settings.fundingLimit,
+      secondApprovalThreshold: settings.secondApprovalThreshold,
+      frozenIncomingPolicy: "allow_frozen",
+      updatedAt: settings.updatedAt.toISOString(),
     }),
   );
 });
@@ -370,6 +837,34 @@ router.get("/bank/admin/users", requireAdmin, async (req, res): Promise<void> =>
   }
 
   const search = parsed.data.search?.trim();
+  const filters = [];
+  if (search) {
+    const needle = `%${search}%`;
+    filters.push(
+      or(
+        ilike(bankUsersTable.email, needle),
+        ilike(bankUsersTable.id, needle),
+        ilike(bankUsersTable.customerId, needle),
+        ilike(bankUsersTable.firstName, needle),
+        ilike(bankUsersTable.lastName, needle),
+        sql`${bankUsersTable.id} in (select user_id from bank_wallets where id::text ilike ${needle})`,
+      ),
+    );
+  }
+  if (parsed.data.accountStatus) {
+    filters.push(eq(bankUsersTable.accountStatus, parsed.data.accountStatus));
+  }
+  if (parsed.data.verificationStatus) {
+    filters.push(
+      eq(bankUsersTable.verificationStatus, parsed.data.verificationStatus),
+    );
+  }
+  const page = parsed.data.page ?? 1;
+  const pageSize = parsed.data.limit ?? 50;
+  const [totalRows] = await db
+    .select({ value: count() })
+    .from(bankUsersTable)
+    .where(filters.length ? and(...filters) : undefined);
   const rows = await db
     .select({
       id: bankUsersTable.id,
@@ -381,22 +876,15 @@ router.get("/bank/admin/users", requireAdmin, async (req, res): Promise<void> =>
       verificationStatus: bankUsersTable.verificationStatus,
       verificationNote: bankUsersTable.verificationNote,
       accountStatus: bankUsersTable.accountStatus,
+      accountRestrictionReason: bankUsersTable.accountRestrictionReason,
+      accountRestrictionNotes: bankUsersTable.accountRestrictionNotes,
+      accountRestrictedAt: bankUsersTable.accountRestrictedAt,
       createdAt: bankUsersTable.createdAt,
       walletCount: count(bankWalletsTable.id),
     })
     .from(bankUsersTable)
     .leftJoin(bankWalletsTable, eq(bankWalletsTable.userId, bankUsersTable.id))
-    .where(
-      search
-        ? or(
-            ilike(bankUsersTable.email, `%${search}%`),
-            ilike(bankUsersTable.id, `%${search}%`),
-            ilike(bankUsersTable.customerId, `%${search}%`),
-            ilike(bankUsersTable.firstName, `%${search}%`),
-            ilike(bankUsersTable.lastName, `%${search}%`),
-          )
-        : undefined,
-    )
+    .where(filters.length ? and(...filters) : undefined)
     .groupBy(
       bankUsersTable.id,
       bankUsersTable.email,
@@ -406,26 +894,35 @@ router.get("/bank/admin/users", requireAdmin, async (req, res): Promise<void> =>
       bankUsersTable.verificationStatus,
       bankUsersTable.verificationNote,
       bankUsersTable.accountStatus,
+      bankUsersTable.accountRestrictionReason,
+      bankUsersTable.accountRestrictionNotes,
+      bankUsersTable.accountRestrictedAt,
       bankUsersTable.createdAt,
     )
     .orderBy(desc(bankUsersTable.createdAt))
-    .limit(parsed.data.limit ?? 50);
+    .limit(pageSize)
+    .offset((page - 1) * pageSize);
 
   res.json(
     ListAdminUsersResponse.parse(
-      rows.map((row) => ({
-        ...row,
-        verificationStatus: row.verificationStatus as
-          | "not_started"
-          | "pending"
-          | "approved"
-          | "rejected"
-          | "additional_information_required",
-        verificationNote: row.verificationNote,
-        accountStatus: row.accountStatus as "active" | "suspended",
-        createdAt: row.createdAt.toISOString(),
-        walletCount: Number(row.walletCount),
-      })),
+      {
+        items: rows.map((row) => ({
+          ...row,
+          verificationStatus: row.verificationStatus as
+            | "not_started"
+            | "pending"
+            | "approved"
+            | "rejected"
+            | "additional_information_required",
+          accountStatus: row.accountStatus as "active" | "restricted" | "suspended",
+          accountRestrictedAt: row.accountRestrictedAt?.toISOString() ?? null,
+          createdAt: row.createdAt.toISOString(),
+          walletCount: Number(row.walletCount),
+        })),
+        total: Number(totalRows?.value ?? 0),
+        page,
+        pageSize,
+      },
     ),
   );
 });
@@ -448,10 +945,38 @@ router.get(
       res.status(404).json({ error: "User record not found." });
       return;
     }
-    const [wallets, transactions] = await Promise.all([
+    const [wallets, transactions, history, transactionCountRows] = await Promise.all([
       getWalletsForUser(user.id),
       listUserTransactions(user.id, { limit: 50 }),
+      db
+        .select()
+        .from(bankAuditLogsTable)
+        .where(eq(bankAuditLogsTable.targetUserId, user.id))
+        .orderBy(desc(bankAuditLogsTable.createdAt))
+        .limit(50),
+      db
+        .select({ value: count() })
+        .from(bankTransactionsTable)
+        .where(
+          or(
+            eq(bankTransactionsTable.fromUserId, user.id),
+            eq(bankTransactionsTable.toUserId, user.id),
+          ),
+        ),
     ]);
+    const actorIds = [...new Set(history.map((entry) => entry.actorUserId))];
+    const actors = actorIds.length
+      ? await db
+          .select({
+            id: bankUsersTable.id,
+            email: bankUsersTable.email,
+            firstName: bankUsersTable.firstName,
+            lastName: bankUsersTable.lastName,
+          })
+          .from(bankUsersTable)
+          .where(inArray(bankUsersTable.id, actorIds))
+      : [];
+    const actorById = new Map(actors.map((actor) => [actor.id, actor]));
     res.json(
       GetAdminUserDetailResponse.parse({
         user: {
@@ -464,14 +989,36 @@ router.get(
           verificationStatus: user.verificationStatus,
           verificationNote: user.verificationNote,
           accountStatus: user.accountStatus,
+          accountRestrictionReason: user.accountRestrictionReason,
+          accountRestrictionNotes: user.accountRestrictionNotes,
+          accountRestrictedAt: user.accountRestrictedAt?.toISOString() ?? null,
           walletCount: wallets.length,
           createdAt: user.createdAt.toISOString(),
         },
         phone: user.phone,
         dateOfBirth: user.dateOfBirth,
         transactionPinConfigured: !!user.transactionPinHash,
+        transactionCount: Number(transactionCountRows[0]?.value ?? 0),
         wallets,
         transactions,
+        administrativeHistory: history.map((entry) => {
+          const actor = actorById.get(entry.actorUserId);
+          return {
+            id: entry.id,
+            actorName:
+              [actor?.firstName, actor?.lastName].filter(Boolean).join(" ") ||
+              actor?.email ||
+              "Unknown administrator",
+            actorEmail: actor?.email ?? "unknown@invalid.local",
+            targetName:
+              [user.firstName, user.lastName].filter(Boolean).join(" ") ||
+              user.email,
+            targetEmail: user.email,
+            action: entry.action,
+            reason: entry.reason,
+            createdAt: entry.createdAt.toISOString(),
+          };
+        }),
       }),
     );
   },
@@ -558,10 +1105,23 @@ router.patch(
     }
 
     const result = await db.transaction(async (tx) => {
+      const now = new Date();
       const [user] = await tx
         .update(bankUsersTable)
         .set({
           accountStatus: parsed.data.accountStatus,
+          accountRestrictionReason:
+            parsed.data.accountStatus === "restricted"
+              ? parsed.data.reason.trim()
+              : null,
+          accountRestrictionNotes:
+            parsed.data.accountStatus === "restricted"
+              ? parsed.data.notes?.trim() || null
+              : null,
+          accountRestrictedByUserId:
+            parsed.data.accountStatus === "restricted" ? actorUserId : null,
+          accountRestrictedAt:
+            parsed.data.accountStatus === "restricted" ? now : null,
           updatedAt: new Date(),
         })
         .where(eq(bankUsersTable.id, params.data.userId))
@@ -576,8 +1136,10 @@ router.patch(
         action:
           parsed.data.accountStatus === "suspended"
             ? "suspend_user"
-            : "reactivate_user",
-        reason: parsed.data.reason.trim(),
+            : parsed.data.accountStatus === "restricted"
+              ? "restrict_user"
+              : "restore_user",
+        reason: `${parsed.data.reason.trim()}${parsed.data.notes?.trim() ? ` Notes: ${parsed.data.notes.trim()}` : ""}`,
       });
 
       return user;
@@ -604,8 +1166,105 @@ router.patch(
         verificationStatus: result.verificationStatus,
         verificationNote: result.verificationNote,
         accountStatus: result.accountStatus,
+        accountRestrictionReason: result.accountRestrictionReason,
+        accountRestrictionNotes: result.accountRestrictionNotes,
+        accountRestrictedAt: result.accountRestrictedAt?.toISOString() ?? null,
         walletCount: walletCount?.value ?? 0,
         createdAt: result.createdAt.toISOString(),
+      }),
+    );
+  },
+);
+
+router.patch(
+  "/bank/admin/users/:userId/profile",
+  requireAdmin,
+  async (req, res): Promise<void> => {
+    const params = UpdateAdminUserProfileParams.safeParse(req.params);
+    const parsed = UpdateAdminUserProfileBody.safeParse(req.body);
+    if (!params.success || !parsed.success) {
+      res.status(400).json({
+        error: !params.success
+          ? params.error.message
+          : parsed.error?.message ?? "Invalid request.",
+      });
+      return;
+    }
+    const clerkUserId = getAuth(req).userId;
+    if (!clerkUserId) {
+      res.status(401).json({ error: "Sign in to access your Globus account." });
+      return;
+    }
+    const actorUserId = (await ensureBankUser(clerkUserId)).id;
+    const pinResult = await verifyTransactionPin(
+      actorUserId,
+      parsed.data.transactionPin,
+    );
+    if (pinResult !== "valid") {
+      respondWithTransactionPinError(res, pinResult);
+      return;
+    }
+    const reason = parsed.data.reason.trim();
+    const profileFields = {
+      ...(parsed.data.firstName !== undefined
+        ? { firstName: parsed.data.firstName?.trim() || null }
+        : {}),
+      ...(parsed.data.lastName !== undefined
+        ? { lastName: parsed.data.lastName?.trim() || null }
+        : {}),
+      ...(parsed.data.phone !== undefined
+        ? { phone: parsed.data.phone?.trim() || null }
+        : {}),
+      ...(parsed.data.country !== undefined
+        ? { country: parsed.data.country?.trim() || null }
+        : {}),
+    };
+    if (Object.keys(profileFields).length === 0 || reason.length < 5) {
+      res.status(400).json({
+        error: "Change at least one permitted profile field and enter a reason.",
+      });
+      return;
+    }
+    const updated = await db.transaction(async (tx) => {
+      const [user] = await tx
+        .update(bankUsersTable)
+        .set({ ...profileFields, updatedAt: new Date() })
+        .where(eq(bankUsersTable.id, params.data.userId))
+        .returning();
+      if (!user) return null;
+      await tx.insert(bankAuditLogsTable).values({
+        actorUserId,
+        targetUserId: user.id,
+        action: "update_member_profile",
+        reason,
+      });
+      const [walletCount] = await tx
+        .select({ value: count() })
+        .from(bankWalletsTable)
+        .where(eq(bankWalletsTable.userId, user.id));
+      return { user, walletCount: Number(walletCount?.value ?? 0) };
+    });
+    if (!updated) {
+      res.status(404).json({ error: "User record not found." });
+      return;
+    }
+    res.json(
+      UpdateAdminUserProfileResponse.parse({
+        id: updated.user.id,
+        email: updated.user.email,
+        customerId: updated.user.customerId,
+        firstName: updated.user.firstName,
+        lastName: updated.user.lastName,
+        country: updated.user.country,
+        verificationStatus: updated.user.verificationStatus,
+        verificationNote: updated.user.verificationNote,
+        accountStatus: updated.user.accountStatus,
+        accountRestrictionReason: updated.user.accountRestrictionReason,
+        accountRestrictionNotes: updated.user.accountRestrictionNotes,
+        accountRestrictedAt:
+          updated.user.accountRestrictedAt?.toISOString() ?? null,
+        walletCount: updated.walletCount,
+        createdAt: updated.user.createdAt.toISOString(),
       }),
     );
   },
@@ -874,10 +1533,18 @@ router.post(
       return;
     }
 
-    if (amountMinor <= 0n || amountMinor > 100_000_000n) {
-      res.status(400).json({ error: "Funding must be greater than zero and no more than 1,000,000.00." });
+    const settings = await getOrCreateAdminSettings();
+    const fundingLimitMinor = parseAmountToMinor(settings.fundingLimit);
+    const secondApprovalThresholdMinor = parseAmountToMinor(
+      settings.secondApprovalThreshold,
+    );
+    if (amountMinor <= 0n || amountMinor > fundingLimitMinor) {
+      res.status(400).json({
+        error: `Funding must be greater than zero and no more than ${settings.fundingLimit}.`,
+      });
       return;
     }
+    const requiresSecondApproval = amountMinor >= secondApprovalThresholdMinor;
 
     const result = await db.transaction(async (tx) => {
       await tx.execute(
@@ -901,7 +1568,9 @@ router.post(
           duplicate.currency === parsed.data.currency &&
           duplicate.amountMinor === amountMinor &&
           duplicate.counterparty === senderName &&
-          duplicate.description === description;
+          duplicate.description === description &&
+          duplicate.adminReference === (parsed.data.internalReference?.trim() || null) &&
+          duplicate.adminNotes === (parsed.data.adminNotes?.trim() || null);
         return sameRequest
           ? { transaction: duplicate }
           : { error: "That request reference is already in use." };
@@ -920,8 +1589,16 @@ router.post(
       }
 
       const wallet = await userWallet(tx, target.id, parsed.data.currency);
-      if (!wallet || wallet.status !== "active") {
-        return { error: "An active wallet for the selected currency is unavailable." };
+      if (
+        !wallet ||
+        (parsed.data.direction === "debit" && wallet.status !== "active")
+      ) {
+        return {
+          error:
+            parsed.data.direction === "debit"
+              ? "A frozen wallet cannot be debited."
+              : "A wallet for the selected currency is unavailable.",
+        };
       }
       await tx
         .select({ id: bankWalletsTable.id })
@@ -947,39 +1624,45 @@ router.post(
           fromWalletId: parsed.data.direction === "debit" ? wallet.id : null,
           toWalletId: parsed.data.direction === "credit" ? wallet.id : null,
           type: "admin_funding",
-          status: "completed",
+          status: requiresSecondApproval ? "pending" : "completed",
           currency: parsed.data.currency,
           amountMinor,
           feeMinor: 0n,
           counterparty: senderName,
           description,
+          adminReference: parsed.data.internalReference?.trim() || null,
+          adminNotes: parsed.data.adminNotes?.trim() || null,
           mode: "internal_ledger",
         })
         .returning();
 
-      await tx.insert(bankLedgerEntriesTable).values([
-        {
-          transactionId: transaction.id,
-          accountCode: `internal:balance-adjustment:${parsed.data.currency}`,
-          currency: parsed.data.currency,
-          side: parsed.data.direction === "credit" ? "debit" : "credit",
-          amountMinor,
-        },
-        {
-          transactionId: transaction.id,
-          walletId: wallet.id,
-          accountCode: `wallet:${wallet.id}`,
-          currency: parsed.data.currency,
-          side: parsed.data.direction === "credit" ? "credit" : "debit",
-          amountMinor,
-        },
-      ]);
+      if (!requiresSecondApproval) {
+        await tx.insert(bankLedgerEntriesTable).values([
+          {
+            transactionId: transaction.id,
+            accountCode: `internal:balance-adjustment:${parsed.data.currency}`,
+            currency: parsed.data.currency,
+            side: parsed.data.direction === "credit" ? "debit" : "credit",
+            amountMinor,
+          },
+          {
+            transactionId: transaction.id,
+            walletId: wallet.id,
+            accountCode: `wallet:${wallet.id}`,
+            currency: parsed.data.currency,
+            side: parsed.data.direction === "credit" ? "credit" : "debit",
+            amountMinor,
+          },
+        ]);
+      }
 
       await tx.insert(bankAuditLogsTable).values({
         actorUserId,
         targetUserId: target.id,
-        action: "adjust_user_balance",
-        reason: `${parsed.data.direction} ${formatMinorAmount(amountMinor)} ${parsed.data.currency}: ${reason}`,
+        action: requiresSecondApproval
+          ? "request_admin_funding"
+          : "adjust_user_balance",
+        reason: `${requiresSecondApproval ? "Awaiting second-admin approval. " : ""}${parsed.data.direction} ${formatMinorAmount(amountMinor)} ${parsed.data.currency}: ${reason}`,
       });
 
       return { transaction };
@@ -997,6 +1680,151 @@ router.post(
     res.status(201).json(
       CreateAdminFundingResponse.parse(
         toBankTransaction(result.transaction, params.data.userId),
+      ),
+    );
+  },
+);
+
+router.post(
+  "/bank/admin/transactions/:transactionId/funding-review",
+  requireAdmin,
+  async (req, res): Promise<void> => {
+    const params = ReviewAdminFundingParams.safeParse(req.params);
+    const parsed = ReviewAdminFundingBody.safeParse(req.body);
+    if (!params.success || !parsed.success) {
+      res.status(400).json({
+        error: !params.success
+          ? params.error.message
+          : parsed.error?.message ?? "Invalid request.",
+      });
+      return;
+    }
+    const clerkUserId = getAuth(req).userId;
+    if (!clerkUserId) {
+      res.status(401).json({ error: "Sign in to access your Globus account." });
+      return;
+    }
+    const actorUserId = (await ensureBankUser(clerkUserId)).id;
+    const pinResult = await verifyTransactionPin(
+      actorUserId,
+      parsed.data.transactionPin,
+    );
+    if (pinResult !== "valid") {
+      respondWithTransactionPinError(res, pinResult);
+      return;
+    }
+    const reason = parsed.data.reason.trim();
+    if (reason.length < 5) {
+      res.status(400).json({ error: "Enter an audit reason of at least five characters." });
+      return;
+    }
+    const result = await db.transaction(async (tx) => {
+      const [transaction] = await tx
+        .select()
+        .from(bankTransactionsTable)
+        .where(eq(bankTransactionsTable.id, params.data.transactionId))
+        .for("update");
+      if (!transaction) return { notFound: true as const };
+      if (
+        (transaction.type !== "admin_funding" &&
+          transaction.type !== "admin_adjustment") ||
+        transaction.status !== "pending"
+      ) {
+        return { error: "This adjustment is not awaiting a second-admin decision." };
+      }
+      if (transaction.initiatedByUserId === actorUserId) {
+        return { error: "A different administrator must review this funding request." };
+      }
+      const walletId = transaction.fromWalletId ?? transaction.toWalletId;
+      if (!walletId) {
+        return { error: "The funding request does not reference a wallet." };
+      }
+      const [wallet] = await tx
+        .select()
+        .from(bankWalletsTable)
+        .where(eq(bankWalletsTable.id, walletId))
+        .for("update");
+      const targetUserId = transaction.fromUserId ?? transaction.toUserId;
+      if (!targetUserId) {
+        return { error: "The funding request is missing its target customer." };
+      }
+      const [target] = targetUserId
+        ? await tx
+            .select()
+            .from(bankUsersTable)
+            .where(eq(bankUsersTable.id, targetUserId))
+            .for("update")
+        : [];
+      if (!wallet || !target) {
+        return { error: "The funding wallet or customer account is unavailable." };
+      }
+      const isDebit = Boolean(transaction.fromWalletId);
+      if (target.accountStatus !== "active") {
+        return { error: "Funding cannot be approved for a restricted or suspended account." };
+      }
+      if (isDebit && wallet.status !== "active") {
+        return { error: "A frozen wallet cannot be debited." };
+      }
+      if (parsed.data.decision === "approve" && isDebit) {
+        const balance = await balanceForWallet(tx, wallet.id);
+        const allReserved = await reservedForWallet(tx, wallet.id);
+        const otherReserved = allReserved - transaction.amountMinor;
+        if (otherReserved < 0n || balance - otherReserved < transaction.amountMinor) {
+          return { error: "The reserved balance is no longer available for this adjustment." };
+        }
+      }
+      if (parsed.data.decision === "approve") {
+        await tx.insert(bankLedgerEntriesTable).values([
+          {
+            transactionId: transaction.id,
+            accountCode: `internal:balance-adjustment:${transaction.currency}`,
+            currency: transaction.currency,
+            side: isDebit ? "credit" : "debit",
+            amountMinor: transaction.amountMinor,
+          },
+          {
+            transactionId: transaction.id,
+            walletId: wallet.id,
+            accountCode: `wallet:${wallet.id}`,
+            currency: transaction.currency,
+            side: isDebit ? "debit" : "credit",
+            amountMinor: transaction.amountMinor,
+          },
+        ]);
+      }
+      const [updated] = await tx
+        .update(bankTransactionsTable)
+        .set({
+          status: parsed.data.decision === "approve" ? "completed" : "failed",
+        })
+        .where(eq(bankTransactionsTable.id, transaction.id))
+        .returning();
+      await tx.insert(bankAuditLogsTable).values({
+        actorUserId,
+        targetUserId,
+        action:
+          transaction.type === "admin_adjustment"
+            ? parsed.data.decision === "approve"
+              ? "approve_admin_adjustment"
+              : "reject_admin_adjustment"
+            : parsed.data.decision === "approve"
+              ? "approve_admin_funding"
+              : "reject_admin_funding",
+        reason: `Funding ${transaction.reference}: ${parsed.data.decision}. ${reason}`,
+      });
+      return { transaction: updated, targetUserId };
+    });
+    if ("notFound" in result) {
+      res.status(404).json({ error: "Funding request not found." });
+      return;
+    }
+    if ("error" in result) {
+      res.status(409).json({ error: result.error });
+      return;
+    }
+    res.json(
+      ReviewAdminFundingResponse.parse(
+        toBankTransaction(result.transaction, result.targetUserId),
       ),
     );
   },
@@ -1139,8 +1967,16 @@ router.patch(
               .limit(1)
           )[0]
         : await userWallet(tx, target.id, request.currency);
-      if (!wallet || wallet.status !== "active") {
-        return { error: "An active wallet for this request is unavailable." };
+      if (
+        !wallet ||
+        (request.type === "withdrawal" && wallet.status !== "active")
+      ) {
+        return {
+          error:
+            request.type === "withdrawal"
+              ? "A frozen wallet cannot be used for a withdrawal."
+              : "A wallet for this request is unavailable.",
+        };
       }
       await tx
         .select({ id: bankWalletsTable.id })
@@ -1258,6 +2094,492 @@ router.patch(
         status: result.request.status,
         createdAt: result.request.createdAt.toISOString(),
       }),
+    );
+  },
+);
+
+router.get(
+  "/bank/admin/transactions",
+  requireAdmin,
+  async (req, res): Promise<void> => {
+    const parsed = ListAdminTransactionsQueryParams.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+    const page = parsed.data.page ?? 1;
+    const pageSize = parsed.data.pageSize ?? 25;
+    const filters = [];
+    const search = parsed.data.search?.trim();
+    const customer = parsed.data.customer?.trim();
+    if (search) {
+      const needle = `%${search}%`;
+      filters.push(
+        or(
+          ilike(bankTransactionsTable.reference, needle),
+          ilike(bankTransactionsTable.description, needle),
+          ilike(bankTransactionsTable.counterparty, needle),
+          sql`(${bankTransactionsTable.fromUserId} in (select id from bank_users where email ilike ${needle} or customer_id ilike ${needle} or first_name ilike ${needle} or last_name ilike ${needle}) or ${bankTransactionsTable.toUserId} in (select id from bank_users where email ilike ${needle} or customer_id ilike ${needle} or first_name ilike ${needle} or last_name ilike ${needle}))`,
+        ),
+      );
+    }
+    if (customer) {
+      const needle = `%${customer}%`;
+      filters.push(
+        sql`(${bankTransactionsTable.fromUserId} in (select id from bank_users where email ilike ${needle} or customer_id ilike ${needle} or id ilike ${needle} or first_name ilike ${needle} or last_name ilike ${needle}) or ${bankTransactionsTable.toUserId} in (select id from bank_users where email ilike ${needle} or customer_id ilike ${needle} or id ilike ${needle} or first_name ilike ${needle} or last_name ilike ${needle}))`,
+      );
+    }
+    if (parsed.data.currency) {
+      filters.push(eq(bankTransactionsTable.currency, parsed.data.currency));
+    }
+    if (parsed.data.status) {
+      filters.push(eq(bankTransactionsTable.status, parsed.data.status));
+    }
+    const type = parsed.data.type;
+    if (type === "transfer_in" || type === "transfer_out") {
+      filters.push(eq(bankTransactionsTable.type, "transfer"));
+      filters.push(
+        type === "transfer_in"
+          ? sql`${bankTransactionsTable.toUserId} is not null`
+          : sql`${bankTransactionsTable.fromUserId} is not null`,
+      );
+    } else if (type === "admin_debit") {
+      filters.push(eq(bankTransactionsTable.type, "admin_funding"));
+      filters.push(sql`${bankTransactionsTable.fromUserId} is not null`);
+    } else if (type === "admin_funding") {
+      filters.push(eq(bankTransactionsTable.type, "admin_funding"));
+      filters.push(sql`${bankTransactionsTable.toUserId} is not null`);
+    } else if (type === "simulation_credit") {
+      filters.push(
+        or(
+          eq(bankTransactionsTable.type, "simulation_credit"),
+          eq(bankTransactionsTable.type, "sandbox_credit"),
+        ),
+      );
+    } else if (type) {
+      filters.push(eq(bankTransactionsTable.type, type));
+    }
+    if (parsed.data.fromDate) {
+      filters.push(
+        gte(
+          bankTransactionsTable.createdAt,
+          new Date(`${parsed.data.fromDate}T00:00:00.000Z`),
+        ),
+      );
+    }
+    if (parsed.data.toDate) {
+      filters.push(
+        lte(
+          bankTransactionsTable.createdAt,
+          new Date(`${parsed.data.toDate}T23:59:59.999Z`),
+        ),
+      );
+    }
+    if (parsed.data.minimumAmount) {
+      filters.push(
+        gte(
+          bankTransactionsTable.amountMinor,
+          parseAmountToMinor(parsed.data.minimumAmount),
+        ),
+      );
+    }
+    if (parsed.data.maximumAmount) {
+      filters.push(
+        lte(
+          bankTransactionsTable.amountMinor,
+          parseAmountToMinor(parsed.data.maximumAmount),
+        ),
+      );
+    }
+    const where = filters.length ? and(...filters) : undefined;
+    const [totalRows] = await db
+      .select({ value: count() })
+      .from(bankTransactionsTable)
+      .where(where);
+    const transactions = await db
+      .select()
+      .from(bankTransactionsTable)
+      .where(where)
+      .orderBy(desc(bankTransactionsTable.createdAt))
+      .limit(pageSize)
+      .offset((page - 1) * pageSize);
+    res.json(
+      ListAdminTransactionsResponse.parse({
+        items: transactions.map((transaction) =>
+          toBankTransaction(
+            transaction,
+            transaction.fromUserId ?? transaction.toUserId ?? "",
+          ),
+        ),
+        total: Number(totalRows?.value ?? 0),
+        page,
+        pageSize,
+      }),
+    );
+  },
+);
+
+router.get(
+  "/bank/admin/transactions/:transactionId",
+  requireAdmin,
+  async (req, res): Promise<void> => {
+    const params = GetAdminTransactionDetailParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const [transaction] = await db
+      .select()
+      .from(bankTransactionsTable)
+      .where(eq(bankTransactionsTable.id, params.data.transactionId))
+      .limit(1);
+    if (!transaction) {
+      res.status(404).json({ error: "Transaction not found." });
+      return;
+    }
+    const [initiator] = await db
+      .select()
+      .from(bankUsersTable)
+      .where(eq(bankUsersTable.id, transaction.initiatedByUserId))
+      .limit(1);
+    const customerId = transaction.fromUserId ?? transaction.toUserId;
+    const [customer] = customerId
+      ? await db
+          .select()
+          .from(bankUsersTable)
+          .where(eq(bankUsersTable.id, customerId))
+          .limit(1)
+      : [];
+    const entries = await db
+      .select()
+      .from(bankLedgerEntriesTable)
+      .where(eq(bankLedgerEntriesTable.transactionId, transaction.id))
+      .orderBy(asc(bankLedgerEntriesTable.createdAt));
+    res.json(
+      GetAdminTransactionDetailResponse.parse({
+        transaction: toBankTransaction(
+          transaction,
+          transaction.fromUserId ?? transaction.toUserId ?? "",
+        ),
+        initiatorName:
+          [initiator?.firstName, initiator?.lastName].filter(Boolean).join(" ") ||
+          initiator?.email ||
+          "Unknown administrator",
+        initiatorEmail: initiator?.email ?? "unknown@invalid.local",
+        customerName:
+          [customer?.firstName, customer?.lastName].filter(Boolean).join(" ") ||
+          customer?.email ||
+          "Internal ledger",
+        customerEmail: customer?.email ?? "unknown@invalid.local",
+        ledgerEntries: entries.map((entry) => ({
+          id: entry.id,
+          walletId: entry.walletId,
+          accountCode: entry.accountCode,
+          currency: entry.currency,
+          side: entry.side,
+          amount: formatMinorAmount(entry.amountMinor),
+          createdAt: entry.createdAt.toISOString(),
+        })),
+        correctionOfTransactionId: transaction.correctionOfTransactionId,
+        reversalOfTransactionId: transaction.reversalOfTransactionId,
+        correctionReason: transaction.correctionReason,
+        adminReference: transaction.adminReference,
+        adminNotes: transaction.adminNotes,
+        statusHistory: [],
+      }),
+    );
+  },
+);
+
+router.post(
+  "/bank/admin/transactions/:transactionId",
+  requireAdmin,
+  async (req, res): Promise<void> => {
+    const params = CreateAdminTransactionCorrectionParams.safeParse(req.params);
+    const parsed = CreateAdminTransactionCorrectionBody.safeParse(req.body);
+    if (!params.success || !parsed.success) {
+      res.status(400).json({
+        error: !params.success
+          ? params.error.message
+          : parsed.error?.message ?? "Invalid request.",
+      });
+      return;
+    }
+    const clerkUserId = getAuth(req).userId;
+    if (!clerkUserId) {
+      res.status(401).json({ error: "Sign in to access your Globus account." });
+      return;
+    }
+    const actorUserId = (await ensureBankUser(clerkUserId)).id;
+    const pinResult = await verifyTransactionPin(
+      actorUserId,
+      parsed.data.transactionPin,
+    );
+    if (pinResult !== "valid") {
+      respondWithTransactionPinError(res, pinResult);
+      return;
+    }
+    const reason = parsed.data.reason.trim();
+    if (reason.length < 5) {
+      res.status(400).json({ error: "Enter a correction reason of at least five characters." });
+      return;
+    }
+    let adjustmentMinor: bigint | null = null;
+    if (parsed.data.kind === "adjustment") {
+      if (!parsed.data.walletId || !parsed.data.direction || !parsed.data.amount) {
+        res.status(400).json({
+          error: "Choose an original transaction wallet, adjustment direction, and amount.",
+        });
+        return;
+      }
+      try {
+        adjustmentMinor = parseAmountToMinor(parsed.data.amount);
+      } catch (error) {
+        res.status(400).json({
+          error: error instanceof Error ? error.message : "Enter a valid amount.",
+        });
+        return;
+      }
+      if (adjustmentMinor <= 0n) {
+        res.status(400).json({ error: "Adjustment amount must be greater than zero." });
+        return;
+      }
+    }
+    const result = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtext(${parsed.data.idempotencyKey})::bigint)`,
+      );
+      const [duplicate] = await tx
+        .select()
+        .from(bankTransactionsTable)
+        .where(eq(bankTransactionsTable.idempotencyKey, parsed.data.idempotencyKey))
+        .limit(1);
+      if (duplicate) {
+        return duplicate.correctionOfTransactionId === params.data.transactionId &&
+          duplicate.initiatedByUserId === actorUserId
+          ? { transaction: duplicate }
+          : { error: "That correction reference is already in use." };
+      }
+      const [original] = await tx
+        .select()
+        .from(bankTransactionsTable)
+        .where(eq(bankTransactionsTable.id, params.data.transactionId))
+        .for("update");
+      if (!original) return { notFound: true as const };
+      if (original.status !== "completed") {
+        return { error: "Only a completed transaction with posted ledger entries can be corrected." };
+      }
+      const originalEntries = await tx
+        .select()
+        .from(bankLedgerEntriesTable)
+        .where(eq(bankLedgerEntriesTable.transactionId, original.id));
+      if (originalEntries.length === 0) {
+        return { error: "This record has no posted ledger entries to correct." };
+      }
+      const walletIds = [
+        ...new Set(
+          originalEntries.flatMap((entry) => (entry.walletId ? [entry.walletId] : [])),
+        ),
+      ].sort();
+      if (walletIds.length) {
+        await tx
+          .select({ id: bankWalletsTable.id })
+          .from(bankWalletsTable)
+          .where(inArray(bankWalletsTable.id, walletIds))
+          .orderBy(asc(bankWalletsTable.id))
+          .for("update");
+      }
+
+      if (parsed.data.kind === "reversal") {
+        const [priorReversal] = await tx
+          .select({ id: bankTransactionsTable.id })
+          .from(bankTransactionsTable)
+          .where(eq(bankTransactionsTable.reversalOfTransactionId, original.id))
+          .limit(1);
+        if (priorReversal) {
+          return { error: "This transaction already has a recorded reversal." };
+        }
+        const debitByWallet = new Map<string, bigint>();
+        for (const entry of originalEntries) {
+          if (entry.walletId && entry.side === "credit") {
+            debitByWallet.set(
+              entry.walletId,
+              (debitByWallet.get(entry.walletId) ?? 0n) + entry.amountMinor,
+            );
+          }
+        }
+        for (const [walletId, debitAmount] of debitByWallet) {
+          const balance = await balanceForWallet(tx, walletId);
+          const reserved = await reservedForWallet(tx, walletId);
+          if (balance - debitAmount < reserved) {
+            return {
+              error:
+                "This transaction's credited balance has already been spent or reserved. Resolve later activity before reversal.",
+            };
+          }
+        }
+        const [reversal] = await tx
+          .insert(bankTransactionsTable)
+          .values({
+            reference: createReference(),
+            idempotencyKey: parsed.data.idempotencyKey,
+            initiatedByUserId: actorUserId,
+            fromUserId: original.toUserId,
+            toUserId: original.fromUserId,
+            fromWalletId: original.toWalletId,
+            toWalletId: original.fromWalletId,
+            type: "reversal",
+            status: "completed",
+            currency: original.currency,
+            amountMinor: original.amountMinor,
+            feeMinor: original.feeMinor,
+            counterparty: original.reference,
+            description: `Reversal of ${original.reference}`,
+            correctionOfTransactionId: original.id,
+            reversalOfTransactionId: original.id,
+            correctionReason: reason,
+            mode: "internal_ledger",
+          })
+          .returning();
+        await tx.insert(bankLedgerEntriesTable).values(
+          originalEntries.map((entry) => ({
+            transactionId: reversal.id,
+            walletId: entry.walletId,
+            accountCode: entry.accountCode,
+            currency: entry.currency,
+            side: entry.side === "credit" ? "debit" : "credit",
+            amountMinor: entry.amountMinor,
+          })),
+        );
+        await tx
+          .update(bankTransactionsTable)
+          .set({ status: "reversed" })
+          .where(eq(bankTransactionsTable.id, original.id));
+        const targetUserId =
+          original.fromUserId ?? original.toUserId ?? actorUserId;
+        await tx.insert(bankAuditLogsTable).values({
+          actorUserId,
+          targetUserId,
+          action: "reverse_transaction",
+          reason: `Transaction ${original.reference} reversed by ${reversal.reference}. ${reason}`,
+        });
+        return { transaction: reversal };
+      }
+
+      if (!parsed.data.walletId || !parsed.data.direction || !adjustmentMinor) {
+        return { error: "An adjustment wallet, direction, and amount are required." };
+      }
+      const walletEntry = originalEntries.find(
+        (entry) => entry.walletId === parsed.data.walletId,
+      );
+      if (!walletEntry) {
+        return { error: "Choose a wallet affected by the original transaction." };
+      }
+      const correctionSettings = await getOrCreateAdminSettings();
+      const correctionLimitMinor = parseAmountToMinor(
+        correctionSettings.fundingLimit,
+      );
+      const correctionApprovalThreshold = parseAmountToMinor(
+        correctionSettings.secondApprovalThreshold,
+      );
+      if (adjustmentMinor > correctionLimitMinor) {
+        return { error: "Adjustment exceeds the configured per-currency funding cap." };
+      }
+      const requiresSecondApproval =
+        adjustmentMinor >= correctionApprovalThreshold;
+      const [wallet] = await tx
+        .select()
+        .from(bankWalletsTable)
+        .where(eq(bankWalletsTable.id, parsed.data.walletId))
+        .limit(1);
+      if (!wallet) return { error: "The affected wallet is unavailable." };
+      const [target] = await tx
+        .select()
+        .from(bankUsersTable)
+        .where(eq(bankUsersTable.id, wallet.userId))
+        .limit(1);
+      if (!target || target.accountStatus !== "active") {
+        return { error: "Only active customer accounts can receive adjustments." };
+      }
+      if (parsed.data.direction === "debit") {
+        if (wallet.status !== "active") {
+          return { error: "A frozen wallet cannot be debited." };
+        }
+        const balance = await balanceForWallet(tx, wallet.id);
+        const reserved = await reservedForWallet(tx, wallet.id);
+        if (balance - reserved < adjustmentMinor) {
+          return { error: "The adjustment exceeds the available wallet balance." };
+        }
+      }
+      const isCredit = parsed.data.direction === "credit";
+      const [adjustment] = await tx
+        .insert(bankTransactionsTable)
+        .values({
+          reference: createReference(),
+          idempotencyKey: parsed.data.idempotencyKey,
+          initiatedByUserId: actorUserId,
+          fromUserId: isCredit ? null : target.id,
+          toUserId: isCredit ? target.id : null,
+          fromWalletId: isCredit ? null : wallet.id,
+          toWalletId: isCredit ? wallet.id : null,
+          type: "admin_adjustment",
+          status: requiresSecondApproval ? "pending" : "completed",
+          currency: wallet.currency,
+          amountMinor: adjustmentMinor,
+          feeMinor: 0n,
+          counterparty: original.reference,
+          description: `Adjustment for ${original.reference}`,
+          correctionOfTransactionId: original.id,
+          correctionReason: reason,
+          mode: "internal_ledger",
+        })
+        .returning();
+      if (!requiresSecondApproval) {
+        await tx.insert(bankLedgerEntriesTable).values([
+          {
+            transactionId: adjustment.id,
+            accountCode: `internal:balance-adjustment:${wallet.currency}`,
+            currency: wallet.currency,
+            side: isCredit ? "debit" : "credit",
+            amountMinor: adjustmentMinor,
+          },
+          {
+            transactionId: adjustment.id,
+            walletId: wallet.id,
+            accountCode: `wallet:${wallet.id}`,
+            currency: wallet.currency,
+            side: isCredit ? "credit" : "debit",
+            amountMinor: adjustmentMinor,
+          },
+        ]);
+      }
+      await tx.insert(bankAuditLogsTable).values({
+        actorUserId,
+        targetUserId: target.id,
+        action: requiresSecondApproval
+          ? "request_admin_adjustment"
+          : "adjust_transaction",
+        reason: `${requiresSecondApproval ? "Awaiting second-admin approval. " : ""}Adjustment ${adjustment.reference} references transaction ${original.reference}: ${parsed.data.direction} ${formatMinorAmount(adjustmentMinor)} ${wallet.currency}. ${reason}`,
+      });
+      return { transaction: adjustment };
+    });
+    if ("notFound" in result) {
+      res.status(404).json({ error: "Original transaction not found." });
+      return;
+    }
+    if ("error" in result) {
+      res.status(409).json({ error: result.error });
+      return;
+    }
+    res.status(201).json(
+      CreateAdminTransactionCorrectionResponse.parse(
+        toBankTransaction(
+          result.transaction,
+          result.transaction.fromUserId ??
+            result.transaction.toUserId ??
+            actorUserId,
+        ),
+      ),
     );
   },
 );
@@ -1529,130 +2851,6 @@ router.patch(
             actorUserId,
         ),
       ),
-    );
-  },
-);
-
-router.delete(
-  "/bank/admin/transactions/:transactionId",
-  requireAdmin,
-  async (req, res): Promise<void> => {
-    const params = DeleteAdminTransactionParams.safeParse(req.params);
-    if (!params.success) {
-      res.status(400).json({ error: params.error.message });
-      return;
-    }
-
-    const parsed = DeleteAdminTransactionBody.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.message });
-      return;
-    }
-
-    const authenticatedClerkId = getAuth(req).userId;
-    if (!authenticatedClerkId) {
-      res.status(401).json({ error: "Sign in to access your Globus account." });
-      return;
-    }
-    const actorUserId = (await ensureBankUser(authenticatedClerkId)).id;
-    const pinResult = await verifyTransactionPin(
-      actorUserId,
-      parsed.data.transactionPin,
-    );
-    if (pinResult !== "valid") {
-      respondWithTransactionPinError(res, pinResult);
-      return;
-    }
-    const reason = parsed.data.reason.trim();
-    if (reason.length < 5) {
-      res.status(400).json({ error: "Enter a deletion reason of at least five characters." });
-      return;
-    }
-
-    const result = await db.transaction(async (tx) => {
-      const [transaction] = await tx
-        .select()
-        .from(bankTransactionsTable)
-        .where(eq(bankTransactionsTable.id, params.data.transactionId))
-        .for("update");
-      if (!transaction) {
-        return { notFound: true as const };
-      }
-      const entries = await tx
-        .select()
-        .from(bankLedgerEntriesTable)
-        .where(eq(bankLedgerEntriesTable.transactionId, transaction.id));
-      const walletIds = [
-        ...new Set(
-          entries.flatMap((entry) => (entry.walletId ? [entry.walletId] : [])),
-        ),
-      ].sort();
-      if (walletIds.length > 0) {
-        await tx
-          .select({ id: bankWalletsTable.id })
-          .from(bankWalletsTable)
-          .where(inArray(bankWalletsTable.id, walletIds))
-          .orderBy(asc(bankWalletsTable.id))
-          .for("update");
-      }
-
-      const creditsToRemove = new Map<string, bigint>();
-      for (const entry of entries) {
-        if (entry.walletId && entry.side === "credit") {
-          creditsToRemove.set(
-            entry.walletId,
-            (creditsToRemove.get(entry.walletId) ?? 0n) + entry.amountMinor,
-          );
-        }
-      }
-      for (const [walletId, amountMinor] of creditsToRemove) {
-        const balance = await balanceForWallet(tx, walletId);
-        const reserved = await reservedForWallet(tx, walletId);
-        if (balance - amountMinor < reserved) {
-          return {
-            error:
-              "This transaction has already been spent or is reserved by a pending withdrawal. Resolve later activity or the withdrawal request before deleting it.",
-          };
-        }
-      }
-
-      await tx
-        .delete(bankSandboxRequestsTable)
-        .where(eq(bankSandboxRequestsTable.transactionId, transaction.id));
-      await tx
-        .delete(bankLedgerEntriesTable)
-        .where(eq(bankLedgerEntriesTable.transactionId, transaction.id));
-      await tx
-        .delete(bankTransactionsTable)
-        .where(eq(bankTransactionsTable.id, transaction.id));
-      await tx.insert(bankAuditLogsTable).values({
-        actorUserId,
-        targetUserId:
-          transaction.fromUserId ??
-          transaction.toUserId ??
-          transaction.initiatedByUserId,
-        action: "delete_transaction",
-        reason: `Transaction ${transaction.reference}: ${reason}`,
-      });
-
-      return { deleted: true as const, reference: transaction.reference };
-    });
-
-    if ("notFound" in result) {
-      res.status(404).json({ error: "Transaction not found." });
-      return;
-    }
-    if ("error" in result) {
-      res.status(409).json({ error: result.error });
-      return;
-    }
-
-    res.json(
-      DeleteAdminTransactionResponse.parse({
-        transactionId: params.data.transactionId,
-        reference: result.reference,
-        deleted: result.deleted,
-      }),
     );
   },
 );

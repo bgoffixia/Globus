@@ -22,7 +22,6 @@ import {
   Search,
   ShieldCheck,
   Sparkles,
-  Trash2,
   WalletCards,
   X,
 } from 'lucide-react';
@@ -53,7 +52,6 @@ import {
   useCreateBankTransfer,
   useCreateInternationalTransferRequest,
   useCreateLedgerRequest,
-  useDeleteAdminTransaction,
   useGetAdminAccess,
   useGetAdminSummary,
   useGetAdminUserDetail,
@@ -1222,7 +1220,8 @@ export function AdminPage() {
   const [rateMessage, setRateMessage] = useState('');
   const [statusTarget, setStatusTarget] = useState<BankTransaction | null>(null);
   const params = useMemo(() => ({ ...(search.trim() ? { search: search.trim() } : {}), limit: 100 }), [search]);
-  const users = useListAdminUsers(params, { query: { queryKey: getListAdminUsersQueryKey(params), enabled: !!access.data?.allowed } });
+  const usersQuery = useListAdminUsers(params, { query: { queryKey: getListAdminUsersQueryKey(params), enabled: !!access.data?.allowed } });
+  const users = { ...usersQuery, data: usersQuery.data?.items };
   const reviewDocuments = useListAdminIdentityDocuments(identityTarget?.id ?? '', {
     query: {
       queryKey: getListAdminIdentityDocumentsQueryKey(identityTarget?.id ?? ''),
@@ -1234,7 +1233,6 @@ export function AdminPage() {
   const update = useUpdateAdminUserStatus();
   const updateVerification = useUpdateAdminUserVerification();
   const funding = useCreateAdminFunding();
-  const deletion = useDeleteAdminTransaction();
   const updateTransactionStatus = useUpdateAdminTransactionStatus();
   const upsertExchangeRate = useUpsertBankExchangeRate();
   if (access.isLoading) return <PageSkeleton />;
@@ -1285,24 +1283,6 @@ export function AdminPage() {
       },
       onError: error => setFundingError(error instanceof Error ? error.message : 'The balance adjustment could not be recorded.'),
     });
-  };
-  const deleteLedgerTransaction = async (
-    transaction: BankTransaction,
-    reason: string,
-    transactionPin: string,
-  ) => {
-    await deletion.mutateAsync({
-      transactionId: transaction.id,
-      data: { reason, transactionPin },
-    });
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: getListAdminLedgerQueryKey() }),
-      queryClient.invalidateQueries({ queryKey: getGetAdminSummaryQueryKey() }),
-      queryClient.invalidateQueries({ queryKey: getListAdminUsersQueryKey() }),
-      queryClient.invalidateQueries({ queryKey: getGetBankDashboardQueryKey() }),
-      queryClient.invalidateQueries({ queryKey: getListBankWalletsQueryKey() }),
-      queryClient.invalidateQueries({ queryKey: getListBankTransactionsQueryKey() }),
-    ]);
   };
   const saveTransactionStatus = async (
     status: BankTransaction['status'],
@@ -1384,8 +1364,8 @@ export function AdminPage() {
       {summary.isError && <InlineError text="Summary totals are unavailable." retry={() => summary.refetch()} />}
       <div className="mt-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Metric label="Registered users" value={summary.data?.registeredUsers} />
-        <Metric label="Active wallets" value={summary.data?.activeWallets} />
-        <Metric label="Pending ledger requests" value={summary.data?.pendingLedgerRequests} />
+        <Metric label="Active accounts" value={summary.data?.activeAccounts} />
+        <Metric label="Pending operations" value={summary.data?.pendingOperations} />
         <Metric label="Ledger transactions" value={summary.data?.ledgerTransactions} />
       </div>
       <div className="mt-5 flex flex-wrap items-center gap-3 rounded-xl border border-[#d9e7e8] bg-[#eff7f7] px-4 py-3 text-[11px] text-[#48767b]"><ShieldCheck size={15} /> Internal ledger operations only · no outside funds are held or sent.</div>
@@ -1407,6 +1387,9 @@ export function AdminPage() {
             verificationStatus: adminProfile.data!.verificationStatus,
             verificationNote: adminProfile.data!.verificationNote,
             accountStatus: adminProfile.data!.accountStatus,
+            accountRestrictionReason: null,
+            accountRestrictionNotes: null,
+            accountRestrictedAt: null,
             walletCount: 0,
             createdAt: adminProfile.data!.createdAt,
           })} className="rounded-lg bg-[#142f51] px-3 py-2.5 text-[10px] font-bold text-white hover:bg-[#1b4269]">Review my identity</button>}
@@ -1454,8 +1437,8 @@ export function AdminPage() {
         {users.isLoading ? <ListSkeleton /> : users.isError ? <InlineError text="User records are unavailable." retry={() => users.refetch()} /> : users.data?.length ? <div className="overflow-x-auto"><table className="w-full min-w-[1080px] text-left"><thead className="bg-[#f7f9fa] text-[9px] uppercase tracking-[.13em] text-[#8291a0]"><tr><th className="px-6 py-3">Member</th><th className="px-4 py-3">Region</th><th className="px-4 py-3">Verification</th><th className="px-4 py-3">Account</th><th className="px-4 py-3">Wallets</th><th className="px-6 py-3 text-right">Actions</th></tr></thead><tbody>{users.data.map(user => <tr key={user.id} className="border-t border-[#edf0f2] text-[11px] text-[#445a71]"><td className="px-6 py-4"><b className="block text-[#2d435c]">{[user.firstName, user.lastName].filter(Boolean).join(' ') || 'Globus member'}</b><span className="mt-1 block text-[10px] text-[#8a97a5]">{user.email}</span><span className="mt-1 block font-mono text-[10px] font-semibold tracking-[.08em] text-[#52717e]">Customer ID: {user.customerId ?? '—'}</span></td><td className="px-4 py-4">{user.country || '—'}</td><td className="px-4 py-4"><span>{humanize(user.verificationStatus)}</span>{user.verificationNote && <span className="mt-1 block max-w-[220px] truncate text-[9px] text-[#8794a2]" title={user.verificationNote}>{user.verificationNote}</span>}</td><td className="px-4 py-4">{humanize(user.accountStatus)}</td><td className="px-4 py-4">{user.walletCount}</td><td className="px-6 py-4 text-right"><div className="flex justify-end gap-2"><Link href={`/admin/users/${encodeURIComponent(user.id)}`} className="rounded-lg border border-[#dfe6eb] px-3 py-2 text-[10px] font-bold text-[#3f5c75] hover:bg-[#f4f7f8]">Manage</Link>{(user.verificationStatus === 'pending' || user.verificationStatus === 'additional_information_required') && <button onClick={() => openIdentityReview(user)} className="rounded-lg border border-[#d7e6e7] bg-[#f2f8f8] px-3 py-2 text-[10px] font-bold text-[#36777c] hover:bg-[#e5f2f2]">Review ID</button>}<button disabled={user.accountStatus !== 'active'} onClick={() => { setFundTarget(user); setFundingError(''); setFundingSuccess(null); }} className="rounded-lg bg-[#eff7f7] px-3 py-2 text-[10px] font-bold text-[#36777c] hover:bg-[#e2f1f1] disabled:cursor-not-allowed disabled:opacity-40">Fund</button><button disabled={update.isPending} onClick={() => setStatus(user.id, user.accountStatus === 'active' ? 'suspended' : 'active')} className="rounded-lg border border-[#dfe6eb] px-3 py-2 text-[10px] font-bold text-[#3f5c75] hover:bg-[#f4f7f8] disabled:opacity-50">{user.accountStatus === 'active' ? 'Suspend' : 'Reactivate'}</button></div></td></tr>)}</tbody></table></div> : <EmptyState title="No users found" text="Try another email, name, or Customer ID." />}
       </section>
       <section className="mt-6 overflow-hidden rounded-[20px] border border-[#e1e8ee] bg-white">
-        <div className="border-b border-[#edf0f3] px-5 py-4 sm:px-7"><h2 className="text-[14px] font-bold text-[#28405c]">Ledger review</h2><p className="mt-1 text-[10px] text-[#8592a1]">Review ledger activity and transaction status. Deposit and withdrawal approvals are handled in the queue above. Permanent deletion removes the transaction and its ledger entries; a reason is recorded in the audit log, and deletions that would make available balances negative or consume reserved withdrawals are blocked.</p></div>
-        {ledger.isLoading ? <ListSkeleton /> : ledger.isError ? <InlineError text="Ledger records are unavailable." retry={() => ledger.refetch()} /> : ledger.data?.length ? <TransactionList transactions={ledger.data} onDelete={deleteLedgerTransaction} deletePending={deletion.isPending} onStatusOverride={transaction => setStatusTarget(transaction)} statusPending={updateTransactionStatus.isPending} /> : <EmptyState title="Ledger is clear" text="There are no recorded transactions to review." />}
+        <div className="border-b border-[#edf0f3] px-5 py-4 sm:px-7"><h2 className="text-[14px] font-bold text-[#28405c]">Ledger review</h2><p className="mt-1 text-[10px] text-[#8592a1]">Review ledger activity and transaction status. Corrections preserve the original transaction and are recorded as separate ledger entries.</p></div>
+        {ledger.isLoading ? <ListSkeleton /> : ledger.isError ? <InlineError text="Ledger records are unavailable." retry={() => ledger.refetch()} /> : ledger.data?.length ? <TransactionList transactions={ledger.data} onStatusOverride={transaction => setStatusTarget(transaction)} statusPending={updateTransactionStatus.isPending} /> : <EmptyState title="Ledger is clear" text="There are no recorded transactions to review." />}
       </section>
       {identityTarget && <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#14263e]/55 p-4" role="presentation">
         <section role="dialog" aria-modal="true" aria-labelledby="identity-review-title" className="max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-[22px] border border-[#dfe7ec] bg-white p-5 shadow-2xl sm:p-7">
@@ -1529,7 +1512,6 @@ export function AdminUserManagementPage() {
   });
   const updateStatus = useUpdateAdminUserStatus();
   const createFunding = useCreateAdminFunding();
-  const deleteTransaction = useDeleteAdminTransaction();
   const updateTransactionStatus = useUpdateAdminTransactionStatus();
   const updateVerification = useUpdateAdminUserVerification();
   const resetTransactionPin = useResetAdminUserTransactionPin();
@@ -1635,19 +1617,6 @@ export function AdminUserManagementPage() {
     } catch (error) {
       setPageError(error instanceof Error ? error.message : 'The transaction PIN could not be reset.');
     }
-  };
-
-  const deleteUserTransaction = async (
-    transaction: BankTransaction,
-    reason: string,
-    transactionPin: string,
-  ) => {
-    await deleteTransaction.mutateAsync({
-      transactionId: transaction.id,
-      data: { reason, transactionPin },
-    });
-    await refreshUserData();
-    setPageMessage(`Transaction ${transaction.reference} was permanently deleted.`);
   };
 
   const saveUserTransactionStatus = async (
@@ -1771,8 +1740,8 @@ export function AdminUserManagementPage() {
           </section>
 
           <section className="overflow-hidden rounded-[20px] border border-[#e1e8ee] bg-white">
-            <div className="border-b border-[#edf0f3] px-5 py-4 sm:px-7"><h2 className="text-[14px] font-bold text-[#28405c]">Recent activity</h2><p className="mt-1 text-[10px] text-[#8592a1]">Latest 50 transactions. Deletion is permanent and requires a reason.</p></div>
-            {detail.data.transactions.length ? <TransactionList transactions={detail.data.transactions} onDelete={deleteUserTransaction} deletePending={deleteTransaction.isPending} onStatusOverride={transaction => setStatusTarget(transaction)} statusPending={updateTransactionStatus.isPending} /> : <EmptyState title="No activity yet" text="This member has no recorded transactions." />}
+            <div className="border-b border-[#edf0f3] px-5 py-4 sm:px-7"><h2 className="text-[14px] font-bold text-[#28405c]">Recent activity</h2><p className="mt-1 text-[10px] text-[#8592a1]">Latest 50 transactions. Posted records remain intact; corrections create separately audited ledger entries.</p></div>
+            {detail.data.transactions.length ? <TransactionList transactions={detail.data.transactions} onStatusOverride={transaction => setStatusTarget(transaction)} statusPending={updateTransactionStatus.isPending} /> : <EmptyState title="No activity yet" text="This member has no recorded transactions." />}
           </section>
         </div>
 
@@ -1923,36 +1892,15 @@ function transactionDisplayType(transaction: BankTransaction) {
 }
 function TransactionList({
   transactions,
-  onDelete,
-  deletePending = false,
   onStatusOverride,
   statusPending = false,
 }: {
   transactions: BankTransaction[];
-  onDelete?: (transaction: BankTransaction, reason: string, transactionPin: string) => Promise<void>;
-  deletePending?: boolean;
   onStatusOverride?: (transaction: BankTransaction) => void;
   statusPending?: boolean;
 }) {
   const [receipt, setReceipt] = useState<BankTransaction | null>(null);
   const [historyTarget, setHistoryTarget] = useState<BankTransaction | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<BankTransaction | null>(null);
-  const [deleteReason, setDeleteReason] = useState('');
-  const [deletePin, setDeletePin] = useState('');
-  const [deleteError, setDeleteError] = useState('');
-  const submitDelete = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!deleteTarget || !onDelete) return;
-    setDeleteError('');
-    try {
-      await onDelete(deleteTarget, deleteReason.trim(), deletePin);
-      setDeleteTarget(null);
-      setDeleteReason('');
-      setDeletePin('');
-    } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : 'The transaction could not be deleted.');
-    }
-  };
   return <>
     <div>{transactions.map(transaction => {
       const isIncoming = transaction.type === 'transfer_in' || transaction.type === 'external_transfer_in' || transaction.type === 'simulation_credit' || transaction.type === 'admin_funding';
@@ -1962,37 +1910,15 @@ function TransactionList({
         <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${isIncoming ? 'bg-[#edf7f3] text-[#4d8c72]' : isInternationalRequest ? 'bg-[#fbf7eb] text-[#a0793b]' : 'bg-[#f0f4f7] text-[#658097]'}`}>{isInternationalRequest ? <Globe2 size={16} /> : isIncoming ? <ArrowDownLeft size={16} /> : <ArrowUpRight size={16} />}</span>
         <div className="min-w-0 flex-1"><p className="truncate text-[11px] font-semibold text-[#334a63]">{transaction.description || transactionDisplayType(transaction)}</p><p className="mt-1 truncate text-[9px] text-[#8996a4]">{transaction.counterparty || 'Internal ledger'} · {formatDate(transaction.createdAt)} · Internal ledger</p></div>
         <div className="shrink-0 text-right"><p className={`text-[11px] font-bold ${isIncoming ? 'text-[#417f69]' : isInternationalRequest ? 'text-[#a0793b]' : 'text-[#3c5269]'}`}>{isInternationalRequest ? 'Request · ' : isIncoming ? '+' : '−'}{formatMoney(Number(transaction.amount), transaction.currency)}</p><p className={`mt-1 text-[9px] capitalize ${transaction.status === 'completed' ? 'text-[#4f8c75]' : 'text-[#9b8050]'}`}>{humanize(transaction.status)}</p></div>
-        {(canPrintReceipt || onStatusOverride || onDelete) && <div className="flex w-full flex-wrap justify-end gap-2 sm:ml-auto sm:w-auto sm:flex-nowrap">
+        {(canPrintReceipt || onStatusOverride) && <div className="flex w-full flex-wrap justify-end gap-2 sm:ml-auto sm:w-auto sm:flex-nowrap">
           {canPrintReceipt && <button type="button" onClick={() => setReceipt(transaction)} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#dfe7eb] px-2.5 py-2 text-[9px] font-bold text-[#4a667e] hover:bg-[#f5f8f9]" aria-label={`View receipt ${transaction.reference}`}><FileText size={13} /><span className="hidden sm:inline">Receipt</span></button>}
           {onStatusOverride && <button type="button" onClick={() => setHistoryTarget(transaction)} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#dfe7eb] px-2.5 py-2 text-[9px] font-bold text-[#4a667e] hover:bg-[#f5f8f9]" aria-label={`View status history for ${transaction.reference}`}><History size={13} /><span className="hidden sm:inline">History</span></button>}
           {onStatusOverride && transaction.type !== 'deposit_request' && transaction.type !== 'withdrawal_request' && <button type="button" disabled={statusPending} onClick={() => onStatusOverride(transaction)} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#dfe7eb] px-2.5 py-2 text-[9px] font-bold text-[#4a667e] hover:bg-[#f5f8f9] disabled:cursor-not-allowed disabled:opacity-50" aria-label={`Override status for ${transaction.reference}`}><RefreshCw size={13} /><span className="hidden sm:inline">Status</span></button>}
-          {onDelete && <button type="button" disabled={deletePending} onClick={() => { setDeleteTarget(transaction); setDeleteReason(''); setDeletePin(''); setDeleteError(''); }} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#ead8d5] px-2.5 py-2 text-[9px] font-bold text-[#a24940] hover:bg-[#fff7f5] disabled:cursor-not-allowed disabled:opacity-50" aria-label={`Permanently delete transaction ${transaction.reference}`}><Trash2 size={13} /><span className="hidden sm:inline">Delete</span></button>}
         </div>}
       </div>;
     })}</div>
     {receipt && <ReceiptDialog transaction={receipt} onClose={() => setReceipt(null)} />}
     {historyTarget && <TransactionStatusHistoryDialog transaction={historyTarget} onClose={() => setHistoryTarget(null)} />}
-    {deleteTarget && onDelete && <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#14263e]/55 p-4">
-      <section role="dialog" aria-modal="true" aria-labelledby="delete-transaction-title" className="w-full max-w-lg rounded-[22px] border border-[#dfe7ec] bg-white p-5 shadow-2xl sm:p-7">
-        <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#a24940]">Permanent action</p>
-        <h2 id="delete-transaction-title" className="mt-1 text-[16px] font-bold text-[#29425c]">Delete transaction?</h2>
-        <p className="mt-2 break-all text-[10px] text-[#7e8d9c]">{deleteTarget.reference}</p>
-        <p className="mt-4 rounded-lg border border-[#f0d6d2] bg-[#fff7f5] px-4 py-3 text-[10px] leading-5 text-[#8f4a43]">This permanently removes the transaction and its ledger entries. Affected wallet balances will change, and this cannot be undone.</p>
-        <form onSubmit={submitDelete} className="mt-5 space-y-4">
-          <Field label="Audit reason">
-            <textarea required minLength={5} maxLength={500} rows={3} value={deleteReason} onChange={event => setDeleteReason(event.target.value)} className={`${inputClass} h-auto py-3`} />
-          </Field>
-          <Field label="Your 6-digit transaction PIN">
-            <input required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="current-password" value={deletePin} onChange={event => setDeletePin(event.target.value.replace(/\D/g, '').slice(0, 6))} className={inputClass} />
-          </Field>
-          {deleteError && <p role="alert" className="rounded-lg bg-[#fff1ef] px-4 py-3 text-[11px] text-[#a24940]">{deleteError}</p>}
-          <div className="flex flex-wrap justify-end gap-2">
-            <button type="button" onClick={() => setDeleteTarget(null)} className="rounded-xl border border-[#dfe6eb] px-4 py-3 text-[10px] font-bold text-[#546b80] hover:bg-[#f5f8f9]">Cancel</button>
-            <button disabled={deletePending || deleteReason.trim().length < 5 || deletePin.length !== 6} className="rounded-xl bg-[#a24940] px-4 py-3 text-[10px] font-bold text-white hover:bg-[#8f3c34] disabled:cursor-not-allowed disabled:opacity-50">{deletePending ? 'Deleting…' : 'Permanently delete'}</button>
-          </div>
-        </form>
-      </section>
-    </div>}
   </>;
 }
 

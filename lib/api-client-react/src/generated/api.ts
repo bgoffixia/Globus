@@ -21,20 +21,30 @@ import type {
 
 import type {
   AdminAccess,
+  AdminAccount,
+  AdminAccountPage,
+  AdminAuditLogPage,
   AdminFundingInput,
+  AdminFundingReviewInput,
   AdminIdentityVerificationInput,
   AdminLedgerRequest,
   AdminLedgerRequestReviewInput,
+  AdminSettings,
+  AdminSettingsInput,
   AdminSummary,
-  AdminTransactionDeleteInput,
-  AdminTransactionDeleteResult,
+  AdminTransactionCorrectionInput,
+  AdminTransactionDetail,
+  AdminTransactionPage,
   AdminTransactionPinResetInput,
   AdminTransactionPinResetResult,
   AdminTransactionStatusChange,
   AdminTransactionStatusUpdateInput,
   AdminUser,
   AdminUserDetail,
+  AdminUserPage,
+  AdminUserProfileInput,
   AdminUserStatusInput,
+  AdminWalletStatusInput,
   BadRequestResponse,
   BankDashboard,
   BankExchangeRate,
@@ -59,7 +69,10 @@ import type {
   InternationalTransferRequestInput,
   LedgerRequest,
   LedgerRequestInput,
+  ListAdminAccountsParams,
+  ListAdminAuditLogsParams,
   ListAdminLedgerParams,
+  ListAdminTransactionsParams,
   ListAdminUsersParams,
   ListBankTransactionsParams,
   NotFoundResponse,
@@ -1996,6 +2009,428 @@ export function useGetAdminSummary<TData = Awaited<ReturnType<typeof getAdminSum
 
 
 
+export const getListAdminAccountsUrl = (params?: ListAdminAccountsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/bank/admin/accounts?${stringifiedParams}` : `/api/bank/admin/accounts`
+}
+
+/**
+ * @summary Search and page through customer currency wallets
+ */
+export const listAdminAccounts = async (params?: ListAdminAccountsParams, options?: Parameters<typeof customFetch>[1]): Promise<AdminAccountPage> => {
+
+  return customFetch<AdminAccountPage>(getListAdminAccountsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminAccountsQueryKey = (params?: ListAdminAccountsParams,) => {
+    return [
+    `/api/bank/admin/accounts`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListAdminAccountsQueryOptions = <TData = Awaited<ReturnType<typeof listAdminAccounts>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>(params?: ListAdminAccountsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminAccounts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminAccountsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminAccounts>>> = ({ signal }) => listAdminAccounts(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminAccounts>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminAccountsQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminAccounts>>>
+export type ListAdminAccountsQueryError = ErrorType<UnauthorizedResponse | ForbiddenResponse>
+
+
+/**
+ * @summary Search and page through customer currency wallets
+ */
+
+export function useListAdminAccounts<TData = Awaited<ReturnType<typeof listAdminAccounts>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>(
+ params?: ListAdminAccountsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminAccounts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminAccountsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateAdminWalletStatusUrl = (walletId: string,) => {
+
+
+
+
+  return `/api/bank/admin/wallets/${walletId}`
+}
+
+/**
+ * @summary Freeze or unfreeze a wallet with an audited reason
+ */
+export const updateAdminWalletStatus = async (walletId: string,
+    adminWalletStatusInput: AdminWalletStatusInput, options?: Parameters<typeof customFetch>[1]): Promise<AdminAccount> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<AdminAccount>(getUpdateAdminWalletStatusUrl(walletId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(adminWalletStatusInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateAdminWalletStatusMutationKey = () => ['updateAdminWalletStatus'] as const;
+
+export const getUpdateAdminWalletStatusMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminWalletStatus>>, TError,UpdateAdminWalletStatusMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAdminWalletStatus>>, TError,UpdateAdminWalletStatusMutationVariables, TContext> => {
+
+const mutationKey = getUpdateAdminWalletStatusMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAdminWalletStatus>>, UpdateAdminWalletStatusMutationVariables> = (props) => {
+          const {walletId,data} = props ?? {};
+
+          return  updateAdminWalletStatus(walletId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAdminWalletStatusMutationResult = NonNullable<Awaited<ReturnType<typeof updateAdminWalletStatus>>>
+    export type UpdateAdminWalletStatusMutationBody = BodyType<AdminWalletStatusInput>
+    export type UpdateAdminWalletStatusMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
+    export type UpdateAdminWalletStatusMutationVariables = {walletId: string;data: BodyType<AdminWalletStatusInput>}
+
+    /**
+ * @summary Freeze or unfreeze a wallet with an audited reason
+ */
+export const useUpdateAdminWalletStatus = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminWalletStatus>>, TError,UpdateAdminWalletStatusMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAdminWalletStatus>>,
+        TError,
+        UpdateAdminWalletStatusMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateAdminWalletStatusMutationOptions(options));
+    }
+
+export const getListAdminAuditLogsUrl = (params?: ListAdminAuditLogsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/bank/admin/audit-logs?${stringifiedParams}` : `/api/bank/admin/audit-logs`
+}
+
+/**
+ * @summary Search and page through administrative audit events
+ */
+export const listAdminAuditLogs = async (params?: ListAdminAuditLogsParams, options?: Parameters<typeof customFetch>[1]): Promise<AdminAuditLogPage> => {
+
+  return customFetch<AdminAuditLogPage>(getListAdminAuditLogsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminAuditLogsQueryKey = (params?: ListAdminAuditLogsParams,) => {
+    return [
+    `/api/bank/admin/audit-logs`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListAdminAuditLogsQueryOptions = <TData = Awaited<ReturnType<typeof listAdminAuditLogs>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>(params?: ListAdminAuditLogsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminAuditLogs>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminAuditLogsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminAuditLogs>>> = ({ signal }) => listAdminAuditLogs(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminAuditLogs>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminAuditLogsQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminAuditLogs>>>
+export type ListAdminAuditLogsQueryError = ErrorType<UnauthorizedResponse | ForbiddenResponse>
+
+
+/**
+ * @summary Search and page through administrative audit events
+ */
+
+export function useListAdminAuditLogs<TData = Awaited<ReturnType<typeof listAdminAuditLogs>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>(
+ params?: ListAdminAuditLogsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminAuditLogs>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminAuditLogsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetAdminSettingsUrl = () => {
+
+
+
+
+  return `/api/bank/admin/settings`
+}
+
+/**
+ * @summary Read operational funding and frozen-wallet policies
+ */
+export const getAdminSettings = async ( options?: Parameters<typeof customFetch>[1]): Promise<AdminSettings> => {
+
+  return customFetch<AdminSettings>(getGetAdminSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminSettingsQueryKey = () => {
+    return [
+    `/api/bank/admin/settings`
+    ] as const;
+    }
+
+
+export const getGetAdminSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getAdminSettings>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminSettings>>> = ({ signal }) => getAdminSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminSettings>>>
+export type GetAdminSettingsQueryError = ErrorType<UnauthorizedResponse | ForbiddenResponse>
+
+
+/**
+ * @summary Read operational funding and frozen-wallet policies
+ */
+
+export function useGetAdminSettings<TData = Awaited<ReturnType<typeof getAdminSettings>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateAdminSettingsUrl = () => {
+
+
+
+
+  return `/api/bank/admin/settings`
+}
+
+/**
+ * @summary Update funding limits and approval settings
+ */
+export const updateAdminSettings = async (adminSettingsInput: AdminSettingsInput, options?: Parameters<typeof customFetch>[1]): Promise<AdminSettings> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<AdminSettings>(getUpdateAdminSettingsUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(adminSettingsInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateAdminSettingsMutationKey = () => ['updateAdminSettings'] as const;
+
+export const getUpdateAdminSettingsMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminSettings>>, TError,UpdateAdminSettingsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAdminSettings>>, TError,UpdateAdminSettingsMutationVariables, TContext> => {
+
+const mutationKey = getUpdateAdminSettingsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAdminSettings>>, UpdateAdminSettingsMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateAdminSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAdminSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateAdminSettings>>>
+    export type UpdateAdminSettingsMutationBody = BodyType<AdminSettingsInput>
+    export type UpdateAdminSettingsMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>
+    export type UpdateAdminSettingsMutationVariables = {data: BodyType<AdminSettingsInput>}
+
+    /**
+ * @summary Update funding limits and approval settings
+ */
+export const useUpdateAdminSettings = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminSettings>>, TError,UpdateAdminSettingsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAdminSettings>>,
+        TError,
+        UpdateAdminSettingsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateAdminSettingsMutationOptions(options));
+    }
+
 export const getListAdminLedgerRequestsUrl = () => {
 
 
@@ -2180,9 +2615,9 @@ export const getListAdminUsersUrl = (params?: ListAdminUsersParams,) => {
 /**
  * @summary Search and list user records
  */
-export const listAdminUsers = async (params?: ListAdminUsersParams, options?: Parameters<typeof customFetch>[1]): Promise<AdminUser[]> => {
+export const listAdminUsers = async (params?: ListAdminUsersParams, options?: Parameters<typeof customFetch>[1]): Promise<AdminUserPage> => {
 
-  return customFetch<AdminUser[]>(getListAdminUsersUrl(params),
+  return customFetch<AdminUserPage>(getListAdminUsersUrl(params),
   {
     ...options,
     method: 'GET'
@@ -2499,6 +2934,95 @@ export const useUpdateAdminUserStatus = <TError = ErrorType<BadRequestResponse |
         TContext
       > => {
       return useMutation(getUpdateAdminUserStatusMutationOptions(options));
+    }
+
+export const getUpdateAdminUserProfileUrl = (userId: string,) => {
+
+
+
+
+  return `/api/bank/admin/users/${userId}/profile`
+}
+
+/**
+ * @summary Edit permitted member profile fields with a documented reason
+ */
+export const updateAdminUserProfile = async (userId: string,
+    adminUserProfileInput: AdminUserProfileInput, options?: Parameters<typeof customFetch>[1]): Promise<AdminUser> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<AdminUser>(getUpdateAdminUserProfileUrl(userId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(adminUserProfileInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateAdminUserProfileMutationKey = () => ['updateAdminUserProfile'] as const;
+
+export const getUpdateAdminUserProfileMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminUserProfile>>, TError,UpdateAdminUserProfileMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAdminUserProfile>>, TError,UpdateAdminUserProfileMutationVariables, TContext> => {
+
+const mutationKey = getUpdateAdminUserProfileMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAdminUserProfile>>, UpdateAdminUserProfileMutationVariables> = (props) => {
+          const {userId,data} = props ?? {};
+
+          return  updateAdminUserProfile(userId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAdminUserProfileMutationResult = NonNullable<Awaited<ReturnType<typeof updateAdminUserProfile>>>
+    export type UpdateAdminUserProfileMutationBody = BodyType<AdminUserProfileInput>
+    export type UpdateAdminUserProfileMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
+    export type UpdateAdminUserProfileMutationVariables = {userId: string;data: BodyType<AdminUserProfileInput>}
+
+    /**
+ * @summary Edit permitted member profile fields with a documented reason
+ */
+export const useUpdateAdminUserProfile = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminUserProfile>>, TError,UpdateAdminUserProfileMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAdminUserProfile>>,
+        TError,
+        UpdateAdminUserProfileMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateAdminUserProfileMutationOptions(options));
     }
 
 export const getListAdminIdentityDocumentsUrl = (userId: string,) => {
@@ -2994,6 +3518,256 @@ export function useListAdminTransactionStatusHistory<TData = Awaited<ReturnType<
 
 
 
+export const getListAdminTransactionsUrl = (params?: ListAdminTransactionsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/bank/admin/transactions?${stringifiedParams}` : `/api/bank/admin/transactions`
+}
+
+/**
+ * @summary Search, filter, and page through transactions
+ */
+export const listAdminTransactions = async (params?: ListAdminTransactionsParams, options?: Parameters<typeof customFetch>[1]): Promise<AdminTransactionPage> => {
+
+  return customFetch<AdminTransactionPage>(getListAdminTransactionsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminTransactionsQueryKey = (params?: ListAdminTransactionsParams,) => {
+    return [
+    `/api/bank/admin/transactions`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListAdminTransactionsQueryOptions = <TData = Awaited<ReturnType<typeof listAdminTransactions>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>(params?: ListAdminTransactionsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminTransactions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminTransactionsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminTransactions>>> = ({ signal }) => listAdminTransactions(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminTransactions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminTransactionsQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminTransactions>>>
+export type ListAdminTransactionsQueryError = ErrorType<UnauthorizedResponse | ForbiddenResponse>
+
+
+/**
+ * @summary Search, filter, and page through transactions
+ */
+
+export function useListAdminTransactions<TData = Awaited<ReturnType<typeof listAdminTransactions>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>(
+ params?: ListAdminTransactionsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminTransactions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminTransactionsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetAdminTransactionDetailUrl = (transactionId: string,) => {
+
+
+
+
+  return `/api/bank/admin/transactions/${transactionId}`
+}
+
+/**
+ * @summary Read transaction details and associated ledger entries
+ */
+export const getAdminTransactionDetail = async (transactionId: string, options?: Parameters<typeof customFetch>[1]): Promise<AdminTransactionDetail> => {
+
+  return customFetch<AdminTransactionDetail>(getGetAdminTransactionDetailUrl(transactionId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminTransactionDetailQueryKey = (transactionId: string,) => {
+    return [
+    `/api/bank/admin/transactions/${transactionId}`
+    ] as const;
+    }
+
+
+export const getGetAdminTransactionDetailQueryOptions = <TData = Awaited<ReturnType<typeof getAdminTransactionDetail>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>>(transactionId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminTransactionDetail>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminTransactionDetailQueryKey(transactionId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminTransactionDetail>>> = ({ signal }) => getAdminTransactionDetail(transactionId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: transactionId !== null && transactionId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminTransactionDetail>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminTransactionDetailQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminTransactionDetail>>>
+export type GetAdminTransactionDetailQueryError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
+
+
+/**
+ * @summary Read transaction details and associated ledger entries
+ */
+
+export function useGetAdminTransactionDetail<TData = Awaited<ReturnType<typeof getAdminTransactionDetail>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>>(
+ transactionId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminTransactionDetail>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminTransactionDetailQueryOptions(transactionId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateAdminTransactionCorrectionUrl = (transactionId: string,) => {
+
+
+
+
+  return `/api/bank/admin/transactions/${transactionId}`
+}
+
+/**
+ * @summary Reverse a posted transaction or record a compensating adjustment
+ */
+export const createAdminTransactionCorrection = async (transactionId: string,
+    adminTransactionCorrectionInput: AdminTransactionCorrectionInput, options?: Parameters<typeof customFetch>[1]): Promise<BankTransaction> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<BankTransaction>(getCreateAdminTransactionCorrectionUrl(transactionId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(adminTransactionCorrectionInput)
+  }
+);}
+
+
+
+
+
+export const getCreateAdminTransactionCorrectionMutationKey = () => ['createAdminTransactionCorrection'] as const;
+
+export const getCreateAdminTransactionCorrectionMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAdminTransactionCorrection>>, TError,CreateAdminTransactionCorrectionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createAdminTransactionCorrection>>, TError,CreateAdminTransactionCorrectionMutationVariables, TContext> => {
+
+const mutationKey = getCreateAdminTransactionCorrectionMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createAdminTransactionCorrection>>, CreateAdminTransactionCorrectionMutationVariables> = (props) => {
+          const {transactionId,data} = props ?? {};
+
+          return  createAdminTransactionCorrection(transactionId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateAdminTransactionCorrectionMutationResult = NonNullable<Awaited<ReturnType<typeof createAdminTransactionCorrection>>>
+    export type CreateAdminTransactionCorrectionMutationBody = BodyType<AdminTransactionCorrectionInput>
+    export type CreateAdminTransactionCorrectionMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>
+    export type CreateAdminTransactionCorrectionMutationVariables = {transactionId: string;data: BodyType<AdminTransactionCorrectionInput>}
+
+    /**
+ * @summary Reverse a posted transaction or record a compensating adjustment
+ */
+export const useCreateAdminTransactionCorrection = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAdminTransactionCorrection>>, TError,CreateAdminTransactionCorrectionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createAdminTransactionCorrection>>,
+        TError,
+        CreateAdminTransactionCorrectionMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateAdminTransactionCorrectionMutationOptions(options));
+    }
+
 export const getUpdateAdminTransactionStatusUrl = (transactionId: string,) => {
 
 
@@ -3083,19 +3857,19 @@ export const useUpdateAdminTransactionStatus = <TError = ErrorType<BadRequestRes
       return useMutation(getUpdateAdminTransactionStatusMutationOptions(options));
     }
 
-export const getDeleteAdminTransactionUrl = (transactionId: string,) => {
+export const getReviewAdminFundingUrl = (transactionId: string,) => {
 
 
 
 
-  return `/api/bank/admin/transactions/${transactionId}`
+  return `/api/bank/admin/transactions/${transactionId}/funding-review`
 }
 
 /**
- * @summary Permanently delete a transaction and its ledger entries
+ * @summary Approve or reject funding requiring a second administrator
  */
-export const deleteAdminTransaction = async (transactionId: string,
-    adminTransactionDeleteInput: AdminTransactionDeleteInput, options?: Parameters<typeof customFetch>[1]): Promise<AdminTransactionDeleteResult> => {
+export const reviewAdminFunding = async (transactionId: string,
+    adminFundingReviewInput: AdminFundingReviewInput, options?: Parameters<typeof customFetch>[1]): Promise<BankTransaction> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -3111,12 +3885,12 @@ export const deleteAdminTransaction = async (transactionId: string,
     }
     return headers;
   };
-return customFetch<AdminTransactionDeleteResult>(getDeleteAdminTransactionUrl(transactionId),
+return customFetch<BankTransaction>(getReviewAdminFundingUrl(transactionId),
   {
     ...options,
-    method: 'DELETE',
+    method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(adminTransactionDeleteInput)
+    body: JSON.stringify(adminFundingReviewInput)
   }
 );}
 
@@ -3124,13 +3898,13 @@ return customFetch<AdminTransactionDeleteResult>(getDeleteAdminTransactionUrl(tr
 
 
 
-export const getDeleteAdminTransactionMutationKey = () => ['deleteAdminTransaction'] as const;
+export const getReviewAdminFundingMutationKey = () => ['reviewAdminFunding'] as const;
 
-export const getDeleteAdminTransactionMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAdminTransaction>>, TError,DeleteAdminTransactionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof deleteAdminTransaction>>, TError,DeleteAdminTransactionMutationVariables, TContext> => {
+export const getReviewAdminFundingMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewAdminFunding>>, TError,ReviewAdminFundingMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reviewAdminFunding>>, TError,ReviewAdminFundingMutationVariables, TContext> => {
 
-const mutationKey = getDeleteAdminTransactionMutationKey();
+const mutationKey = getReviewAdminFundingMutationKey();
 const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -3140,10 +3914,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteAdminTransaction>>, DeleteAdminTransactionMutationVariables> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reviewAdminFunding>>, ReviewAdminFundingMutationVariables> = (props) => {
           const {transactionId,data} = props ?? {};
 
-          return  deleteAdminTransaction(transactionId,data,requestOptions)
+          return  reviewAdminFunding(transactionId,data,requestOptions)
         }
 
 
@@ -3153,22 +3927,22 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type DeleteAdminTransactionMutationResult = NonNullable<Awaited<ReturnType<typeof deleteAdminTransaction>>>
-    export type DeleteAdminTransactionMutationBody = BodyType<AdminTransactionDeleteInput>
-    export type DeleteAdminTransactionMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>
-    export type DeleteAdminTransactionMutationVariables = {transactionId: string;data: BodyType<AdminTransactionDeleteInput>}
+    export type ReviewAdminFundingMutationResult = NonNullable<Awaited<ReturnType<typeof reviewAdminFunding>>>
+    export type ReviewAdminFundingMutationBody = BodyType<AdminFundingReviewInput>
+    export type ReviewAdminFundingMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>
+    export type ReviewAdminFundingMutationVariables = {transactionId: string;data: BodyType<AdminFundingReviewInput>}
 
     /**
- * @summary Permanently delete a transaction and its ledger entries
+ * @summary Approve or reject funding requiring a second administrator
  */
-export const useDeleteAdminTransaction = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAdminTransaction>>, TError,DeleteAdminTransactionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+export const useReviewAdminFunding = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewAdminFunding>>, TError,ReviewAdminFundingMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
-        Awaited<ReturnType<typeof deleteAdminTransaction>>,
+        Awaited<ReturnType<typeof reviewAdminFunding>>,
         TError,
-        DeleteAdminTransactionMutationVariables,
+        ReviewAdminFundingMutationVariables,
         TContext
       > => {
-      return useMutation(getDeleteAdminTransactionMutationOptions(options));
+      return useMutation(getReviewAdminFundingMutationOptions(options));
     }
 

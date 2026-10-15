@@ -24,6 +24,8 @@ export const bankCurrencyEnum = pgEnum("bank_currency_code", [
 export const bankTransactionTypeEnum = pgEnum("bank_transaction_type", [
   "simulation_credit",
   "admin_funding",
+  "admin_adjustment",
+  "reversal",
   "external_transfer",
   "external_transfer_in",
   "sandbox_credit",
@@ -65,6 +67,10 @@ export const bankUsersTable = pgTable("bank_users", {
   verificationStatus: text("verification_status").notNull().default("not_started"),
   verificationNote: text("verification_note"),
   accountStatus: text("account_status").notNull().default("active"),
+  accountRestrictionReason: text("account_restriction_reason"),
+  accountRestrictionNotes: text("account_restriction_notes"),
+  accountRestrictedByUserId: text("account_restricted_by_user_id"),
+  accountRestrictedAt: timestamp("account_restricted_at", { withTimezone: true }),
   acceptedTermsAt: timestamp("accepted_terms_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
@@ -83,6 +89,16 @@ export const bankWalletsTable = pgTable(
       .references(() => bankUsersTable.id, { onDelete: "cascade" }),
     currency: bankCurrencyEnum("currency").notNull(),
     status: text("status").notNull().default("active"),
+    restrictionReason: text("restriction_reason"),
+    restrictionNotes: text("restriction_notes"),
+    restrictedByUserId: text("restricted_by_user_id").references(
+      () => bankUsersTable.id,
+    ),
+    restrictedAt: timestamp("restricted_at", { withTimezone: true }),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -118,6 +134,11 @@ export const bankTransactionsTable = pgTable(
       .default(sql`0`),
     counterparty: text("counterparty"),
     description: text("description").notNull().default(""),
+    adminReference: text("admin_reference"),
+    adminNotes: text("admin_notes"),
+    correctionOfTransactionId: uuid("correction_of_transaction_id"),
+    reversalOfTransactionId: uuid("reversal_of_transaction_id"),
+    correctionReason: text("correction_reason"),
     mode: text("mode").notNull().default("simulation"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -127,6 +148,8 @@ export const bankTransactionsTable = pgTable(
     index("bank_transaction_from_user_idx").on(table.fromUserId, table.createdAt),
     index("bank_transaction_to_user_idx").on(table.toUserId, table.createdAt),
     index("bank_transaction_status_idx").on(table.status, table.createdAt),
+    index("bank_transaction_correction_idx").on(table.correctionOfTransactionId),
+    uniqueIndex("bank_transaction_single_reversal_idx").on(table.reversalOfTransactionId),
   ],
 );
 
@@ -199,3 +222,19 @@ export const bankAuditLogsTable = pgTable(
     index("bank_audit_target_idx").on(table.targetUserId, table.createdAt),
   ],
 );
+
+export const bankAdminSettingsTable = pgTable("bank_admin_settings", {
+  id: text("id").primaryKey().default("operations"),
+  fundingLimit: text("funding_limit").notNull().default("100000000"),
+  secondApprovalThreshold: text("second_approval_threshold")
+    .notNull()
+    .default("100000000"),
+  frozenIncomingPolicy: text("frozen_incoming_policy")
+    .notNull()
+    .default("allow_frozen"),
+  updatedByUserId: text("updated_by_user_id").references(() => bankUsersTable.id),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});

@@ -11,8 +11,6 @@ import { AuthFrame, ClerkSignInForm, ClerkSignUpForm, EmailRecoverySignInForm } 
 import { PwaInstallPrompt } from '@/components/pwa-install-prompt';
 import NotFound from '@/pages/not-found';
 import {
-  AdminPage,
-  AdminUserManagementPage,
   DashboardPage,
   DisclosurePage,
   HomePage,
@@ -24,6 +22,7 @@ import {
   TransactionsPage,
   WalletsPage,
 } from '@/pages/bank-pages';
+import { AdminWorkspace } from '@/pages/admin-workspace';
 import {
   Redirect,
   Route,
@@ -131,6 +130,19 @@ function ProtectedPage({ children }: { children: ReactNode }) {
   );
 }
 
+function ProtectedAdminPage() {
+  return (
+    <>
+      <Show when="signed-in">
+        <AdminWorkspace />
+      </Show>
+      <Show when="signed-out">
+        <Redirect to="/sign-in" />
+      </Show>
+    </>
+  );
+}
+
 function SignInPage() {
   return (
     <AuthFrame mode="sign-in">
@@ -219,8 +231,17 @@ function ClerkRoutes() {
         <Route path="/withdraw"><ProtectedPage><ProviderRequestPage type="withdrawal" /></ProtectedPage></Route>
         <Route path="/receive"><ProtectedPage><ReceivePage /></ProtectedPage></Route>
         <Route path="/settings"><ProtectedPage><SettingsPage /></ProtectedPage></Route>
-        <Route path="/admin/users/:userId"><ProtectedPage><AdminUserManagementPage /></ProtectedPage></Route>
-        <Route path="/admin"><ProtectedPage><AdminPage /></ProtectedPage></Route>
+        <Route path="/admin/users/:userId"><ProtectedAdminPage /></Route>
+        <Route path="/admin/users"><ProtectedAdminPage /></Route>
+        <Route path="/admin/accounts"><ProtectedAdminPage /></Route>
+        <Route path="/admin/transactions"><ProtectedAdminPage /></Route>
+        <Route path="/admin/funding"><ProtectedAdminPage /></Route>
+        <Route path="/admin/wallets"><ProtectedAdminPage /></Route>
+        <Route path="/admin/restrictions"><ProtectedAdminPage /></Route>
+        <Route path="/admin/audit"><ProtectedAdminPage /></Route>
+        <Route path="/admin/settings"><ProtectedAdminPage /></Route>
+        <Route path="/admin/logout"><ProtectedAdminPage /></Route>
+        <Route path="/admin"><ProtectedAdminPage /></Route>
         <Route path="/about"><DisclosurePage path="/about" /></Route>
         <Route path="/help"><DisclosurePage path="/help" /></Route>
         <Route path="/fees"><DisclosurePage path="/fees" /></Route>
