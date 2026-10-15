@@ -77,7 +77,7 @@ import {
 } from '@workspace/api-client-react';
 import type { AdminLedgerRequest, AdminUser, BankTransaction, IdentityDocument, Wallet } from '@workspace/api-client-react';
 import { GlobusLoader } from '@/components/globus-loader';
-
+import { downloadTransactionReceiptPdf } from '@/lib/transaction-receipt-pdf';
 const currencies = ['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD'] as const;
 type Currency = typeof currencies[number];
 const currencyNames: Record<Currency, string> = {
@@ -1615,32 +1615,6 @@ function transactionDisplayType(transaction: BankTransaction) {
       return humanize(transaction.type);
   }
 }
-
-function receiptContents(transaction: BankTransaction) {
-  return [
-    'Globus internal ledger receipt',
-    `Reference: ${transaction.reference}`,
-    `Status: ${humanize(transaction.status)}`,
-    `Activity: ${transactionDisplayType(transaction)}`,
-    `Amount: ${formatMoney(Number(transaction.amount), transaction.currency)}`,
-    `Date: ${formatDate(transaction.createdAt)}`,
-    transaction.counterparty ? `Counterparty label: ${transaction.counterparty}` : '',
-    transaction.description ? `Description: ${transaction.description}` : '',
-    '',
-    'This receipt records activity in the Globus internal ledger. It is not proof of funds received or sent by a bank or payment provider. Globus does not connect to a bank, payment gateway, or real-money transfer service.',
-  ].filter(Boolean).join('\n');
-}
-
-function downloadTransactionReceipt(transaction: BankTransaction) {
-  const file = new Blob([receiptContents(transaction)], { type: 'text/plain;charset=utf-8' });
-  const url = URL.createObjectURL(file);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `globus-receipt-${transaction.reference}.txt`;
-  link.click();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
 function TransactionList({
   transactions,
   onDelete,
@@ -1839,6 +1813,9 @@ function TransactionStatusDialog({
 }
 
 function ReceiptDialog({ transaction, onClose }: { transaction: BankTransaction; onClose: () => void }) {
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState('');
+
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
@@ -1846,6 +1823,30 @@ function ReceiptDialog({ transaction, onClose }: { transaction: BankTransaction;
     window.addEventListener('keydown', closeOnEscape);
     return () => window.removeEventListener('keydown', closeOnEscape);
   }, [onClose]);
+
+  const downloadPdf = async () => {
+    setDownloadError('');
+    setDownloading(true);
+    try {
+      if (transaction.status !== 'completed') {
+        throw new Error('PDF receipts are available for completed transactions only.');
+      }
+      await downloadTransactionReceiptPdf({
+        reference: transaction.reference,
+        amount: formatMoney(Number(transaction.amount), transaction.currency),
+        status: humanize(transaction.status),
+        date: formatDate(transaction.createdAt),
+        description: transaction.description || transactionDisplayType(transaction),
+        counterparty: transaction.counterparty || 'Internal ledger',
+        activity: transactionDisplayType(transaction),
+        disclaimer: 'This receipt records an entry in the Globus internal ledger. It is not proof of funds received or sent by an outside account. Globus does not connect to a bank, payment gateway, or real-money transfer service.',
+      }, `${import.meta.env.BASE_URL}globus-wordmark.png`);
+    } catch (error) {
+      setDownloadError(error instanceof Error ? error.message : 'The PDF receipt could not be downloaded.');
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   return (
     <div
@@ -1881,10 +1882,11 @@ function ReceiptDialog({ transaction, onClose }: { transaction: BankTransaction;
         <div className="receipt-actions mt-6 flex items-center justify-between border-t border-[#edf0f2] pt-5">
           <span className="text-[9px] font-bold uppercase tracking-[.13em] text-[#56837f]">Internal record</span>
           <div className="flex gap-2">
-            <button type="button" onClick={() => downloadTransactionReceipt(transaction)} className="inline-flex items-center gap-2 rounded-lg border border-[#dfe7eb] px-3 py-2.5 text-[10px] font-bold text-[#4a667e] hover:bg-[#f5f8f9]"><Download size={14} /> Download</button>
+            <button type="button" data-testid="button-download-receipt-pdf" disabled={downloading || transaction.status !== 'completed'} onClick={downloadPdf} className="inline-flex items-center gap-2 rounded-lg border border-[#dfe7eb] px-3 py-2.5 text-[10px] font-bold text-[#4a667e] hover:bg-[#f5f8f9] disabled:cursor-not-allowed disabled:opacity-50"><Download size={14} /> {downloading ? 'Preparing PDF…' : 'Download PDF'}</button>
             <button type="button" onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-lg bg-[#142f51] px-4 py-2.5 text-[10px] font-bold text-white hover:bg-[#1b4269]"><Printer size={14} /> Print / Save PDF</button>
           </div>
         </div>
+        {downloadError && <p role="alert" data-testid="status-receipt-download-error" className="mt-3 text-right text-[10px] text-[#a24940]">{downloadError}</p>}
       </section>
     </div>
   );
