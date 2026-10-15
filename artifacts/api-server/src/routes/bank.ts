@@ -256,11 +256,13 @@ router.get("/bank/dashboard", async (req, res): Promise<void> => {
       profile: {
         id: profile.id,
         email: profile.email,
+        customerId: profile.customerId,
         firstName: profile.firstName,
         lastName: profile.lastName,
         phone: profile.phone,
         country: profile.country,
         dateOfBirth: profile.dateOfBirth,
+        transactionPinConfigured: !!profile.transactionPinHash,
         verificationStatus: profile.verificationStatus,
         verificationNote: profile.verificationNote,
         accountStatus: profile.accountStatus,
