@@ -1,6 +1,6 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { useSignIn, useSignUp } from '@clerk/react';
-import { useLookupCustomerId, useUpdateBankProfile } from '@workspace/api-client-react';
+import { getGetBankProfileQueryKey, useGetBankProfile, useLookupCustomerId, useUpdateBankProfile } from '@workspace/api-client-react';
 import { Link, useLocation } from 'wouter';
 import './auth-pages.css';
 
@@ -139,7 +139,7 @@ export function ClerkSignInForm() {
           <span aria-hidden="true">→</span>
         </button>
       </form>
-      <p className="gb-switch-copy gb-recovery-link"><Link href="/sign-in/email">Forgot your Customer ID?</Link></p>
+      <p className="gb-switch-copy gb-recovery-link"><Link href="/sign-in/email">Forgot your Customer ID or password?</Link></p>
       <p className="gb-switch-copy">New to Globus? <Link href="/sign-up">Create an account <span aria-hidden="true">→</span></Link></p>
     </div>
   );
@@ -148,45 +148,160 @@ export function ClerkSignInForm() {
 export function EmailRecoverySignInForm() {
   const [, setLocation] = useLocation();
   const { signIn, fetchStatus } = useSignIn();
+  const profile = useGetBankProfile({ query: { queryKey: getGetBankProfileQueryKey(), enabled: false } });
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [customerId, setCustomerId] = useState('');
+  const [stage, setStage] = useState<'email' | 'code' | 'password' | 'complete'>('email');
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const busy = fetchStatus === 'fetching';
 
-  const submit = async (event: FormEvent<HTMLFormElement>) => {
+  const sendRecoveryCode = async () => {
+    setError('');
+    setNotice('');
+    try {
+      await signIn.create({ identifier: email.trim() });
+      await signIn.resetPasswordEmailCode.sendCode();
+    } catch {
+      // Keep the same response for unknown addresses and other recovery failures.
+    }
+    setNotice('If an account can be recovered using that address, a verification code has been sent.');
+  };
+
+  const requestCode = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    await sendRecoveryCode();
+    setStage('code');
+  };
+
+  const resendCode = async () => {
+    await sendRecoveryCode();
+  };
+
+  const changeRecoveryEmail = async () => {
+    await signIn.reset();
+    setStage('email');
+    setError('');
+    setNotice('');
+    setVerificationCode('');
+  };
+
+  const verifyCode = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError('');
-    const result = await signIn.password({ identifier: email.trim(), password });
-    if (result.error || signIn.status !== 'complete') {
-      setError('Email or password could not be verified. Check your details and try again.');
-      return;
+    try {
+      const verified = await signIn.resetPasswordEmailCode.verifyCode({
+        code: verificationCode.trim(),
+      });
+      if (verified.error || signIn.status !== 'needs_new_password') {
+        setError('We could not verify those recovery details. Check the code and try again.');
+        return;
+      }
+      setStage('password');
+      setNotice('');
+    } catch {
+      setError('We could not verify those recovery details. Check the code and try again.');
     }
-    const finalized = await signIn.finalize({ navigate: () => undefined });
-    if (finalized.error) {
-      setError('Sign-in could not be completed. Please try again.');
-      return;
+  };
+
+  const resetPassword = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError('');
+    try {
+      const reset = await signIn.resetPasswordEmailCode.submitPassword({ password: newPassword });
+      if (reset.error || signIn.status !== 'complete') {
+        setError('We could not complete recovery. Check your password and try again.');
+        return;
+      }
+      const finalized = await signIn.finalize({ navigate: () => undefined });
+      if (finalized.error) {
+        setError('We could not complete recovery. Check your password and try again.');
+        return;
+      }
+      const memberProfile = await profile.refetch();
+      setCustomerId(memberProfile.data?.customerId ?? '');
+      setStage('complete');
+    } catch {
+      setError('We could not complete recovery. Check your password and try again.');
     }
-    setLocation('/settings');
   };
 
   return (
     <div className="gb-signin-form-wrap">
       <div className="gb-form-heading">
         <span className="gb-step-label">CUSTOMER ID RECOVERY <i /></span>
-        <h1>Sign in with email</h1>
-        <p>After signing in, find your Customer ID in Settings or Receive.</p>
+        <h1>
+          {stage === 'email' && 'Recover your account'}
+          {stage === 'code' && 'Check your email'}
+          {stage === 'password' && 'Choose a new password'}
+          {stage === 'complete' && 'Recovery complete'}
+        </h1>
+        <p>
+          {stage === 'email' && 'Verify your email to reset your password and retrieve your Customer ID.'}
+          {stage === 'code' && 'Enter the recovery code if one was sent to you.'}
+          {stage === 'password' && 'Set a new password for your Globus account.'}
+          {stage === 'complete' && 'Your password has been reset.'}
+        </p>
       </div>
-      <form className="gb-auth-form" onSubmit={submit}>
-        <label className="gb-field-label" htmlFor="gb-recovery-email">Email address</label>
-        <input id="gb-recovery-email" className="gb-input" type="email" autoComplete="email" maxLength={254} value={email} onChange={event => setEmail(event.target.value)} required />
-        <label className="gb-field-label gb-signin-spaced-label" htmlFor="gb-recovery-password">Password</label>
-        <input id="gb-recovery-password" className="gb-input" type="password" autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} required />
-        {error && <p role="alert" className="gb-auth-error">{error}</p>}
-        <button className="gb-primary-button" type="submit" disabled={busy || !email.trim() || !password}>
-          <span>{busy ? 'Signing in…' : 'Sign in and retrieve ID'}</span>
-          <span aria-hidden="true">→</span>
-        </button>
-      </form>
+      {stage === 'email' && (
+        <form className="gb-auth-form" onSubmit={requestCode}>
+          <label className="gb-field-label" htmlFor="gb-recovery-email">Email address</label>
+          <input id="gb-recovery-email" className="gb-input" type="email" autoComplete="email" maxLength={254} value={email} onChange={event => setEmail(event.target.value)} required />
+          {error && <p role="alert" className="gb-auth-error">{error}</p>}
+          <button className="gb-primary-button" type="submit" disabled={busy || !email.trim()}>
+            <span>{busy ? 'Requesting code…' : 'Send recovery code'}</span>
+            <span aria-hidden="true">→</span>
+          </button>
+        </form>
+      )}
+      {stage === 'code' && (
+        <form className="gb-auth-form" onSubmit={verifyCode}>
+          <label className="gb-field-label" htmlFor="gb-recovery-code">Recovery code</label>
+          <input id="gb-recovery-code" className="gb-input" type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={12} value={verificationCode} onChange={event => setVerificationCode(event.target.value.trim())} required />
+          {notice && <p className="gb-auth-notice" role="status">{notice}</p>}
+          {error && <p role="alert" className="gb-auth-error">{error}</p>}
+          <button className="gb-primary-button" type="submit" disabled={busy || !verificationCode.trim()}>
+            <span>{busy ? 'Verifying…' : 'Verify code'}</span>
+            <span aria-hidden="true">→</span>
+          </button>
+          <button className="gb-recovery-secondary" type="button" disabled={busy} onClick={resendCode}>
+            Send another code
+          </button>
+          <button className="gb-recovery-secondary" type="button" disabled={busy} onClick={changeRecoveryEmail}>
+            Use a different email address
+          </button>
+        </form>
+      )}
+      {stage === 'password' && (
+        <form className="gb-auth-form" onSubmit={resetPassword}>
+          <label className="gb-field-label" htmlFor="gb-new-password">New password</label>
+          <input id="gb-new-password" className="gb-input" type="password" autoComplete="new-password" minLength={8} value={newPassword} onChange={event => setNewPassword(event.target.value)} required />
+          <p className="gb-password-hint">Use at least 8 characters. Additional security rules are checked securely by Clerk.</p>
+          {error && <p role="alert" className="gb-auth-error">{error}</p>}
+          <button className="gb-primary-button" type="submit" disabled={busy || newPassword.length < 8}>
+            <span>{busy ? 'Resetting password…' : 'Reset password'}</span>
+            <span aria-hidden="true">→</span>
+          </button>
+        </form>
+      )}
+      {stage === 'complete' && (
+        <div className="gb-auth-form">
+          {customerId ? (
+            <>
+              <label className="gb-field-label" htmlFor="gb-recovered-customer-id">Your Customer ID</label>
+              <output id="gb-recovered-customer-id" className="gb-input gb-recovered-customer-id">{customerId}</output>
+            </>
+          ) : (
+            <p className="gb-switch-copy">Your password is reset. Sign in to view your Customer ID in Settings.</p>
+          )}
+          <button className="gb-primary-button" type="button" onClick={() => setLocation(customerId ? '/dashboard' : '/settings')}>
+            <span>{customerId ? 'Continue to your account' : 'Open Settings'}</span>
+            <span aria-hidden="true">→</span>
+          </button>
+        </div>
+      )}
       <p className="gb-switch-copy"><Link href="/sign-in">Back to Customer ID sign-in</Link></p>
     </div>
   );
