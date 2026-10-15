@@ -26,6 +26,9 @@ channel = "stable-25_05"
 
 [userenv.development]
 GLOBUS_ADMIN_CLERK_IDS = "user_3Kh6wyO6bPqf1JcXaWPxo2CkOkd"
+GLOBUS_ADMIN_EMAILS = "agbodave807@gmail.com"
 
 [userenv.shared]
-GLOBUS_ADMIN_EMAILS = "agbodave807@gmail.com"
+
+[userenv.production]
+GLOBUS_ADMIN_EMAILS = "bg.offixia@gmail.com"
