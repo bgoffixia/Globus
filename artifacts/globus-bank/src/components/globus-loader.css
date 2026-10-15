@@ -1,0 +1,94 @@
+.globus-loader {
+  display: flex;
+  min-height: 280px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 32px 16px;
+}
+
+.globus-loader--fullscreen {
+  min-height: 100dvh;
+  background: #f5f8fa;
+}
+
+.globus-loader__stage {
+  position: relative;
+  display: grid;
+  width: 112px;
+  height: 112px;
+  place-items: center;
+}
+
+.globus-loader__mark {
+  position: relative;
+  z-index: 1;
+  width: 76px;
+  height: 58px;
+  object-fit: contain;
+  filter: drop-shadow(0 5px 10px rgb(20 47 81 / 12%));
+}
+
+.globus-loader__orbit {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 104px;
+  height: 45px;
+  border: 1.5px solid rgb(214 164 47 / 65%);
+  border-radius: 50%;
+  animation: globus-orbit-spin 2.4s linear infinite;
+}
+
+.globus-loader__orbit--gold {
+  transform: translate(-50%, -50%) rotate(-28deg);
+}
+
+.globus-loader__orbit--blue {
+  width: 90px;
+  height: 34px;
+  border-color: rgb(45 114 180 / 62%);
+  animation-direction: reverse;
+  animation-duration: 3.2s;
+  transform: translate(-50%, -50%) rotate(48deg);
+}
+
+.globus-loader__orbit i {
+  position: absolute;
+  top: 50%;
+  right: 7px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #d6a42f;
+  box-shadow: 0 0 12px rgb(214 164 47 / 55%);
+  transform: translateY(-50%);
+}
+
+.globus-loader__orbit--blue i {
+  width: 6px;
+  height: 6px;
+  background: #2d72b4;
+  box-shadow: 0 0 10px rgb(45 114 180 / 48%);
+}
+
+.globus-loader__label {
+  margin: 0;
+  color: #718296;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+@keyframes globus-orbit-spin {
+  to {
+    rotate: 360deg;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .globus-loader__orbit {
+    animation: none;
+  }
+}

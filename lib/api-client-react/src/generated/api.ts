@@ -28,6 +28,8 @@ import type {
   AdminSummary,
   AdminTransactionDeleteInput,
   AdminTransactionDeleteResult,
+  AdminTransactionPinResetInput,
+  AdminTransactionPinResetResult,
   AdminTransactionStatusChange,
   AdminTransactionStatusUpdateInput,
   AdminUser,
@@ -55,6 +57,8 @@ import type {
   ListAdminUsersParams,
   ListBankTransactionsParams,
   NotFoundResponse,
+  TransactionPinInput,
+  TransactionPinUpdateResult,
   TransferInput,
   UnauthorizedResponse,
   Wallet
@@ -566,6 +570,94 @@ export const useUpdateBankProfile = <TError = ErrorType<BadRequestResponse | Una
         TContext
       > => {
       return useMutation(getUpdateBankProfileMutationOptions(options));
+    }
+
+export const getUpdateTransactionPinUrl = () => {
+
+
+
+
+  return `/api/bank/transaction-pin`
+}
+
+/**
+ * @summary Set or change the authenticated user's transaction PIN
+ */
+export const updateTransactionPin = async (transactionPinInput: TransactionPinInput, options?: Parameters<typeof customFetch>[1]): Promise<TransactionPinUpdateResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<TransactionPinUpdateResult>(getUpdateTransactionPinUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(transactionPinInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateTransactionPinMutationKey = () => ['updateTransactionPin'] as const;
+
+export const getUpdateTransactionPinMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateTransactionPin>>, TError,UpdateTransactionPinMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateTransactionPin>>, TError,UpdateTransactionPinMutationVariables, TContext> => {
+
+const mutationKey = getUpdateTransactionPinMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateTransactionPin>>, UpdateTransactionPinMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateTransactionPin(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateTransactionPinMutationResult = NonNullable<Awaited<ReturnType<typeof updateTransactionPin>>>
+    export type UpdateTransactionPinMutationBody = BodyType<TransactionPinInput>
+    export type UpdateTransactionPinMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse>
+    export type UpdateTransactionPinMutationVariables = {data: BodyType<TransactionPinInput>}
+
+    /**
+ * @summary Set or change the authenticated user's transaction PIN
+ */
+export const useUpdateTransactionPin = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateTransactionPin>>, TError,UpdateTransactionPinMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateTransactionPin>>,
+        TError,
+        UpdateTransactionPinMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateTransactionPinMutationOptions(options));
     }
 
 export const getListMyIdentityDocumentsUrl = () => {
@@ -1805,6 +1897,95 @@ export function useGetAdminUserDetail<TData = Awaited<ReturnType<typeof getAdmin
 
 
 
+
+export const getResetAdminUserTransactionPinUrl = (userId: string,) => {
+
+
+
+
+  return `/api/bank/admin/users/${userId}/transaction-pin/reset`
+}
+
+/**
+ * @summary Reset a member's transaction PIN without exposing its value
+ */
+export const resetAdminUserTransactionPin = async (userId: string,
+    adminTransactionPinResetInput: AdminTransactionPinResetInput, options?: Parameters<typeof customFetch>[1]): Promise<AdminTransactionPinResetResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<AdminTransactionPinResetResult>(getResetAdminUserTransactionPinUrl(userId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(adminTransactionPinResetInput)
+  }
+);}
+
+
+
+
+
+export const getResetAdminUserTransactionPinMutationKey = () => ['resetAdminUserTransactionPin'] as const;
+
+export const getResetAdminUserTransactionPinMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resetAdminUserTransactionPin>>, TError,ResetAdminUserTransactionPinMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof resetAdminUserTransactionPin>>, TError,ResetAdminUserTransactionPinMutationVariables, TContext> => {
+
+const mutationKey = getResetAdminUserTransactionPinMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof resetAdminUserTransactionPin>>, ResetAdminUserTransactionPinMutationVariables> = (props) => {
+          const {userId,data} = props ?? {};
+
+          return  resetAdminUserTransactionPin(userId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ResetAdminUserTransactionPinMutationResult = NonNullable<Awaited<ReturnType<typeof resetAdminUserTransactionPin>>>
+    export type ResetAdminUserTransactionPinMutationBody = BodyType<AdminTransactionPinResetInput>
+    export type ResetAdminUserTransactionPinMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
+    export type ResetAdminUserTransactionPinMutationVariables = {userId: string;data: BodyType<AdminTransactionPinResetInput>}
+
+    /**
+ * @summary Reset a member's transaction PIN without exposing its value
+ */
+export const useResetAdminUserTransactionPin = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resetAdminUserTransactionPin>>, TError,ResetAdminUserTransactionPinMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof resetAdminUserTransactionPin>>,
+        TError,
+        ResetAdminUserTransactionPinMutationVariables,
+        TContext
+      > => {
+      return useMutation(getResetAdminUserTransactionPinMutationOptions(options));
+    }
 
 export const getUpdateAdminUserStatusUrl = (userId: string,) => {
 

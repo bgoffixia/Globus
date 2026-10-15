@@ -135,6 +135,32 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /bank/transaction-pin:
+    put:
+      operationId: updateTransactionPin
+      tags: [bank]
+      summary: Set or change the authenticated user's transaction PIN
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransactionPinInput"
+      responses:
+        "200":
+          description: Transaction PIN saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionPinUpdateResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
   /bank/verification/documents:
     get:
       operationId: listMyIdentityDocuments
@@ -472,6 +498,39 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AdminUserDetail"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /bank/admin/users/{userId}/transaction-pin/reset:
+    post:
+      operationId: resetAdminUserTransactionPin
+      tags: [admin]
+      summary: Reset a member's transaction PIN without exposing its value
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminTransactionPinResetInput"
+      responses:
+        "200":
+          description: PIN reset; member must set a new PIN before their next transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminTransactionPinResetResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -837,11 +896,33 @@ components:
         phone: { type: ["string", "null"] }
         country: { type: ["string", "null"] }
         dateOfBirth: { type: ["string", "null"], pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }
+        transactionPinConfigured: { type: boolean }
         verificationStatus: { type: string, enum: [not_started, pending, approved, rejected, additional_information_required] }
         verificationNote: { type: ["string", "null"] }
         accountStatus: { type: string, enum: [active, suspended] }
         createdAt: { type: string, format: date-time }
-      required: [id, email, firstName, lastName, phone, country, dateOfBirth, verificationStatus, verificationNote, accountStatus, createdAt]
+      required: [id, email, firstName, lastName, phone, country, dateOfBirth, transactionPinConfigured, verificationStatus, verificationNote, accountStatus, createdAt]
+    TransactionPinInput:
+      type: object
+      properties:
+        pin: { type: string, pattern: "^[0-9]{6}$" }
+        currentPin: { type: string, pattern: "^[0-9]{6}$" }
+      required: [pin]
+    TransactionPinUpdateResult:
+      type: object
+      properties:
+        configured: { type: boolean, const: true }
+      required: [configured]
+    AdminTransactionPinResetInput:
+      type: object
+      properties:
+        reason: { type: string, minLength: 5, maxLength: 500 }
+      required: [reason]
+    AdminTransactionPinResetResult:
+      type: object
+      properties:
+        configured: { type: boolean, const: false }
+      required: [configured]
     BankProfileInput:
       type: object
       properties:
@@ -918,7 +999,8 @@ components:
         amount: { type: string, pattern: "^[0-9]{1,12}(\\.[0-9]{1,2})?$" }
         description: { type: string, maxLength: 140 }
         idempotencyKey: { type: string, minLength: 16, maxLength: 100 }
-      required: [recipientEmail, currency, amount, idempotencyKey]
+        transactionPin: { type: string, pattern: "^[0-9]{6}$" }
+      required: [recipientEmail, currency, amount, idempotencyKey, transactionPin]
     ExternalTransferInput:
       type: object
       properties:
@@ -930,7 +1012,8 @@ components:
         amount: { type: string, pattern: "^[0-9]{1,12}(\\.[0-9]{1,2})?$" }
         description: { type: string, maxLength: 140 }
         idempotencyKey: { type: string, minLength: 16, maxLength: 100 }
-      required: [recipientName, destinationCountry, bankName, accountNumberLast4, currency, amount, idempotencyKey]
+        transactionPin: { type: string, pattern: "^[0-9]{6}$" }
+      required: [recipientName, destinationCountry, bankName, accountNumberLast4, currency, amount, idempotencyKey, transactionPin]
     IncomingExternalTransferInput:
       type: object
       properties:
@@ -940,7 +1023,8 @@ components:
         amount: { type: string, pattern: "^[0-9]{1,12}(\\.[0-9]{1,2})?$" }
         description: { type: string, maxLength: 140 }
         idempotencyKey: { type: string, minLength: 16, maxLength: 100 }
-      required: [sourceName, sourceCountry, currency, amount, idempotencyKey]
+        transactionPin: { type: string, pattern: "^[0-9]{6}$" }
+      required: [sourceName, sourceCountry, currency, amount, idempotencyKey, transactionPin]
     LedgerRequestInput:
       type: object
       properties:
@@ -949,7 +1033,8 @@ components:
         amount: { type: string, pattern: "^[0-9]{1,12}(\\.[0-9]{1,2})?$" }
         description: { type: string, maxLength: 140 }
         idempotencyKey: { type: string, minLength: 16, maxLength: 100 }
-      required: [type, currency, amount, idempotencyKey]
+        transactionPin: { type: string, pattern: "^[0-9]{6}$" }
+      required: [type, currency, amount, idempotencyKey, transactionPin]
     LedgerRequest:
       type: object
       properties:
@@ -983,7 +1068,8 @@ components:
       properties:
         decision: { type: string, enum: [approve, reject] }
         reason: { type: string, minLength: 5, maxLength: 500 }
-      required: [decision, reason]
+        transactionPin: { type: string, pattern: "^[0-9]{6}$" }
+      required: [decision, reason, transactionPin]
     AdminAccess:
       type: object
       properties:
@@ -1020,13 +1106,14 @@ components:
         user: { $ref: "#/components/schemas/AdminUser" }
         phone: { type: ["string", "null"] }
         dateOfBirth: { type: ["string", "null"], pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }
+        transactionPinConfigured: { type: boolean }
         wallets:
           type: array
           items: { $ref: "#/components/schemas/Wallet" }
         transactions:
           type: array
           items: { $ref: "#/components/schemas/BankTransaction" }
-      required: [user, phone, dateOfBirth, wallets, transactions]
+      required: [user, phone, dateOfBirth, transactionPinConfigured, wallets, transactions]
     AdminUserStatusInput:
       type: object
       properties:
@@ -1050,7 +1137,8 @@ components:
         description: { type: string, minLength: 1, maxLength: 240 }
         reason: { type: string, minLength: 5, maxLength: 500 }
         idempotencyKey: { type: string, minLength: 16, maxLength: 100 }
-      required: [direction, currency, amount, senderName, description, reason, idempotencyKey]
+        transactionPin: { type: string, pattern: "^[0-9]{6}$" }
+      required: [direction, currency, amount, senderName, description, reason, idempotencyKey, transactionPin]
     AdminTransactionDeleteInput:
       type: object
       properties:

@@ -5,6 +5,15 @@ import { ErrorBoundary } from '@/components/error-boundary';
 
 import './index.css';
 
+if ('serviceWorker' in navigator) {
+  const scope = import.meta.env.BASE_URL;
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register(`${scope}sw.js`, { scope }).catch(error => {
+      console.error('Globus offline shell could not be registered.', error);
+    });
+  });
+}
+
 createRoot(document.getElementById('root')!, {
   // Keeps caught errors off reportError(), which would raise the dev overlay.
   onCaughtError: (error, errorInfo) => {

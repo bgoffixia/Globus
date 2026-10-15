@@ -2,6 +2,7 @@ import {
   bigint,
   date,
   index,
+  integer,
   pgEnum,
   pgTable,
   text,
@@ -53,6 +54,13 @@ export const bankUsersTable = pgTable("bank_users", {
   phone: text("phone"),
   country: text("country"),
   dateOfBirth: date("date_of_birth", { mode: "string" }),
+  transactionPinHash: text("transaction_pin_hash"),
+  transactionPinFailedAttempts: integer("transaction_pin_failed_attempts")
+    .notNull()
+    .default(0),
+  transactionPinLockedUntil: timestamp("transaction_pin_locked_until", {
+    withTimezone: true,
+  }),
   verificationStatus: text("verification_status").notNull().default("not_started"),
   verificationNote: text("verification_note"),
   accountStatus: text("account_status").notNull().default("active"),

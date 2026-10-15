@@ -8,6 +8,7 @@ import { BankShell } from '@/components/bank-shell';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { AuthFrame, ClerkSignUpForm } from '@/components/auth-pages';
+import { PwaInstallPrompt } from '@/components/pwa-install-prompt';
 import NotFound from '@/pages/not-found';
 import {
   AdminPage,
@@ -225,6 +226,7 @@ function ClerkRoutes() {
         <Route path="/contact"><DisclosurePage path="/contact" /></Route>
         <Route component={NotFound} />
       </Switch>
+      <PwaInstallPrompt />
     </ClerkProvider>
   );
 }

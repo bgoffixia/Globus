@@ -20,4 +20,6 @@ export interface LedgerRequestInput {
      * @maxLength 100
      */
   idempotencyKey: string;
+  /** @pattern ^[0-9]{6}$ */
+  transactionPin: string;
 }

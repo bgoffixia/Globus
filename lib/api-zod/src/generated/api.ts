@@ -31,6 +31,7 @@ export const GetBankProfileResponse = zod.object({
   "phone": zod.string().nullable(),
   "country": zod.string().nullable(),
   "dateOfBirth": zod.string().regex(getBankProfileResponseDateOfBirthRegExp).nullable(),
+  "transactionPinConfigured": zod.boolean(),
   "verificationStatus": zod.enum(['not_started', 'pending', 'approved', 'rejected', 'additional_information_required']),
   "verificationNote": zod.string().nullable(),
   "accountStatus": zod.enum(['active', 'suspended']),
@@ -53,6 +54,7 @@ export const GetBankDashboardResponse = zod.object({
   "phone": zod.string().nullable(),
   "country": zod.string().nullable(),
   "dateOfBirth": zod.string().regex(getBankDashboardResponseProfileDateOfBirthRegExp).nullable(),
+  "transactionPinConfigured": zod.boolean(),
   "verificationStatus": zod.enum(['not_started', 'pending', 'approved', 'rejected', 'additional_information_required']),
   "verificationNote": zod.string().nullable(),
   "accountStatus": zod.enum(['active', 'suspended']),
@@ -168,10 +170,28 @@ export const UpdateBankProfileResponse = zod.object({
   "phone": zod.string().nullable(),
   "country": zod.string().nullable(),
   "dateOfBirth": zod.string().regex(updateBankProfileResponseDateOfBirthRegExp).nullable(),
+  "transactionPinConfigured": zod.boolean(),
   "verificationStatus": zod.enum(['not_started', 'pending', 'approved', 'rejected', 'additional_information_required']),
   "verificationNote": zod.string().nullable(),
   "accountStatus": zod.enum(['active', 'suspended']),
   "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Set or change the authenticated user's transaction PIN
+ */
+export const updateTransactionPinBodyPinRegExp = new RegExp('^[0-9]{6}$');
+export const updateTransactionPinBodyCurrentPinRegExp = new RegExp('^[0-9]{6}$');
+
+
+export const UpdateTransactionPinBody = zod.object({
+  "pin": zod.string().regex(updateTransactionPinBodyPinRegExp),
+  "currentPin": zod.string().regex(updateTransactionPinBodyCurrentPinRegExp).optional()
+})
+
+export const UpdateTransactionPinResponse = zod.object({
+  "configured": zod.literal(true)
 })
 
 
@@ -260,6 +280,7 @@ export const SubmitIdentityDocumentsResponse = zod.object({
   "phone": zod.string().nullable(),
   "country": zod.string().nullable(),
   "dateOfBirth": zod.string().regex(submitIdentityDocumentsResponseDateOfBirthRegExp).nullable(),
+  "transactionPinConfigured": zod.boolean(),
   "verificationStatus": zod.enum(['not_started', 'pending', 'approved', 'rejected', 'additional_information_required']),
   "verificationNote": zod.string().nullable(),
   "accountStatus": zod.enum(['active', 'suspended']),
@@ -276,6 +297,7 @@ export const createBankTransferBodyDescriptionMax = 140;
 export const createBankTransferBodyIdempotencyKeyMin = 16;
 export const createBankTransferBodyIdempotencyKeyMax = 100;
 
+export const createBankTransferBodyTransactionPinRegExp = new RegExp('^[0-9]{6}$');
 
 
 export const CreateBankTransferBody = zod.object({
@@ -283,7 +305,8 @@ export const CreateBankTransferBody = zod.object({
   "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
   "amount": zod.string().regex(createBankTransferBodyAmountRegExp),
   "description": zod.string().max(createBankTransferBodyDescriptionMax).optional(),
-  "idempotencyKey": zod.string().min(createBankTransferBodyIdempotencyKeyMin).max(createBankTransferBodyIdempotencyKeyMax)
+  "idempotencyKey": zod.string().min(createBankTransferBodyIdempotencyKeyMin).max(createBankTransferBodyIdempotencyKeyMax),
+  "transactionPin": zod.string().regex(createBankTransferBodyTransactionPinRegExp)
 })
 
 export const CreateBankTransferResponse = zod.object({
@@ -319,6 +342,7 @@ export const createExternalTransferBodyDescriptionMax = 140;
 export const createExternalTransferBodyIdempotencyKeyMin = 16;
 export const createExternalTransferBodyIdempotencyKeyMax = 100;
 
+export const createExternalTransferBodyTransactionPinRegExp = new RegExp('^[0-9]{6}$');
 
 
 export const CreateExternalTransferBody = zod.object({
@@ -329,7 +353,8 @@ export const CreateExternalTransferBody = zod.object({
   "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
   "amount": zod.string().regex(createExternalTransferBodyAmountRegExp),
   "description": zod.string().max(createExternalTransferBodyDescriptionMax).optional(),
-  "idempotencyKey": zod.string().min(createExternalTransferBodyIdempotencyKeyMin).max(createExternalTransferBodyIdempotencyKeyMax)
+  "idempotencyKey": zod.string().min(createExternalTransferBodyIdempotencyKeyMin).max(createExternalTransferBodyIdempotencyKeyMax),
+  "transactionPin": zod.string().regex(createExternalTransferBodyTransactionPinRegExp)
 })
 
 export const CreateExternalTransferResponse = zod.void()
@@ -350,6 +375,7 @@ export const createIncomingExternalTransferBodyDescriptionMax = 140;
 export const createIncomingExternalTransferBodyIdempotencyKeyMin = 16;
 export const createIncomingExternalTransferBodyIdempotencyKeyMax = 100;
 
+export const createIncomingExternalTransferBodyTransactionPinRegExp = new RegExp('^[0-9]{6}$');
 
 
 export const CreateIncomingExternalTransferBody = zod.object({
@@ -358,7 +384,8 @@ export const CreateIncomingExternalTransferBody = zod.object({
   "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
   "amount": zod.string().regex(createIncomingExternalTransferBodyAmountRegExp),
   "description": zod.string().max(createIncomingExternalTransferBodyDescriptionMax).optional(),
-  "idempotencyKey": zod.string().min(createIncomingExternalTransferBodyIdempotencyKeyMin).max(createIncomingExternalTransferBodyIdempotencyKeyMax)
+  "idempotencyKey": zod.string().min(createIncomingExternalTransferBodyIdempotencyKeyMin).max(createIncomingExternalTransferBodyIdempotencyKeyMax),
+  "transactionPin": zod.string().regex(createIncomingExternalTransferBodyTransactionPinRegExp)
 })
 
 export const CreateIncomingExternalTransferResponse = zod.void()
@@ -373,6 +400,7 @@ export const createLedgerRequestBodyDescriptionMax = 140;
 export const createLedgerRequestBodyIdempotencyKeyMin = 16;
 export const createLedgerRequestBodyIdempotencyKeyMax = 100;
 
+export const createLedgerRequestBodyTransactionPinRegExp = new RegExp('^[0-9]{6}$');
 
 
 export const CreateLedgerRequestBody = zod.object({
@@ -380,7 +408,8 @@ export const CreateLedgerRequestBody = zod.object({
   "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
   "amount": zod.string().regex(createLedgerRequestBodyAmountRegExp),
   "description": zod.string().max(createLedgerRequestBodyDescriptionMax).optional(),
-  "idempotencyKey": zod.string().min(createLedgerRequestBodyIdempotencyKeyMin).max(createLedgerRequestBodyIdempotencyKeyMax)
+  "idempotencyKey": zod.string().min(createLedgerRequestBodyIdempotencyKeyMin).max(createLedgerRequestBodyIdempotencyKeyMax),
+  "transactionPin": zod.string().regex(createLedgerRequestBodyTransactionPinRegExp)
 })
 
 export const CreateLedgerRequestResponse = zod.object({
@@ -448,11 +477,13 @@ export const ReviewAdminLedgerRequestParams = zod.object({
 export const reviewAdminLedgerRequestBodyReasonMin = 5;
 export const reviewAdminLedgerRequestBodyReasonMax = 500;
 
+export const reviewAdminLedgerRequestBodyTransactionPinRegExp = new RegExp('^[0-9]{6}$');
 
 
 export const ReviewAdminLedgerRequestBody = zod.object({
   "decision": zod.enum(['approve', 'reject']),
-  "reason": zod.string().min(reviewAdminLedgerRequestBodyReasonMin).max(reviewAdminLedgerRequestBodyReasonMax)
+  "reason": zod.string().min(reviewAdminLedgerRequestBodyReasonMin).max(reviewAdminLedgerRequestBodyReasonMax),
+  "transactionPin": zod.string().regex(reviewAdminLedgerRequestBodyTransactionPinRegExp)
 })
 
 export const ReviewAdminLedgerRequestResponse = zod.object({
@@ -529,6 +560,7 @@ export const GetAdminUserDetailResponse = zod.object({
 }),
   "phone": zod.string().nullable(),
   "dateOfBirth": zod.string().regex(getAdminUserDetailResponseDateOfBirthRegExp).nullable(),
+  "transactionPinConfigured": zod.boolean(),
   "wallets": zod.array(zod.object({
   "id": zod.string(),
   "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
@@ -550,6 +582,30 @@ export const GetAdminUserDetailResponse = zod.object({
   "mode": zod.enum(['internal_ledger']),
   "createdAt": zod.coerce.date()
 }))
+})
+
+
+/**
+ * @summary Reset a member's transaction PIN without exposing its value
+ */
+
+
+
+export const ResetAdminUserTransactionPinParams = zod.object({
+  "userId": zod.coerce.string().min(1)
+})
+
+export const resetAdminUserTransactionPinBodyReasonMin = 5;
+export const resetAdminUserTransactionPinBodyReasonMax = 500;
+
+
+
+export const ResetAdminUserTransactionPinBody = zod.object({
+  "reason": zod.string().min(resetAdminUserTransactionPinBodyReasonMin).max(resetAdminUserTransactionPinBodyReasonMax)
+})
+
+export const ResetAdminUserTransactionPinResponse = zod.object({
+  "configured": zod.literal(false)
 })
 
 
@@ -680,6 +736,7 @@ export const createAdminFundingBodyReasonMax = 500;
 export const createAdminFundingBodyIdempotencyKeyMin = 16;
 export const createAdminFundingBodyIdempotencyKeyMax = 100;
 
+export const createAdminFundingBodyTransactionPinRegExp = new RegExp('^[0-9]{6}$');
 
 
 export const CreateAdminFundingBody = zod.object({
@@ -689,7 +746,8 @@ export const CreateAdminFundingBody = zod.object({
   "senderName": zod.string().min(1).max(createAdminFundingBodySenderNameMax),
   "description": zod.string().min(1).max(createAdminFundingBodyDescriptionMax),
   "reason": zod.string().min(createAdminFundingBodyReasonMin).max(createAdminFundingBodyReasonMax),
-  "idempotencyKey": zod.string().min(createAdminFundingBodyIdempotencyKeyMin).max(createAdminFundingBodyIdempotencyKeyMax)
+  "idempotencyKey": zod.string().min(createAdminFundingBodyIdempotencyKeyMin).max(createAdminFundingBodyIdempotencyKeyMax),
+  "transactionPin": zod.string().regex(createAdminFundingBodyTransactionPinRegExp)
 })
 
 export const CreateAdminFundingResponse = zod.object({

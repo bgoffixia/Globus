@@ -24,6 +24,8 @@ import {
   ListBankWalletsResponse,
   SubmitIdentityDocumentsBody,
   SubmitIdentityDocumentsResponse,
+  UpdateTransactionPinBody,
+  UpdateTransactionPinResponse,
   UpdateBankProfileBody,
   UpdateBankProfileResponse,
 } from "@workspace/api-zod";
@@ -58,6 +60,11 @@ import {
   sealIdentityDocumentUpload,
   validateUploadedIdentityDocument,
 } from "../lib/identityDocumentStorage";
+import {
+  updateTransactionPin as saveTransactionPin,
+  verifyTransactionPin,
+  type TransactionPinResult,
+} from "../lib/transaction-pin";
 
 const router: IRouter = Router();
 
@@ -69,6 +76,29 @@ function rejectExternalTransfer(res: Response, kind: "deposit" | "payout"): bool
         : "External payouts are not available. Submit a ledger withdrawal request instead.",
   });
   return true;
+}
+
+function respondWithTransactionPinError(
+  res: Response,
+  result: Exclude<TransactionPinResult, "valid">,
+): void {
+  if (result === "not_configured") {
+    res.status(409).json({
+      error: "Set a 6-digit transaction PIN in Settings before making transactions.",
+    });
+    return;
+  }
+  if (result === "locked") {
+    res.status(429).json({
+      error: "Too many incorrect PIN attempts. Try again in 15 minutes.",
+    });
+    return;
+  }
+  if (result === "invalid") {
+    res.status(403).json({ error: "The transaction PIN is incorrect." });
+    return;
+  }
+  res.status(404).json({ error: "The account for this transaction was not found." });
 }
 
 const requireSignedIn: RequestHandler = (req, res, next) => {
@@ -163,6 +193,7 @@ router.get("/bank/me", async (req, res): Promise<void> => {
       phone: user.phone,
       country: user.country,
       dateOfBirth: user.dateOfBirth,
+      transactionPinConfigured: !!user.transactionPinHash,
       verificationStatus: user.verificationStatus,
       verificationNote: user.verificationNote,
       accountStatus: user.accountStatus,
@@ -293,12 +324,51 @@ router.put("/bank/profile", async (req, res): Promise<void> => {
       phone: user.phone,
       country: user.country,
       dateOfBirth: user.dateOfBirth,
+      transactionPinConfigured: !!user.transactionPinHash,
       verificationStatus: user.verificationStatus,
       verificationNote: user.verificationNote,
       accountStatus: user.accountStatus,
       createdAt: user.createdAt.toISOString(),
     }),
   );
+});
+
+router.put("/bank/transaction-pin", async (req, res): Promise<void> => {
+  const authUserId = getAuth(req).userId;
+  if (!authUserId) {
+    res.status(401).json({ error: "Sign in to access your Globus account." });
+    return;
+  }
+  const parsed = UpdateTransactionPinBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const user = await getOrCreateBankUser(authUserId);
+  const result = await saveTransactionPin(
+    user.id,
+    parsed.data.pin,
+    parsed.data.currentPin,
+  );
+  if (result === "updated") {
+    res.json(UpdateTransactionPinResponse.parse({ configured: true }));
+    return;
+  }
+  if (result === "current_pin_required") {
+    res.status(400).json({ error: "Enter your current transaction PIN to change it." });
+    return;
+  }
+  if (result === "locked") {
+    res.status(429).json({
+      error: "Too many incorrect PIN attempts. Try again in 15 minutes.",
+    });
+    return;
+  }
+  if (result === "invalid") {
+    res.status(403).json({ error: "The current transaction PIN is incorrect." });
+    return;
+  }
+  res.status(404).json({ error: "The account for this transaction was not found." });
 });
 
 router.get("/bank/verification/documents", async (req, res): Promise<void> => {
@@ -699,6 +769,12 @@ router.post("/bank/transfers", async (req, res): Promise<void> => {
 
   if (amountMinor <= 0n) {
     res.status(400).json({ error: "The transfer amount must be greater than zero." });
+    return;
+  }
+
+  const pinResult = await verifyTransactionPin(userId, parsed.data.transactionPin);
+  if (pinResult !== "valid") {
+    respondWithTransactionPinError(res, pinResult);
     return;
   }
 
@@ -1161,6 +1237,12 @@ router.post("/bank/ledger-requests", async (req, res): Promise<void> => {
         createdAt: existing[0].createdAt.toISOString(),
       }),
     );
+    return;
+  }
+
+  const pinResult = await verifyTransactionPin(userId, parsed.data.transactionPin);
+  if (pinResult !== "valid") {
+    respondWithTransactionPinError(res, pinResult);
     return;
   }
 

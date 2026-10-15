@@ -35,6 +35,9 @@ import {
   ReviewAdminLedgerRequestBody,
   ReviewAdminLedgerRequestParams,
   ReviewAdminLedgerRequestResponse,
+  ResetAdminUserTransactionPinBody,
+  ResetAdminUserTransactionPinParams,
+  ResetAdminUserTransactionPinResponse,
 } from "@workspace/api-zod";
 import {
   bankAuditLogsTable,
@@ -62,6 +65,7 @@ import {
   deleteIdentityDocumentObject,
   getIdentityDocumentFile,
 } from "../lib/identityDocumentStorage";
+import { verifyTransactionPin } from "../lib/transaction-pin";
 
 const router: IRouter = Router();
 
@@ -94,6 +98,28 @@ const requireAdmin: RequestHandler = (req, res, next) => {
   }
   next();
 };
+
+function respondWithTransactionPinError(
+  res: import("express").Response,
+  result: Exclude<
+    Awaited<ReturnType<typeof verifyTransactionPin>>,
+    "valid"
+  >,
+): void {
+  if (result === "not_configured") {
+    res.status(409).json({
+      error: "Set a 6-digit transaction PIN in Settings before approving transactions.",
+    });
+  } else if (result === "locked") {
+    res.status(429).json({
+      error: "Too many incorrect PIN attempts. Try again in 15 minutes.",
+    });
+  } else if (result === "invalid") {
+    res.status(403).json({ error: "The transaction PIN is incorrect." });
+  } else {
+    res.status(404).json({ error: "The account for this transaction was not found." });
+  }
+}
 
 async function runIdentityReview(input: {
   actorUserId: string;
@@ -319,10 +345,64 @@ router.get(
         },
         phone: user.phone,
         dateOfBirth: user.dateOfBirth,
+        transactionPinConfigured: !!user.transactionPinHash,
         wallets,
         transactions,
       }),
     );
+  },
+);
+
+router.post(
+  "/bank/admin/users/:userId/transaction-pin/reset",
+  requireAdmin,
+  async (req, res): Promise<void> => {
+    const params = ResetAdminUserTransactionPinParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const parsed = ResetAdminUserTransactionPinBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+    const authenticatedClerkId = getAuth(req).userId;
+    if (!authenticatedClerkId) {
+      res.status(401).json({ error: "Sign in to access your Globus account." });
+      return;
+    }
+    const actorUserId = (await ensureBankUser(authenticatedClerkId)).id;
+    const reason = parsed.data.reason.trim();
+    if (reason.length < 5) {
+      res.status(400).json({ error: "Enter a reset reason of at least five characters." });
+      return;
+    }
+    const reset = await db.transaction(async (tx) => {
+      const [target] = await tx
+        .update(bankUsersTable)
+        .set({
+          transactionPinHash: null,
+          transactionPinFailedAttempts: 0,
+          transactionPinLockedUntil: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(bankUsersTable.id, params.data.userId))
+        .returning({ id: bankUsersTable.id });
+      if (!target) return false;
+      await tx.insert(bankAuditLogsTable).values({
+        actorUserId,
+        targetUserId: target.id,
+        action: "reset_transaction_pin",
+        reason,
+      });
+      return true;
+    });
+    if (!reset) {
+      res.status(404).json({ error: "User record not found." });
+      return;
+    }
+    res.json(ResetAdminUserTransactionPinResponse.parse({ configured: false }));
   },
 );
 
@@ -632,6 +712,14 @@ router.post(
       return;
     }
     const actorUserId = (await ensureBankUser(authenticatedClerkId)).id;
+    const pinResult = await verifyTransactionPin(
+      actorUserId,
+      parsed.data.transactionPin,
+    );
+    if (pinResult !== "valid") {
+      respondWithTransactionPinError(res, pinResult);
+      return;
+    }
 
     const reason = parsed.data.reason.trim();
     const senderName = parsed.data.senderName.trim();
@@ -860,6 +948,14 @@ router.patch(
       return;
     }
     const actorUserId = (await ensureBankUser(authenticatedClerkId)).id;
+    const pinResult = await verifyTransactionPin(
+      actorUserId,
+      parsed.data.transactionPin,
+    );
+    if (pinResult !== "valid") {
+      respondWithTransactionPinError(res, pinResult);
+      return;
+    }
     const reason = parsed.data.reason.trim();
     if (reason.length < 5) {
       res.status(400).json({ error: "Enter an audit reason of at least five characters." });

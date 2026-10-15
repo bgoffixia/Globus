@@ -103,12 +103,38 @@ export interface BankProfile {
      * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
      */
   dateOfBirth: string | null;
+  transactionPinConfigured: boolean;
   verificationStatus: BankProfileVerificationStatus;
   /** @nullable */
   verificationNote: string | null;
   accountStatus: BankProfileAccountStatus;
   createdAt: string;
 }
+
+export interface TransactionPinInput {
+  /** @pattern ^[0-9]{6}$ */
+  pin: string;
+  /** @pattern ^[0-9]{6}$ */
+  currentPin?: string;
+}
+
+export const TransactionPinUpdateResultValue = {
+  configured: true,
+} as const;
+export type TransactionPinUpdateResult = typeof TransactionPinUpdateResultValue;
+
+export interface AdminTransactionPinResetInput {
+  /**
+     * @minLength 5
+     * @maxLength 500
+     */
+  reason: string;
+}
+
+export const AdminTransactionPinResetResultValue = {
+  configured: false,
+} as const;
+export type AdminTransactionPinResetResult = typeof AdminTransactionPinResetResultValue;
 
 export interface BankProfileInput {
   /**
@@ -228,6 +254,8 @@ export interface TransferInput {
      * @maxLength 100
      */
   idempotencyKey: string;
+  /** @pattern ^[0-9]{6}$ */
+  transactionPin: string;
 }
 
 export interface ExternalTransferInput {
@@ -258,6 +286,8 @@ export interface ExternalTransferInput {
      * @maxLength 100
      */
   idempotencyKey: string;
+  /** @pattern ^[0-9]{6}$ */
+  transactionPin: string;
 }
 
 export interface IncomingExternalTransferInput {
@@ -281,6 +311,8 @@ export interface IncomingExternalTransferInput {
      * @maxLength 100
      */
   idempotencyKey: string;
+  /** @pattern ^[0-9]{6}$ */
+  transactionPin: string;
 }
 
 export type LedgerRequestInputType = typeof LedgerRequestInputType[keyof typeof LedgerRequestInputType];
@@ -303,6 +335,8 @@ export interface LedgerRequestInput {
      * @maxLength 100
      */
   idempotencyKey: string;
+  /** @pattern ^[0-9]{6}$ */
+  transactionPin: string;
 }
 
 export type LedgerRequestType = typeof LedgerRequestType[keyof typeof LedgerRequestType];
@@ -381,6 +415,8 @@ export interface AdminLedgerRequestReviewInput {
      * @maxLength 500
      */
   reason: string;
+  /** @pattern ^[0-9]{6}$ */
+  transactionPin: string;
 }
 
 export interface AdminAccess {
@@ -440,6 +476,7 @@ export interface AdminUserDetail {
      * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
      */
   dateOfBirth: string | null;
+  transactionPinConfigured: boolean;
   wallets: Wallet[];
   transactions: BankTransaction[];
 }
@@ -514,6 +551,8 @@ export interface AdminFundingInput {
      * @maxLength 100
      */
   idempotencyKey: string;
+  /** @pattern ^[0-9]{6}$ */
+  transactionPin: string;
 }
 
 export interface AdminTransactionDeleteInput {

@@ -69,11 +69,14 @@ import {
   useUpdateAdminTransactionStatus,
   useUpdateAdminUserVerification,
   useReviewAdminLedgerRequest,
+  useResetAdminUserTransactionPin,
+  useUpdateTransactionPin,
   useUpdateBankProfile,
   useDeleteMyIdentityDocument,
   useSubmitIdentityDocuments,
 } from '@workspace/api-client-react';
 import type { AdminLedgerRequest, AdminUser, BankTransaction, IdentityDocument, Wallet } from '@workspace/api-client-react';
+import { GlobusLoader } from '@/components/globus-loader';
 
 const currencies = ['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD'] as const;
 type Currency = typeof currencies[number];
@@ -319,12 +322,14 @@ export function TransactionsPage() {
 
 export function SendPage() {
   const queryClient = useQueryClient();
+  const profileQuery = useGetBankProfile({ query: { queryKey: getGetBankProfileQueryKey() } });
   const walletsQuery = useListBankWallets({ query: { queryKey: getListBankWalletsQueryKey() } });
   const memberTransfer = useCreateBankTransfer();
   const [recipientEmail, setRecipientEmail] = useState('');
   const [currency, setCurrency] = useState<Currency>('USD');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
+  const [transactionPin, setTransactionPin] = useState('');
   const [success, setSuccess] = useState<BankTransaction | null>(null);
   const [receipt, setReceipt] = useState<BankTransaction | null>(null);
   const [message, setMessage] = useState('');
@@ -340,6 +345,7 @@ export function SendPage() {
       setRecipientEmail('');
       setAmount('');
       setDescription('');
+      setTransactionPin('');
       queryClient.invalidateQueries({ queryKey: getGetBankDashboardQueryKey() });
       queryClient.invalidateQueries({ queryKey: getListBankTransactionsQueryKey() });
       queryClient.invalidateQueries({ queryKey: getListBankWalletsQueryKey() });
@@ -353,6 +359,7 @@ export function SendPage() {
         currency,
         amount,
         ...(description.trim() ? { description: description.trim() } : {}),
+        transactionPin,
         idempotencyKey: crypto.randomUUID(),
       },
     }, { onSuccess, onError });
@@ -370,10 +377,12 @@ export function SendPage() {
               <Field label="Amount"><input required inputMode="decimal" pattern="[0-9]+(\.[0-9]{1,2})?" min="0.01" max={available || undefined} value={amount} onChange={event => setAmount(event.target.value)} placeholder="0.00" className={inputClass} /><span className="mt-1.5 block text-[10px] text-[#8391a0]">Available in {currency}: {formatMoney(available, currency)}</span></Field>
             </div>
             <Field label="Note (optional)"><input maxLength={140} value={description} onChange={event => setDescription(event.target.value)} placeholder="What’s this transfer for?" className={inputClass} /></Field>
+            <Field label="6-digit transaction PIN"><input required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="off" value={transactionPin} onChange={event => setTransactionPin(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="Enter your PIN" className={inputClass} /></Field>
           </div>
+          {profileQuery.data?.transactionPinConfigured === false && <p className="mt-4 rounded-lg border border-[#eadfbe] bg-[#fbf7eb] px-4 py-3 text-[10px] leading-5 text-[#806b3d]">Set up your transaction PIN in <Link href="/settings" className="font-bold underline">Settings</Link> before sending a transfer.</p>}
           {(message || hasError) && <p role="alert" className="mt-5 rounded-lg bg-[#fff1ef] px-4 py-3 text-[11px] text-[#a24940]">{message || 'Please check the transfer details and try again.'}</p>}
           {success && <div role="status" className="mt-5 rounded-xl border border-[#cfe5db] bg-[#f1f8f4] p-4 text-[12px] text-[#417461]"><p className="font-bold">Member transfer recorded</p><p className="mt-1">Reference {success.reference} · {humanize(success.status)}</p><p className="mt-1">The recipient’s Globus wallet was credited. No outside account was involved.</p><button type="button" onClick={() => setReceipt(success)} className="mt-3 inline-flex items-center gap-2 rounded-lg border border-[#bfd8cc] bg-white px-3 py-2 text-[10px] font-bold text-[#3d725d] hover:bg-[#f7fbf8]"><FileText size={14} /> View receipt</button></div>}
-          <button disabled={pending || !recipientEmail.trim() || !amount || Number(amount) <= 0 || Number(amount) > available} className="mt-7 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#142f51] text-[12px] font-bold text-white transition hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">{pending ? 'Sending…' : 'Send internal transfer'} <ArrowRight size={15} /></button>
+          <button disabled={pending || transactionPin.length !== 6 || !recipientEmail.trim() || !amount || Number(amount) <= 0 || Number(amount) > available} className="mt-7 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#142f51] text-[12px] font-bold text-white transition hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">{pending ? 'Sending…' : 'Send internal transfer'} <ArrowRight size={15} /></button>
         </form>
         <aside className="rounded-[22px] bg-[#eaf0f4] p-6">
           <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[#638092]">Ledger transfer</p>
@@ -388,11 +397,13 @@ export function SendPage() {
 
 export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }) {
   const queryClient = useQueryClient();
+  const profileQuery = useGetBankProfile({ query: { queryKey: getGetBankProfileQueryKey() } });
   const walletsQuery = useListBankWallets({ query: { queryKey: getListBankWalletsQueryKey() } });
   const mutation = useCreateLedgerRequest();
   const [currency, setCurrency] = useState<Currency>('USD');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
+  const [transactionPin, setTransactionPin] = useState('');
   const [result, setResult] = useState<{ reference: string; message: string; status: string } | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
   const selectedWallet = walletsQuery.data?.find(wallet => wallet.currency === currency);
@@ -405,11 +416,12 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
     event.preventDefault();
     setResult(null);
     setErrorMessage('');
-    mutation.mutate({ data: { type, currency, amount, ...(description.trim() ? { description: description.trim() } : {}), idempotencyKey: crypto.randomUUID() } }, {
+    mutation.mutate({ data: { type, currency, amount, ...(description.trim() ? { description: description.trim() } : {}), transactionPin, idempotencyKey: crypto.randomUUID() } }, {
       onSuccess: request => {
         setResult(request);
         setAmount('');
         setDescription('');
+        setTransactionPin('');
         queryClient.invalidateQueries({ queryKey: getGetBankDashboardQueryKey() });
         queryClient.invalidateQueries({ queryKey: getListBankTransactionsQueryKey() });
         queryClient.invalidateQueries({ queryKey: getListBankWalletsQueryKey() });
@@ -430,9 +442,11 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
             <Field label="Amount"><input required inputMode="decimal" pattern="[0-9]+(\.[0-9]{1,2})?" min="0.01" max={type === 'withdrawal' ? available : 1000000} value={amount} onChange={event => setAmount(event.target.value)} placeholder="0.00" className={inputClass} /><span className="mt-1.5 block text-[10px] text-[#8391a0]">{type === 'withdrawal' ? `Available to withdraw: ${formatMoney(available, currency)}` : 'Maximum request: 1,000,000.00'}</span></Field>
           </div>
           <div className="mt-5"><Field label="Note for the administrator (optional)"><input maxLength={140} value={description} onChange={event => setDescription(event.target.value)} placeholder="Add context for your request" className={inputClass} /></Field></div>
+          <div className="mt-5"><Field label="6-digit transaction PIN"><input required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="off" value={transactionPin} onChange={event => setTransactionPin(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="Enter your PIN" className={inputClass} /></Field></div>
+          {profileQuery.data?.transactionPinConfigured === false && <p className="mt-4 rounded-lg border border-[#eadfbe] bg-[#fbf7eb] px-4 py-3 text-[10px] leading-5 text-[#806b3d]">Set up your transaction PIN in <Link href="/settings" className="font-bold underline">Settings</Link> before submitting this request.</p>}
           {(errorMessage || mutation.isError) && <p role="alert" className="mt-5 rounded-lg bg-[#fff1ef] px-4 py-3 text-[11px] text-[#a24940]">{errorMessage || 'The request could not be recorded.'}</p>}
           {result && <div role="status" className="mt-5 rounded-xl border border-[#d6e6e5] bg-[#f2f8f7] p-4 text-[12px] text-[#426e70]"><p className="font-bold">Request recorded · {humanize(result.status)}</p><p className="mt-1">{result.message}</p><p className="mt-2 font-mono text-[10px]">Reference {result.reference}</p></div>}
-          <button disabled={mutation.isPending || !amount || Number(amount) <= 0 || (type === 'withdrawal' && Number(amount) > available)} className="mt-7 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#142f51] text-[12px] font-bold text-white transition hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">{mutation.isPending ? 'Sending for review…' : 'Submit request'} <ArrowRight size={15} /></button>
+          <button disabled={mutation.isPending || transactionPin.length !== 6 || !amount || Number(amount) <= 0 || (type === 'withdrawal' && Number(amount) > available)} className="mt-7 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#142f51] text-[12px] font-bold text-white transition hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">{mutation.isPending ? 'Sending for review…' : 'Submit request'} <ArrowRight size={15} /></button>
           <p className="mt-3 text-center text-[10px] text-[#8794a1]">Globus stores the request and review result in its internal ledger database.</p>
         </form>
         <div className="rounded-[22px] border border-[#e1e8ee] bg-white p-6">
@@ -542,6 +556,42 @@ export function SettingsPage() {
       },
       onError: error => setNote(error instanceof Error ? error.message : 'Profile could not be saved. Please try again.'),
     });
+  };
+  const updatePin = useUpdateTransactionPin();
+  const [currentPin, setCurrentPin] = useState('');
+  const [newPin, setNewPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
+  const [pinMessage, setPinMessage] = useState('');
+  const submitPin = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setPinMessage('');
+    if (!/^[0-9]{6}$/.test(newPin)) {
+      setPinMessage('Enter a new PIN with exactly six digits.');
+      return;
+    }
+    if (newPin !== confirmPin) {
+      setPinMessage('The new PIN entries do not match.');
+      return;
+    }
+    if (profile?.transactionPinConfigured && !/^[0-9]{6}$/.test(currentPin)) {
+      setPinMessage('Enter your current six-digit PIN to change it.');
+      return;
+    }
+    try {
+      await updatePin.mutateAsync({
+        data: {
+          pin: newPin,
+          ...(profile?.transactionPinConfigured ? { currentPin } : {}),
+        },
+      });
+      await queryClient.invalidateQueries({ queryKey: getGetBankProfileQueryKey() });
+      setCurrentPin('');
+      setNewPin('');
+      setConfirmPin('');
+      setPinMessage('Transaction PIN saved. You will need it for every transaction.');
+    } catch (error) {
+      setPinMessage(error instanceof Error ? error.message : 'The transaction PIN could not be saved.');
+    }
   };
   const uploadProfilePhoto = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
@@ -710,6 +760,23 @@ export function SettingsPage() {
         </section>
       </div>
       <section className="mt-6 rounded-[22px] border border-[#e1e8ee] bg-white p-5 sm:p-7">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#55868b]">Transaction security</p>
+            <h2 className="mt-1 text-[15px] font-bold text-[#29425c]">{profile?.transactionPinConfigured ? 'Update transaction PIN' : 'Create transaction PIN'}</h2>
+            <p className="mt-2 max-w-2xl text-[11px] leading-5 text-[#718296]">Use a six-digit PIN to authorize each transfer, deposit request, withdrawal request, and administrator balance action. Your PIN is stored as a secure hash and cannot be viewed by administrators.</p>
+          </div>
+          <span className={`rounded-full px-3 py-1.5 text-[9px] font-bold ${profile?.transactionPinConfigured ? 'bg-[#eef7f3] text-[#4b826d]' : 'bg-[#fbf7eb] text-[#92773e]'}`}>{profile?.transactionPinConfigured ? 'PIN active' : 'PIN not set'}</span>
+        </div>
+        <form onSubmit={submitPin} className="mt-5 grid gap-4 sm:grid-cols-2">
+          {profile?.transactionPinConfigured && <Field label="Current PIN"><input required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="current-password" value={currentPin} onChange={event => setCurrentPin(event.target.value.replace(/\D/g, '').slice(0, 6))} className={inputClass} /></Field>}
+          <Field label="New 6-digit PIN"><input required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="new-password" value={newPin} onChange={event => setNewPin(event.target.value.replace(/\D/g, '').slice(0, 6))} className={inputClass} /></Field>
+          <Field label="Confirm new PIN"><input required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="new-password" value={confirmPin} onChange={event => setConfirmPin(event.target.value.replace(/\D/g, '').slice(0, 6))} className={inputClass} /></Field>
+          {pinMessage && <p role={pinMessage.startsWith('Transaction PIN saved') ? 'status' : 'alert'} className={`sm:col-span-2 rounded-lg px-4 py-3 text-[11px] ${pinMessage.startsWith('Transaction PIN saved') ? 'bg-[#f0f8f4] text-[#41755f]' : 'bg-[#fff1ef] text-[#a24940]'}`}>{pinMessage}</p>}
+          <button disabled={updatePin.isPending || newPin.length !== 6 || confirmPin.length !== 6} className="h-11 w-fit rounded-xl bg-[#142f51] px-5 text-[11px] font-bold text-white hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">{updatePin.isPending ? 'Saving PIN…' : profile?.transactionPinConfigured ? 'Update PIN' : 'Create PIN'}</button>
+        </form>
+      </section>
+      <section className="mt-6 rounded-[22px] border border-[#e1e8ee] bg-white p-5 sm:p-7">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#55868b]">Private identity review</p>
@@ -770,8 +837,14 @@ function AdminLedgerRequestQueue() {
   });
   const review = useReviewAdminLedgerRequest();
   const [error, setError] = useState('');
+  const [reviewTarget, setReviewTarget] = useState<{
+    request: AdminLedgerRequest;
+    decision: 'approve' | 'reject';
+    reason: string;
+  } | null>(null);
+  const [transactionPin, setTransactionPin] = useState('');
 
-  const decide = async (request: AdminLedgerRequest, decision: 'approve' | 'reject') => {
+  const decide = (request: AdminLedgerRequest, decision: 'approve' | 'reject') => {
     const reason = window.prompt(
       `${decision === 'approve' ? 'Approval' : 'Rejection'} reason for ${request.reference} (at least 5 characters):`,
     );
@@ -781,52 +854,86 @@ function AdminLedgerRequestQueue() {
       return;
     }
     setError('');
+    setTransactionPin('');
+    setReviewTarget({ request, decision, reason: reason.trim() });
+  };
+
+  const submitDecision = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!reviewTarget || !/^[0-9]{6}$/.test(transactionPin)) {
+      setError('Enter your six-digit transaction PIN.');
+      return;
+    }
+    setError('');
     try {
       await review.mutateAsync({
-        requestId: request.id,
-        data: { decision, reason: reason.trim() },
+        requestId: reviewTarget.request.id,
+        data: {
+          decision: reviewTarget.decision,
+          reason: reviewTarget.reason,
+          transactionPin,
+        },
       });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: getListAdminLedgerRequestsQueryKey() }),
         queryClient.invalidateQueries({ queryKey: getGetAdminSummaryQueryKey() }),
         queryClient.invalidateQueries({ queryKey: getListAdminLedgerQueryKey() }),
         queryClient.invalidateQueries({ queryKey: getListAdminUsersQueryKey() }),
-        queryClient.invalidateQueries({ queryKey: getGetAdminUserDetailQueryKey(request.userId) }),
+        queryClient.invalidateQueries({ queryKey: getGetAdminUserDetailQueryKey(reviewTarget.request.userId) }),
         queryClient.invalidateQueries({ queryKey: getGetBankDashboardQueryKey() }),
         queryClient.invalidateQueries({ queryKey: getListBankTransactionsQueryKey() }),
         queryClient.invalidateQueries({ queryKey: getListBankWalletsQueryKey() }),
       ]);
+      setReviewTarget(null);
+      setTransactionPin('');
     } catch (reviewError) {
       setError(reviewError instanceof Error ? reviewError.message : 'The ledger request could not be reviewed.');
     }
   };
 
   return (
-    <section className="mt-6 overflow-hidden rounded-[20px] border border-[#e1e8ee] bg-white">
-      <div className="border-b border-[#edf0f3] px-5 py-4 sm:px-7">
-        <h2 className="text-[14px] font-bold text-[#28405c]">Deposit and withdrawal approvals</h2>
-        <p className="mt-1 text-[10px] leading-4 text-[#8592a1]">Approval posts an internal ledger credit or debit only. It does not receive an outside deposit or make a payout. Every decision needs an audit reason.</p>
-      </div>
-      {error && <p role="alert" className="border-b border-[#edf0f3] bg-[#fff1ef] px-5 py-3 text-[11px] text-[#a24940]">{error}</p>}
-      {requests.isLoading ? <ListSkeleton /> : requests.isError ? <InlineError text="Ledger requests are unavailable." retry={() => requests.refetch()} /> : requests.data?.length ? (
-        <div className="divide-y divide-[#edf0f2]">
-          {requests.data.map(request => (
-            <article key={request.id} className="flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-[#eef6f6] px-2.5 py-1 text-[9px] font-bold uppercase tracking-wide text-[#36777c]">{request.type}</span><span className="font-mono text-[9px] text-[#8291a0]">{request.reference}</span><span className="text-[9px] text-[#8291a0]">{formatDate(request.createdAt)}</span></div>
-                <p className="mt-2 truncate text-[11px] font-semibold text-[#344b64]">{request.memberName} · {request.email}</p>
-                <p className="mt-1 text-[10px] text-[#7e8d9c]">{request.description || `${humanize(request.type)} request`} · {request.status === 'pending_provider_setup' ? 'Awaiting review' : humanize(request.status)}</p>
-              </div>
-              <div className="flex shrink-0 items-center justify-between gap-3 sm:justify-end">
-                <strong className="text-[13px] text-[#2d435c]">{formatMoney(Number(request.amount), request.currency)}</strong>
-                <button type="button" disabled={review.isPending} onClick={() => decide(request, 'approve')} className="rounded-lg bg-[#eaf5ef] px-3 py-2 text-[10px] font-bold text-[#47795f] hover:bg-[#dff0e6] disabled:opacity-50">Approve</button>
-                <button type="button" disabled={review.isPending} onClick={() => decide(request, 'reject')} className="rounded-lg border border-[#ead8d5] px-3 py-2 text-[10px] font-bold text-[#a24940] hover:bg-[#fff7f5] disabled:opacity-50">Reject</button>
-              </div>
-            </article>
-          ))}
+    <>
+      <section className="mt-6 overflow-hidden rounded-[20px] border border-[#e1e8ee] bg-white">
+        <div className="border-b border-[#edf0f3] px-5 py-4 sm:px-7">
+          <h2 className="text-[14px] font-bold text-[#28405c]">Deposit and withdrawal approvals</h2>
+          <p className="mt-1 text-[10px] leading-4 text-[#8592a1]">Approval posts an internal ledger credit or debit only. It does not receive an outside deposit or make a payout. Every decision needs an audit reason and administrator PIN.</p>
         </div>
-      ) : <EmptyState title="No requests awaiting review" text="New internal deposit and withdrawal requests will appear here." />}
-    </section>
+        {error && !reviewTarget && <p role="alert" className="border-b border-[#edf0f3] bg-[#fff1ef] px-5 py-3 text-[11px] text-[#a24940]">{error}</p>}
+        {requests.isLoading ? <ListSkeleton /> : requests.isError ? <InlineError text="Ledger requests are unavailable." retry={() => requests.refetch()} /> : requests.data?.length ? (
+          <div className="divide-y divide-[#edf0f2]">
+            {requests.data.map(request => (
+              <article key={request.id} className="flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-[#eef6f6] px-2.5 py-1 text-[9px] font-bold uppercase tracking-wide text-[#36777c]">{request.type}</span><span className="font-mono text-[9px] text-[#8291a0]">{request.reference}</span><span className="text-[9px] text-[#8291a0]">{formatDate(request.createdAt)}</span></div>
+                  <p className="mt-2 truncate text-[11px] font-semibold text-[#344b64]">{request.memberName} · {request.email}</p>
+                  <p className="mt-1 text-[10px] text-[#7e8d9c]">{request.description || `${humanize(request.type)} request`} · {request.status === 'pending_provider_setup' ? 'Awaiting review' : humanize(request.status)}</p>
+                </div>
+                <div className="flex shrink-0 items-center justify-between gap-3 sm:justify-end">
+                  <strong className="text-[13px] text-[#2d435c]">{formatMoney(Number(request.amount), request.currency)}</strong>
+                  <button type="button" disabled={review.isPending} onClick={() => decide(request, 'approve')} className="rounded-lg bg-[#eaf5ef] px-3 py-2 text-[10px] font-bold text-[#47795f] hover:bg-[#dff0e6] disabled:opacity-50">Approve</button>
+                  <button type="button" disabled={review.isPending} onClick={() => decide(request, 'reject')} className="rounded-lg border border-[#ead8d5] px-3 py-2 text-[10px] font-bold text-[#a24940] hover:bg-[#fff7f5] disabled:opacity-50">Reject</button>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : <EmptyState title="No requests awaiting review" text="New internal deposit and withdrawal requests will appear here." />}
+      </section>
+      {reviewTarget && <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#14263e]/55 p-4">
+        <form role="dialog" aria-modal="true" aria-labelledby="ledger-review-title" onSubmit={submitDecision} className="w-full max-w-lg rounded-[22px] border border-[#dfe7ec] bg-white p-5 shadow-2xl sm:p-7">
+          <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#55868b]">Administrator authorization</p>
+          <h2 id="ledger-review-title" className="mt-1 text-[16px] font-bold text-[#29425c]">{reviewTarget.decision === 'approve' ? 'Approve ledger request' : 'Reject ledger request'}</h2>
+          <p className="mt-2 text-[11px] leading-5 text-[#718296]">{reviewTarget.request.memberName} · {reviewTarget.request.reference} · {formatMoney(Number(reviewTarget.request.amount), reviewTarget.request.currency)}</p>
+          <div className="mt-5">
+            <Field label="Your 6-digit transaction PIN"><input required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="current-password" value={transactionPin} onChange={event => setTransactionPin(event.target.value.replace(/\D/g, '').slice(0, 6))} className={inputClass} /></Field>
+          </div>
+          {error && <p role="alert" className="mt-4 rounded-lg bg-[#fff1ef] px-4 py-3 text-[11px] text-[#a24940]">{error}</p>}
+          <div className="mt-5 flex justify-end gap-2">
+            <button type="button" onClick={() => setReviewTarget(null)} className="rounded-xl border border-[#dfe6eb] px-4 py-3 text-[10px] font-bold text-[#546b80] hover:bg-[#f5f8f9]">Cancel</button>
+            <button disabled={review.isPending || transactionPin.length !== 6} className="rounded-xl bg-[#142f51] px-4 py-3 text-[10px] font-bold text-white hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">{review.isPending ? 'Saving…' : 'Confirm decision'}</button>
+          </div>
+        </form>
+      </div>}
+    </>
   );
 }
 
@@ -843,6 +950,7 @@ export function AdminPage() {
   const [fundSenderName, setFundSenderName] = useState('');
   const [fundDescription, setFundDescription] = useState('');
   const [fundReason, setFundReason] = useState('');
+  const [fundTransactionPin, setFundTransactionPin] = useState('');
   const [fundingError, setFundingError] = useState('');
   const [fundingSuccess, setFundingSuccess] = useState<BankTransaction | null>(null);
   const [deleteError, setDeleteError] = useState('');
@@ -898,6 +1006,7 @@ export function AdminPage() {
         senderName: fundSenderName.trim(),
         description: fundDescription.trim(),
         reason: fundReason.trim(),
+        transactionPin: fundTransactionPin,
         idempotencyKey: crypto.randomUUID(),
       },
     }, {
@@ -907,6 +1016,7 @@ export function AdminPage() {
         setFundSenderName('');
         setFundDescription('');
         setFundReason('');
+        setFundTransactionPin('');
         queryClient.invalidateQueries({ queryKey: getListAdminLedgerQueryKey() });
         queryClient.invalidateQueries({ queryKey: getGetAdminSummaryQueryKey() });
         queryClient.invalidateQueries({ queryKey: getListAdminUsersQueryKey() });
@@ -1010,7 +1120,7 @@ export function AdminPage() {
       {fundTarget && <section className="mt-6 rounded-[20px] border border-[#dfe7ec] bg-white p-5 sm:p-7">
         <div className="mb-5 flex items-start justify-between gap-4">
           <div><p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#55868b]">Admin balance adjustment</p><h2 className="mt-1 text-[15px] font-bold text-[#29425c]">Adjust a user wallet</h2><p className="mt-1 text-[11px] text-[#7e8d9c]">{[fundTarget.firstName, fundTarget.lastName].filter(Boolean).join(' ') || 'Globus member'} · {fundTarget.email}</p></div>
-          <button type="button" aria-label="Close funding form" onClick={() => { setFundTarget(null); setFundingError(''); setFundingSuccess(null); setFundSenderName(''); setFundDescription(''); setFundReason(''); }} className="rounded-lg p-2 text-[#6d8092] hover:bg-[#f1f5f7]"><X size={16} /></button>
+          <button type="button" aria-label="Close funding form" onClick={() => { setFundTarget(null); setFundingError(''); setFundingSuccess(null); setFundSenderName(''); setFundDescription(''); setFundReason(''); setFundTransactionPin(''); }} className="rounded-lg p-2 text-[#6d8092] hover:bg-[#f1f5f7]"><X size={16} /></button>
         </div>
         <p className="mb-5 rounded-lg border border-[#d9e8e9] bg-[#f2f8f8] px-4 py-3 text-[10px] leading-4 text-[#4e777a]">This records a credit or debit in Globus’s internal ledger and writes an audit entry. It does not receive or send outside funds. Maximum per entry: 1,000,000.00.</p>
         <form onSubmit={submitFunding} className="grid gap-4 sm:grid-cols-2">
@@ -1020,9 +1130,10 @@ export function AdminPage() {
           <Field label="Counterparty / adjustment label"><input required maxLength={120} value={fundSenderName} onChange={event => setFundSenderName(event.target.value)} placeholder="Globus operations" className={inputClass} /></Field>
           <Field label="Transaction description"><input required maxLength={240} value={fundDescription} onChange={event => setFundDescription(event.target.value)} placeholder="Reason shown in transaction activity" className={inputClass} /></Field>
           <div className="sm:col-span-2"><Field label="Reason (recorded in the audit log)"><textarea required minLength={5} maxLength={500} rows={3} value={fundReason} onChange={event => setFundReason(event.target.value)} placeholder="Reason for this balance adjustment" className={`${inputClass} h-auto py-3`} /></Field></div>
+          <div className="sm:col-span-2"><Field label="Your 6-digit transaction PIN"><input required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="current-password" value={fundTransactionPin} onChange={event => setFundTransactionPin(event.target.value.replace(/\D/g, '').slice(0, 6))} className={inputClass} /></Field></div>
           {fundingError && <p role="alert" className="sm:col-span-2 rounded-lg bg-[#fff1ef] px-4 py-3 text-[11px] text-[#a24940]">{fundingError}</p>}
           {fundingSuccess && <p role="status" className="sm:col-span-2 rounded-lg border border-[#cfe5db] bg-[#f1f8f4] px-4 py-3 text-[11px] text-[#417461]">Balance adjustment recorded · {fundingSuccess.reference}</p>}
-          <div className="sm:col-span-2"><button disabled={funding.isPending || !fundAmount || !fundSenderName.trim() || !fundDescription.trim() || !fundReason.trim()} className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#142f51] px-5 text-[11px] font-bold text-white hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">{funding.isPending ? 'Recording adjustment…' : 'Save balance adjustment'} <ArrowRight size={14} /></button></div>
+          <div className="sm:col-span-2"><button disabled={funding.isPending || fundTransactionPin.length !== 6 || !fundAmount || !fundSenderName.trim() || !fundDescription.trim() || !fundReason.trim()} className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#142f51] px-5 text-[11px] font-bold text-white hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">{funding.isPending ? 'Recording adjustment…' : 'Save balance adjustment'} <ArrowRight size={14} /></button></div>
         </form>
       </section>}
       <AdminLedgerRequestQueue />
@@ -1107,6 +1218,7 @@ export function AdminUserManagementPage() {
   const deleteTransaction = useDeleteAdminTransaction();
   const updateTransactionStatus = useUpdateAdminTransactionStatus();
   const updateVerification = useUpdateAdminUserVerification();
+  const resetTransactionPin = useResetAdminUserTransactionPin();
 
   const [currency, setCurrency] = useState<Currency>('USD');
   const [adjustmentDirection, setAdjustmentDirection] = useState<'credit' | 'debit'>('credit');
@@ -1114,6 +1226,7 @@ export function AdminUserManagementPage() {
   const [senderName, setSenderName] = useState('Globus operations');
   const [fundingDescription, setFundingDescription] = useState('');
   const [fundingReason, setFundingReason] = useState('');
+  const [fundingPin, setFundingPin] = useState('');
   const [fundingError, setFundingError] = useState('');
   const [fundingReference, setFundingReference] = useState('');
   const [pageMessage, setPageMessage] = useState('');
@@ -1173,6 +1286,7 @@ export function AdminUserManagementPage() {
           senderName: senderName.trim(),
           description: fundingDescription.trim(),
           reason: fundingReason.trim(),
+          transactionPin: fundingPin,
           idempotencyKey: crypto.randomUUID(),
         },
       });
@@ -1180,9 +1294,32 @@ export function AdminUserManagementPage() {
       setAmount('');
       setFundingDescription('');
       setFundingReason('');
+      setFundingPin('');
       await refreshUserData();
     } catch (error) {
       setFundingError(error instanceof Error ? error.message : 'The balance adjustment could not be recorded.');
+    }
+  };
+
+  const resetMemberTransactionPin = async () => {
+    if (!user) return;
+    const reason = window.prompt('Enter an audit reason for resetting this member’s transaction PIN (at least 5 characters).');
+    if (reason === null) return;
+    if (reason.trim().length < 5) {
+      setPageError('Enter a reset reason of at least five characters.');
+      return;
+    }
+    if (!window.confirm('Reset this member’s PIN? They will need to create a new PIN before making another transaction.')) return;
+    setPageError('');
+    try {
+      await resetTransactionPin.mutateAsync({
+        userId,
+        data: { reason: reason.trim() },
+      });
+      await refreshUserData();
+      setPageMessage('Transaction PIN reset. The member must create a new PIN before their next transaction.');
+    } catch (error) {
+      setPageError(error instanceof Error ? error.message : 'The transaction PIN could not be reset.');
     }
   };
 
@@ -1346,9 +1483,10 @@ export function AdminUserManagementPage() {
               <Field label="Counterparty / adjustment label"><input required maxLength={120} value={senderName} onChange={event => setSenderName(event.target.value)} className={inputClass} /></Field>
               <Field label="Description"><input required maxLength={240} value={fundingDescription} onChange={event => setFundingDescription(event.target.value)} placeholder="Shown in activity" className={inputClass} /></Field>
               <Field label="Audit reason"><textarea required minLength={5} maxLength={500} rows={3} value={fundingReason} onChange={event => setFundingReason(event.target.value)} className={`${inputClass} h-auto py-3`} /></Field>
+              <Field label="Your 6-digit transaction PIN"><input required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="current-password" value={fundingPin} onChange={event => setFundingPin(event.target.value.replace(/\D/g, '').slice(0, 6))} className={inputClass} /></Field>
               {fundingError && <p role="alert" className="rounded-lg bg-[#fff1ef] px-3 py-2 text-[10px] text-[#a24940]">{fundingError}</p>}
               {fundingReference && <p role="status" className="rounded-lg bg-[#f1f8f4] px-3 py-2 text-[10px] text-[#417461]">Balance adjustment recorded · {fundingReference}</p>}
-              <button disabled={profile.accountStatus !== 'active' || createFunding.isPending || !amount || !senderName.trim() || !fundingDescription.trim() || !fundingReason.trim()} className="h-10 w-full rounded-xl bg-[#142f51] px-4 text-[10px] font-bold text-white hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">{createFunding.isPending ? 'Recording…' : 'Save balance adjustment'}</button>
+              <button disabled={profile.accountStatus !== 'active' || createFunding.isPending || fundingPin.length !== 6 || !amount || !senderName.trim() || !fundingDescription.trim() || !fundingReason.trim()} className="h-10 w-full rounded-xl bg-[#142f51] px-4 text-[10px] font-bold text-white hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">{createFunding.isPending ? 'Recording…' : 'Save balance adjustment'}</button>
               {profile.accountStatus !== 'active' && <p className="text-[9px] text-[#9b8050]">Reactivate the account before adjusting its balance.</p>}
             </form>
           </section>
@@ -1380,6 +1518,12 @@ export function AdminUserManagementPage() {
             ) : (
               <div className="mt-4 rounded-lg bg-[#f7f9fa] px-3 py-3 text-[10px] leading-4 text-[#718294]">There is no identity review awaiting a decision. Current status: <b>{humanize(profile.verificationStatus)}</b>.</div>
             )}
+          </section>
+          <section className="rounded-[20px] border border-[#e1e8ee] bg-white p-5 sm:p-6">
+            <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#71869a]">Transaction security</p>
+            <h2 className="mt-1 text-[14px] font-bold text-[#29425c]">Member PIN</h2>
+            <p className="mt-2 text-[10px] leading-4 text-[#7e8d9c]">Status: <b>{detail.data.transactionPinConfigured ? 'PIN is set' : 'PIN is not set'}</b>. Administrators cannot view or choose the member’s PIN; a reset requires the member to create a new one.</p>
+            <button type="button" disabled={!detail.data.transactionPinConfigured || resetTransactionPin.isPending} onClick={resetMemberTransactionPin} className="mt-4 rounded-lg border border-[#ead8d5] px-3 py-2.5 text-[10px] font-bold text-[#a24940] hover:bg-[#fff7f5] disabled:cursor-not-allowed disabled:opacity-50">{resetTransactionPin.isPending ? 'Resetting…' : 'Reset member PIN'}</button>
           </section>
         </aside>
       </div>
@@ -1728,7 +1872,7 @@ function EmptyState({ title, text }: { title: string; text: string }) {
 }
 
 function PageSkeleton() {
-  return <div className="animate-pulse"><div className="h-3 w-28 rounded bg-[#dfe7ec]" /><div className="mt-4 h-9 w-64 max-w-full rounded-lg bg-[#dfe7ec]" /><div className="mt-3 h-4 w-[420px] max-w-full rounded bg-[#e6edf1]" /><div className="mt-8 grid gap-4 md:grid-cols-2"><div className="h-52 rounded-[22px] bg-[#e3ebef]" /><div className="h-52 rounded-[22px] bg-[#e3ebef]" /></div><div className="mt-5 h-64 rounded-[22px] bg-[#e3ebef]" /></div>;
+  return <GlobusLoader label="Loading your Globus account" />;
 }
 
 function ListSkeleton() {
