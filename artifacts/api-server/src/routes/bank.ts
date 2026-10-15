@@ -16,9 +16,13 @@ import {
   DeleteMyIdentityDocumentParams,
   DeleteMyIdentityDocumentResponse,
   CreateIncomingExternalTransferResponse,
+  CreateInternationalTransferRequestBody,
+  CreateInternationalTransferRequestResponse,
   CreateLedgerRequestResponse,
   GetBankDashboardResponse,
   GetBankProfileResponse,
+  ListBankExchangeRatesResponse,
+  ListInternationalTransferRequestsResponse,
   ListMyIdentityDocumentsResponse,
   ListBankTransactionsQueryParams,
   ListBankTransactionsResponse,
@@ -34,7 +38,9 @@ import {
 } from "@workspace/api-zod";
 import {
   bankAuditLogsTable,
+  bankExchangeRatesTable,
   bankIdentityDocumentsTable,
+  bankInternationalTransferRequestsTable,
   bankLedgerEntriesTable,
   bankSandboxRequestsTable,
   bankTransactionsTable,
@@ -44,6 +50,7 @@ import {
 } from "@workspace/db";
 import {
   balanceForWallet,
+  convertMinorAmount,
   createReference,
   ensureBankUser,
   formatMinorAmount,
@@ -131,6 +138,29 @@ function identityDocumentResponse(document: typeof bankIdentityDocumentsTable.$i
     status: document.status as "uploading" | "uploaded",
     createdAt: document.createdAt.toISOString(),
     uploadedAt: document.uploadedAt?.toISOString() ?? null,
+  };
+}
+
+function internationalTransferRequestResponse(
+  request: typeof bankInternationalTransferRequestsTable.$inferSelect,
+  transaction: typeof bankTransactionsTable.$inferSelect,
+) {
+  return {
+    id: transaction.id,
+    reference: transaction.reference,
+    status: transaction.status,
+    destinationCountry: request.destinationCountry,
+    recipientBank: request.recipientBank,
+    recipientAccountName: request.recipientAccountName,
+    recipientAccountLast4: request.recipientAccountLast4,
+    sourceCurrency: request.sourceCurrency,
+    sourceAmount: formatMinorAmount(request.sourceAmountMinor),
+    destinationCurrency: request.destinationCurrency,
+    destinationAmount: formatMinorAmount(request.destinationAmountMinor),
+    exchangeRate: request.exchangeRate,
+    rateUpdatedAt: request.rateUpdatedAt.toISOString(),
+    remark: request.remark,
+    createdAt: request.createdAt.toISOString(),
   };
 }
 
@@ -933,6 +963,247 @@ router.post("/bank/transfers", async (req, res): Promise<void> => {
   res.status(201).json(
     CreateBankTransferResponse.parse(
       toBankTransaction(transfer.transaction, userId),
+    ),
+  );
+});
+
+router.get("/bank/exchange-rates", async (req, res): Promise<void> => {
+  if (!getAuth(req).userId) {
+    res.status(401).json({ error: "Sign in to access your Globus account." });
+    return;
+  }
+  const rates = await db
+    .select()
+    .from(bankExchangeRatesTable)
+    .orderBy(
+      asc(bankExchangeRatesTable.sourceCurrency),
+      asc(bankExchangeRatesTable.destinationCurrency),
+    );
+  res.json(
+    ListBankExchangeRatesResponse.parse(
+      rates.map((rate) => ({
+        sourceCurrency: rate.sourceCurrency,
+        destinationCurrency: rate.destinationCurrency,
+        rate: rate.rate,
+        updatedAt: rate.updatedAt.toISOString(),
+      })),
+    ),
+  );
+});
+
+router.get("/bank/international-transfer-requests", async (req, res): Promise<void> => {
+  const authUserId = getAuth(req).userId;
+  if (!authUserId) {
+    res.status(401).json({ error: "Sign in to access your Globus account." });
+    return;
+  }
+  const user = await getOrCreateBankUser(authUserId);
+  const records = await db
+    .select({
+      request: bankInternationalTransferRequestsTable,
+      transaction: bankTransactionsTable,
+    })
+    .from(bankInternationalTransferRequestsTable)
+    .innerJoin(
+      bankTransactionsTable,
+      eq(
+        bankTransactionsTable.id,
+        bankInternationalTransferRequestsTable.transactionId,
+      ),
+    )
+    .where(eq(bankInternationalTransferRequestsTable.userId, user.id))
+    .orderBy(desc(bankInternationalTransferRequestsTable.createdAt))
+    .limit(50);
+  res.json(
+    ListInternationalTransferRequestsResponse.parse(
+      records.map(({ request, transaction }) =>
+        internationalTransferRequestResponse(request, transaction),
+      ),
+    ),
+  );
+});
+
+router.post("/bank/international-transfer-requests", async (req, res): Promise<void> => {
+  const authUserId = getAuth(req).userId;
+  if (!authUserId) {
+    res.status(401).json({ error: "Sign in to access your Globus account." });
+    return;
+  }
+  const parsed = CreateInternationalTransferRequestBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const sender = await getOrCreateBankUser(authUserId);
+  if (sender.accountStatus !== "active") {
+    res.status(409).json({ error: "This account is currently restricted." });
+    return;
+  }
+  if (!sender.acceptedTermsAt) {
+    res.status(409).json({ error: "Complete account setup before requesting a transfer." });
+    return;
+  }
+  let amountMinor: bigint;
+  try {
+    amountMinor = parseAmountToMinor(parsed.data.amount);
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Enter a valid transfer amount.",
+    });
+    return;
+  }
+  if (amountMinor <= 0n) {
+    res.status(400).json({ error: "The transfer amount must be greater than zero." });
+    return;
+  }
+  const accountNumber = parsed.data.recipientAccountNumber
+    .replace(/\s+/g, "")
+    .toUpperCase();
+  const transactionPinResult = await verifyTransactionPin(
+    sender.id,
+    parsed.data.transactionPin,
+  );
+  if (transactionPinResult !== "valid") {
+    respondWithTransactionPinError(res, transactionPinResult);
+    return;
+  }
+
+  const result = await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtext(${parsed.data.idempotencyKey})::bigint)`,
+    );
+    const [duplicate] = await tx
+      .select()
+      .from(bankTransactionsTable)
+      .where(eq(bankTransactionsTable.idempotencyKey, parsed.data.idempotencyKey))
+      .limit(1);
+    if (duplicate) {
+      if (
+        duplicate.initiatedByUserId !== sender.id ||
+        duplicate.type !== "external_transfer"
+      ) {
+        return { error: "That request reference is already in use." };
+      }
+      const [existingRequest] = await tx
+        .select()
+        .from(bankInternationalTransferRequestsTable)
+        .where(
+          eq(
+            bankInternationalTransferRequestsTable.transactionId,
+            duplicate.id,
+          ),
+        )
+        .limit(1);
+      return existingRequest
+        ? { request: existingRequest, transaction: duplicate }
+        : { error: "The existing request record could not be loaded." };
+    }
+
+    let rate = "1.0000000000";
+    let rateUpdatedAt = new Date();
+    if (parsed.data.sourceCurrency !== parsed.data.destinationCurrency) {
+      const [configuredRate] = await tx
+        .select()
+        .from(bankExchangeRatesTable)
+        .where(
+          and(
+            eq(bankExchangeRatesTable.sourceCurrency, parsed.data.sourceCurrency),
+            eq(
+              bankExchangeRatesTable.destinationCurrency,
+              parsed.data.destinationCurrency,
+            ),
+          ),
+        )
+        .limit(1);
+      if (!configuredRate) {
+        return {
+          error: `No internal ${parsed.data.sourceCurrency} to ${parsed.data.destinationCurrency} rate is configured. Contact Globus operations.`,
+        };
+      }
+      rate = configuredRate.rate;
+      rateUpdatedAt = configuredRate.updatedAt;
+    }
+
+    let destinationAmountMinor: bigint;
+    try {
+      destinationAmountMinor = convertMinorAmount(amountMinor, rate);
+    } catch (error) {
+      return {
+        error:
+          error instanceof Error
+            ? error.message
+            : "The destination amount could not be calculated.",
+      };
+    }
+    if (destinationAmountMinor <= 0n) {
+      return { error: "The converted amount is below the minimum supported amount." };
+    }
+
+    const wallet = await userWallet(tx, sender.id, parsed.data.sourceCurrency);
+    if (!wallet || wallet.status !== "active") {
+      return { error: "An active wallet for the selected source currency is unavailable." };
+    }
+    await tx
+      .select({ id: bankWalletsTable.id })
+      .from(bankWalletsTable)
+      .where(eq(bankWalletsTable.id, wallet.id))
+      .for("update");
+    const available = await balanceForWallet(tx, wallet.id);
+    const reserved = await reservedForWallet(tx, wallet.id);
+    if (available - reserved < amountMinor) {
+      return { error: "There is not enough available ledger balance for this request." };
+    }
+
+    const reference = createReference();
+    const [transaction] = await tx
+      .insert(bankTransactionsTable)
+      .values({
+        reference,
+        idempotencyKey: parsed.data.idempotencyKey,
+        initiatedByUserId: sender.id,
+        fromUserId: sender.id,
+        fromWalletId: wallet.id,
+        type: "external_transfer",
+        status: "pending",
+        currency: parsed.data.sourceCurrency,
+        amountMinor,
+        feeMinor: 0n,
+        counterparty: `${parsed.data.recipientAccountName.trim()} · ${parsed.data.recipientBank.trim()} · ****${accountNumber.slice(-4)} · ${parsed.data.destinationCountry.trim()}`,
+        description: parsed.data.remark?.trim()
+          ? `International transfer request · ${parsed.data.remark.trim()}`
+          : "International transfer request",
+        mode: "internal_ledger",
+      })
+      .returning();
+    const [request] = await tx
+      .insert(bankInternationalTransferRequestsTable)
+      .values({
+        transactionId: transaction.id,
+        userId: sender.id,
+        sourceWalletId: wallet.id,
+        sourceCurrency: parsed.data.sourceCurrency,
+        sourceAmountMinor: amountMinor,
+        destinationCurrency: parsed.data.destinationCurrency,
+        destinationAmountMinor,
+        exchangeRate: rate,
+        rateUpdatedAt,
+        destinationCountry: parsed.data.destinationCountry.trim(),
+        recipientBank: parsed.data.recipientBank.trim(),
+        recipientAccountName: parsed.data.recipientAccountName.trim(),
+        recipientAccountLast4: accountNumber.slice(-4),
+        remark: parsed.data.remark?.trim() ?? "",
+      })
+      .returning();
+    return { request, transaction };
+  });
+
+  if ("error" in result) {
+    res.status(409).json({ error: result.error });
+    return;
+  }
+  res.status(201).json(
+    CreateInternationalTransferRequestResponse.parse(
+      internationalTransferRequestResponse(result.request, result.transaction),
     ),
   );
 });

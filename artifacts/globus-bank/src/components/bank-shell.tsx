@@ -28,6 +28,7 @@ const primaryLinks = [
 
 const moneyLinks = [
   { href: '/send', label: 'Send', icon: ArrowUpRight },
+  { href: '/international-transfer', label: 'International request', icon: ArrowLeftRight },
   { href: '/receive', label: 'Receive', icon: ArrowDownLeft },
   { href: '/add-money', label: 'Deposit request', icon: CreditCard },
   { href: '/withdraw', label: 'Withdrawal request', icon: ArrowDownLeft },
@@ -146,6 +147,7 @@ function pageLabel(path: string) {
     '/wallets': 'Wallets',
     '/transactions': 'Activity',
     '/send': 'Send money',
+    '/international-transfer': 'International transfer',
     '/receive': 'Receive',
     '/add-money': 'Deposit request',
     '/withdraw': 'Withdrawal request',

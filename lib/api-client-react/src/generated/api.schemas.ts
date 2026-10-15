@@ -25,6 +25,65 @@ export const CurrencyCode = {
   AUD: 'AUD',
 } as const;
 
+export interface BankExchangeRate {
+  sourceCurrency: CurrencyCode;
+  destinationCurrency: CurrencyCode;
+  /** @pattern ^[0-9]+(\.[0-9]{1,10})?$ */
+  rate: string;
+  updatedAt: string;
+}
+
+export interface BankExchangeRateInput {
+  sourceCurrency: CurrencyCode;
+  destinationCurrency: CurrencyCode;
+  /** @pattern ^[0-9]{1,12}(\.[0-9]{1,10})?$ */
+  rate: string;
+  /**
+     * @minLength 5
+     * @maxLength 500
+     */
+  reason: string;
+  /** @pattern ^[0-9]{6}$ */
+  transactionPin: string;
+}
+
+export interface InternationalTransferRequestInput {
+  /**
+     * @minLength 2
+     * @maxLength 80
+     */
+  destinationCountry: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  recipientBank: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  recipientAccountName: string;
+  /**
+     * @minLength 4
+     * @maxLength 34
+     * @pattern ^[A-Za-z0-9 ]+$
+     */
+  recipientAccountNumber: string;
+  sourceCurrency: CurrencyCode;
+  destinationCurrency: CurrencyCode;
+  /** @pattern ^[0-9]{1,12}(\.[0-9]{1,2})?$ */
+  amount: string;
+  /** @maxLength 140 */
+  remark?: string;
+  /**
+     * @minLength 16
+     * @maxLength 100
+     */
+  idempotencyKey: string;
+  /** @pattern ^[0-9]{6}$ */
+  transactionPin: string;
+}
+
 export type TransactionStatus = typeof TransactionStatus[keyof typeof TransactionStatus];
 
 
@@ -34,6 +93,25 @@ export const TransactionStatus = {
   failed: 'failed',
   reversed: 'reversed',
 } as const;
+
+export interface InternationalTransferRequest {
+  id: string;
+  reference: string;
+  status: TransactionStatus;
+  destinationCountry: string;
+  recipientBank: string;
+  recipientAccountName: string;
+  /** @pattern ^[A-Z0-9]{4}$ */
+  recipientAccountLast4: string;
+  sourceCurrency: CurrencyCode;
+  sourceAmount: string;
+  destinationCurrency: CurrencyCode;
+  destinationAmount: string;
+  exchangeRate: string;
+  rateUpdatedAt: string;
+  remark: string;
+  createdAt: string;
+}
 
 export type TransactionType = typeof TransactionType[keyof typeof TransactionType];
 

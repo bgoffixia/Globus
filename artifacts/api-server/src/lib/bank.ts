@@ -78,6 +78,27 @@ export function formatMinorAmount(amountMinor: bigint): string {
   return `${negative ? "-" : ""}${whole}.${fraction}`;
 }
 
+export function convertMinorAmount(
+  amountMinor: bigint,
+  rate: string,
+): bigint {
+  const match = /^(\d{1,12})(?:\.(\d{1,10}))?$/.exec(rate);
+  if (!match) {
+    throw new Error("The configured conversion rate is invalid.");
+  }
+  const scale = 10n ** 10n;
+  const rateScaled =
+    BigInt(match[1]) * scale + BigInt((match[2] ?? "").padEnd(10, "0"));
+  if (rateScaled <= 0n) {
+    throw new Error("The configured conversion rate must be greater than zero.");
+  }
+  const converted = (amountMinor * rateScaled + scale / 2n) / scale;
+  if (converted > 9_223_372_036_854_775_807n) {
+    throw new Error("The converted amount is above the supported limit.");
+  }
+  return converted;
+}
+
 export function createReference(): string {
   return `GBS-${randomUUID().replaceAll("-", "").slice(0, 14).toUpperCase()}`;
 }
@@ -299,8 +320,12 @@ export function toBankTransaction(
     type = transaction.type;
   }
 
+  const isInternationalRequest =
+    transaction.type === "external_transfer" &&
+    transaction.status === "pending" &&
+    transaction.counterparty?.includes("****") === true;
   const isLegacyExternalEntry =
-    transaction.type === "external_transfer" ||
+    (transaction.type === "external_transfer" && !isInternationalRequest) ||
     transaction.type === "external_transfer_in";
   const description = isLegacyExternalEntry
     ? "Prior internal ledger entry"

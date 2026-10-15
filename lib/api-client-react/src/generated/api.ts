@@ -37,6 +37,8 @@ import type {
   AdminUserStatusInput,
   BadRequestResponse,
   BankDashboard,
+  BankExchangeRate,
+  BankExchangeRateInput,
   BankProfile,
   BankProfileInput,
   BankTransaction,
@@ -53,6 +55,8 @@ import type {
   IdentityDocumentUploadUrl,
   IdentityVerificationSubmissionInput,
   IncomingExternalTransferInput,
+  InternationalTransferRequest,
+  InternationalTransferRequestInput,
   LedgerRequest,
   LedgerRequestInput,
   ListAdminLedgerParams,
@@ -1327,6 +1331,337 @@ export const useCreateExternalTransfer = <TError = ErrorType<CreateExternalTrans
         TContext
       > => {
       return useMutation(getCreateExternalTransferMutationOptions(options));
+    }
+
+export const getListBankExchangeRatesUrl = () => {
+
+
+
+
+  return `/api/bank/exchange-rates`
+}
+
+/**
+ * @summary List administrator-maintained internal conversion rates
+ */
+export const listBankExchangeRates = async ( options?: Parameters<typeof customFetch>[1]): Promise<BankExchangeRate[]> => {
+
+  return customFetch<BankExchangeRate[]>(getListBankExchangeRatesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListBankExchangeRatesQueryKey = () => {
+    return [
+    `/api/bank/exchange-rates`
+    ] as const;
+    }
+
+
+export const getListBankExchangeRatesQueryOptions = <TData = Awaited<ReturnType<typeof listBankExchangeRates>>, TError = ErrorType<UnauthorizedResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listBankExchangeRates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListBankExchangeRatesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listBankExchangeRates>>> = ({ signal }) => listBankExchangeRates({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listBankExchangeRates>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListBankExchangeRatesQueryResult = NonNullable<Awaited<ReturnType<typeof listBankExchangeRates>>>
+export type ListBankExchangeRatesQueryError = ErrorType<UnauthorizedResponse>
+
+
+/**
+ * @summary List administrator-maintained internal conversion rates
+ */
+
+export function useListBankExchangeRates<TData = Awaited<ReturnType<typeof listBankExchangeRates>>, TError = ErrorType<UnauthorizedResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listBankExchangeRates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListBankExchangeRatesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListInternationalTransferRequestsUrl = () => {
+
+
+
+
+  return `/api/bank/international-transfer-requests`
+}
+
+/**
+ * @summary List the authenticated user's internal international transfer requests
+ */
+export const listInternationalTransferRequests = async ( options?: Parameters<typeof customFetch>[1]): Promise<InternationalTransferRequest[]> => {
+
+  return customFetch<InternationalTransferRequest[]>(getListInternationalTransferRequestsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListInternationalTransferRequestsQueryKey = () => {
+    return [
+    `/api/bank/international-transfer-requests`
+    ] as const;
+    }
+
+
+export const getListInternationalTransferRequestsQueryOptions = <TData = Awaited<ReturnType<typeof listInternationalTransferRequests>>, TError = ErrorType<UnauthorizedResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listInternationalTransferRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListInternationalTransferRequestsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listInternationalTransferRequests>>> = ({ signal }) => listInternationalTransferRequests({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listInternationalTransferRequests>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListInternationalTransferRequestsQueryResult = NonNullable<Awaited<ReturnType<typeof listInternationalTransferRequests>>>
+export type ListInternationalTransferRequestsQueryError = ErrorType<UnauthorizedResponse>
+
+
+/**
+ * @summary List the authenticated user's internal international transfer requests
+ */
+
+export function useListInternationalTransferRequests<TData = Awaited<ReturnType<typeof listInternationalTransferRequests>>, TError = ErrorType<UnauthorizedResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listInternationalTransferRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListInternationalTransferRequestsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateInternationalTransferRequestUrl = () => {
+
+
+
+
+  return `/api/bank/international-transfer-requests`
+}
+
+/**
+ * Records an internal request only. It does not contact or send funds to an outside account.
+ * @summary Record an internal international transfer request
+ */
+export const createInternationalTransferRequest = async (internationalTransferRequestInput: InternationalTransferRequestInput, options?: Parameters<typeof customFetch>[1]): Promise<InternationalTransferRequest> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<InternationalTransferRequest>(getCreateInternationalTransferRequestUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(internationalTransferRequestInput)
+  }
+);}
+
+
+
+
+
+export const getCreateInternationalTransferRequestMutationKey = () => ['createInternationalTransferRequest'] as const;
+
+export const getCreateInternationalTransferRequestMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createInternationalTransferRequest>>, TError,CreateInternationalTransferRequestMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createInternationalTransferRequest>>, TError,CreateInternationalTransferRequestMutationVariables, TContext> => {
+
+const mutationKey = getCreateInternationalTransferRequestMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createInternationalTransferRequest>>, CreateInternationalTransferRequestMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createInternationalTransferRequest(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateInternationalTransferRequestMutationResult = NonNullable<Awaited<ReturnType<typeof createInternationalTransferRequest>>>
+    export type CreateInternationalTransferRequestMutationBody = BodyType<InternationalTransferRequestInput>
+    export type CreateInternationalTransferRequestMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse>
+    export type CreateInternationalTransferRequestMutationVariables = {data: BodyType<InternationalTransferRequestInput>}
+
+    /**
+ * @summary Record an internal international transfer request
+ */
+export const useCreateInternationalTransferRequest = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createInternationalTransferRequest>>, TError,CreateInternationalTransferRequestMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createInternationalTransferRequest>>,
+        TError,
+        CreateInternationalTransferRequestMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateInternationalTransferRequestMutationOptions(options));
+    }
+
+export const getUpsertBankExchangeRateUrl = () => {
+
+
+
+
+  return `/api/bank/admin/exchange-rates`
+}
+
+/**
+ * @summary Set an administrator-maintained internal conversion rate
+ */
+export const upsertBankExchangeRate = async (bankExchangeRateInput: BankExchangeRateInput, options?: Parameters<typeof customFetch>[1]): Promise<BankExchangeRate> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<BankExchangeRate>(getUpsertBankExchangeRateUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(bankExchangeRateInput)
+  }
+);}
+
+
+
+
+
+export const getUpsertBankExchangeRateMutationKey = () => ['upsertBankExchangeRate'] as const;
+
+export const getUpsertBankExchangeRateMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof upsertBankExchangeRate>>, TError,UpsertBankExchangeRateMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof upsertBankExchangeRate>>, TError,UpsertBankExchangeRateMutationVariables, TContext> => {
+
+const mutationKey = getUpsertBankExchangeRateMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof upsertBankExchangeRate>>, UpsertBankExchangeRateMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  upsertBankExchangeRate(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpsertBankExchangeRateMutationResult = NonNullable<Awaited<ReturnType<typeof upsertBankExchangeRate>>>
+    export type UpsertBankExchangeRateMutationBody = BodyType<BankExchangeRateInput>
+    export type UpsertBankExchangeRateMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>
+    export type UpsertBankExchangeRateMutationVariables = {data: BodyType<BankExchangeRateInput>}
+
+    /**
+ * @summary Set an administrator-maintained internal conversion rate
+ */
+export const useUpsertBankExchangeRate = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof upsertBankExchangeRate>>, TError,UpsertBankExchangeRateMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof upsertBankExchangeRate>>,
+        TError,
+        UpsertBankExchangeRateMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpsertBankExchangeRateMutationOptions(options));
     }
 
 export const getCreateIncomingExternalTransferUrl = () => {

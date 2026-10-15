@@ -989,7 +989,9 @@ components:
         sourceCurrency: { $ref: "#/components/schemas/CurrencyCode" }
         destinationCurrency: { $ref: "#/components/schemas/CurrencyCode" }
         rate: { type: string, pattern: "^[0-9]{1,12}(\\.[0-9]{1,10})?$" }
-      required: [sourceCurrency, destinationCurrency, rate]
+        reason: { type: string, minLength: 5, maxLength: 500 }
+        transactionPin: { type: string, pattern: "^[0-9]{6}$" }
+      required: [sourceCurrency, destinationCurrency, rate, reason, transactionPin]
     InternationalTransferRequestInput:
       type: object
       properties:

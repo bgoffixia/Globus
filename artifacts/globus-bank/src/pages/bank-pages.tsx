@@ -42,6 +42,8 @@ import {
   getListAdminTransactionStatusHistoryQueryKey,
   getListAdminIdentityDocumentsQueryKey,
   getListAdminUsersQueryKey,
+  getListBankExchangeRatesQueryKey,
+  getListInternationalTransferRequestsQueryKey,
   getListMyIdentityDocumentsQueryKey,
   getListBankTransactionsQueryKey,
   getListBankWalletsQueryKey,
@@ -49,6 +51,7 @@ import {
   useCreateIdentityDocumentUploadUrl,
   useCompleteIdentityDocumentUpload,
   useCreateBankTransfer,
+  useCreateInternationalTransferRequest,
   useCreateLedgerRequest,
   useDeleteAdminTransaction,
   useGetAdminAccess,
@@ -65,6 +68,8 @@ import {
   useListMyIdentityDocuments,
   useListBankTransactions,
   useListBankWallets,
+  useListBankExchangeRates,
+  useListInternationalTransferRequests,
   useUpdateAdminUserStatus,
   useUpdateAdminTransactionStatus,
   useUpdateAdminUserVerification,
@@ -72,10 +77,11 @@ import {
   useResetAdminUserTransactionPin,
   useUpdateTransactionPin,
   useUpdateBankProfile,
+  useUpsertBankExchangeRate,
   useDeleteMyIdentityDocument,
   useSubmitIdentityDocuments,
 } from '@workspace/api-client-react';
-import type { AdminLedgerRequest, AdminUser, BankTransaction, IdentityDocument, Wallet } from '@workspace/api-client-react';
+import type { AdminLedgerRequest, AdminUser, BankTransaction, IdentityDocument, InternationalTransferRequest, Wallet } from '@workspace/api-client-react';
 import { GlobusLoader } from '@/components/globus-loader';
 import { downloadTransactionReceiptPdf } from '@/lib/transaction-receipt-pdf';
 const currencies = ['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD'] as const;
@@ -366,7 +372,10 @@ export function SendPage() {
   };
   return (
     <>
-      <PageHeading eyebrow="Internal ledger" title="Send to a Globus member" subtitle="Transfers update both members’ Globus ledger wallets. No outside account is contacted." />
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <PageHeading eyebrow="Internal ledger" title="Send to a Globus member" subtitle="Transfers update both members’ Globus ledger wallets. No outside account is contacted." />
+        <Link href="/international-transfer" className="mb-1 inline-flex items-center gap-2 rounded-xl border border-[#d8e4e9] bg-white px-4 py-2.5 text-[10px] font-bold text-[#365771] hover:bg-[#f4f8f9]"><ArrowLeftRight size={14} /> International transfer request</Link>
+      </div>
       <div className="mt-7 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <form onSubmit={submit} className="rounded-[22px] border border-[#e1e8ee] bg-white p-5 sm:p-8">
           <div className="mb-7 flex gap-3 rounded-xl border border-[#d9e9e9] bg-[#f0f8f8] p-4 text-[11px] leading-5 text-[#497b80]"><ShieldCheck size={17} className="mt-0.5 shrink-0" /><span><b className="text-[#2d646a]">Internal member transfer</b><br />The sender’s and recipient’s Globus ledgers are updated together. This does not send money to a bank or outside account.</span></div>
@@ -391,6 +400,179 @@ export function SendPage() {
         </aside>
       </div>
       {receipt && <ReceiptDialog transaction={receipt} onClose={() => setReceipt(null)} />}
+    </>
+  );
+}
+
+export function InternationalTransferPage() {
+  const queryClient = useQueryClient();
+  const profile = useGetBankProfile({
+    query: { queryKey: getGetBankProfileQueryKey() },
+  });
+  const wallets = useListBankWallets({
+    query: { queryKey: getListBankWalletsQueryKey() },
+  });
+  const rates = useListBankExchangeRates({
+    query: { queryKey: getListBankExchangeRatesQueryKey() },
+  });
+  const requests = useListInternationalTransferRequests({
+    query: { queryKey: getListInternationalTransferRequestsQueryKey() },
+  });
+  const createRequest = useCreateInternationalTransferRequest();
+  const [destinationCountry, setDestinationCountry] = useState('');
+  const [recipientBank, setRecipientBank] = useState('');
+  const [recipientAccountName, setRecipientAccountName] = useState('');
+  const [recipientAccountNumber, setRecipientAccountNumber] = useState('');
+  const [sourceCurrency, setSourceCurrency] = useState<Currency>('USD');
+  const [destinationCurrency, setDestinationCurrency] = useState<Currency>('EUR');
+  const [amount, setAmount] = useState('');
+  const [remark, setRemark] = useState('');
+  const [transactionPin, setTransactionPin] = useState('');
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState<InternationalTransferRequest | null>(null);
+  const available = Number(
+    wallets.data?.find(wallet => wallet.currency === sourceCurrency)?.available ?? 0,
+  );
+  const configuredRate = rates.data?.find(
+    rate =>
+      rate.sourceCurrency === sourceCurrency &&
+      rate.destinationCurrency === destinationCurrency,
+  );
+  const exchangeRate = sourceCurrency === destinationCurrency
+    ? '1.0000000000'
+    : configuredRate?.rate;
+  const convertedAmount = exchangeRate
+    ? previewConversionAmount(amount, exchangeRate)
+    : null;
+
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError('');
+    setSuccess(null);
+    createRequest.mutate({
+      data: {
+        destinationCountry: destinationCountry.trim(),
+        recipientBank: recipientBank.trim(),
+        recipientAccountName: recipientAccountName.trim(),
+        recipientAccountNumber,
+        sourceCurrency,
+        destinationCurrency,
+        amount,
+        ...(remark.trim() ? { remark: remark.trim() } : {}),
+        transactionPin,
+        idempotencyKey: crypto.randomUUID(),
+      },
+    }, {
+      onSuccess: request => {
+        setSuccess(request);
+        setDestinationCountry('');
+        setRecipientBank('');
+        setRecipientAccountName('');
+        setRecipientAccountNumber('');
+        setAmount('');
+        setRemark('');
+        setTransactionPin('');
+        void Promise.all([
+          queryClient.invalidateQueries({ queryKey: getListInternationalTransferRequestsQueryKey() }),
+          queryClient.invalidateQueries({ queryKey: getListBankTransactionsQueryKey() }),
+          queryClient.invalidateQueries({ queryKey: getGetBankDashboardQueryKey() }),
+        ]);
+      },
+      onError: mutationError => {
+        setError(mutationError instanceof Error
+          ? mutationError.message
+          : 'The transfer request could not be recorded. Please try again.');
+      },
+    });
+  };
+
+  return (
+    <>
+      <PageHeading
+        eyebrow="International transfers"
+        title="Create a transfer request"
+        subtitle="Review the destination details and internal currency conversion before submitting your request."
+      />
+      <div className="mt-6 flex flex-wrap items-start gap-3 rounded-xl border border-[#eadfbe] bg-[#fbf7eb] px-4 py-3 text-[10px] leading-5 text-[#806b3d]">
+        <ShieldCheck size={16} className="mt-0.5 shrink-0" />
+        <p><b>Internal request only.</b> Globus does not contact the recipient’s bank or send outside funds. Submitting this request does not debit or reserve your wallet. Only the last four account characters are retained. Conversion rates are maintained by Globus administrators and are not live market quotes.</p>
+      </div>
+
+      <div className="mt-6 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <form onSubmit={submit} className="min-w-0 rounded-[22px] border border-[#e1e8ee] bg-white p-5 sm:p-8">
+          <div className="grid gap-5 sm:grid-cols-2">
+            <Field label="Destination country">
+              <input data-testid="input-destination-country" required minLength={2} maxLength={80} value={destinationCountry} onChange={event => setDestinationCountry(event.target.value)} placeholder="Country" className={inputClass} />
+            </Field>
+            <Field label="Recipient bank">
+              <input data-testid="input-recipient-bank" required maxLength={120} value={recipientBank} onChange={event => setRecipientBank(event.target.value)} placeholder="Bank name" className={inputClass} />
+            </Field>
+            <Field label="Recipient account name">
+              <input data-testid="input-recipient-account-name" required maxLength={120} value={recipientAccountName} onChange={event => setRecipientAccountName(event.target.value)} placeholder="Name on the account" className={inputClass} />
+            </Field>
+            <Field label="Recipient account number / IBAN">
+              <input data-testid="input-recipient-account-number" required minLength={4} maxLength={34} pattern="[A-Za-z0-9 ]+" autoComplete="off" value={recipientAccountNumber} onChange={event => setRecipientAccountNumber(event.target.value)} placeholder="Enter account number or IBAN" className={inputClass} />
+            </Field>
+            <Field label="Source wallet currency">
+              <select data-testid="select-source-currency" value={sourceCurrency} onChange={event => setSourceCurrency(event.target.value as Currency)} className={inputClass}>
+                {currencies.map(item => <option key={item} value={item}>{item} · {currencyNames[item]}</option>)}
+              </select>
+            </Field>
+            <Field label="Destination currency">
+              <select data-testid="select-destination-currency" value={destinationCurrency} onChange={event => setDestinationCurrency(event.target.value as Currency)} className={inputClass}>
+                {currencies.map(item => <option key={item} value={item}>{item} · {currencyNames[item]}</option>)}
+              </select>
+            </Field>
+            <Field label={`Amount in ${sourceCurrency}`}>
+              <input data-testid="input-international-amount" required inputMode="decimal" pattern="[0-9]+(\\.[0-9]{1,2})?" min="0.01" value={amount} onChange={event => setAmount(event.target.value)} placeholder="0.00" className={inputClass} />
+              <span className="mt-1.5 block text-[10px] text-[#8391a0]">Available: {formatMoney(available, sourceCurrency)}</span>
+            </Field>
+            <div className="rounded-xl border border-[#e4eaee] bg-[#f8fafb] p-4" aria-live="polite" data-testid="conversion-quote">
+              <p className="text-[9px] font-bold uppercase tracking-[.14em] text-[#71869a]">Estimated conversion</p>
+              {exchangeRate ? (
+                <>
+                  <p className="mt-2 text-[18px] font-bold text-[#203851]">{convertedAmount === null ? '—' : formatMoney(Number(convertedAmount), destinationCurrency)}</p>
+                  <p className="mt-1 text-[10px] text-[#6f8193]">1 {sourceCurrency} = {exchangeRate} {destinationCurrency}</p>
+                  <p className="mt-1 text-[9px] text-[#8996a3]">{configuredRate ? `Rate updated ${formatDate(configuredRate.updatedAt)}` : 'Same-currency rate'}</p>
+                </>
+              ) : (
+                <p className="mt-2 text-[10px] leading-5 text-[#9a7140]">No internal rate is configured for {sourceCurrency} → {destinationCurrency}. Contact Globus operations.</p>
+              )}
+            </div>
+            <Field label="Remark (optional)">
+              <input data-testid="input-transfer-remark" maxLength={140} value={remark} onChange={event => setRemark(event.target.value)} placeholder="Reason or note for this request" className={inputClass} />
+            </Field>
+            <Field label="6-digit transaction PIN">
+              <input data-testid="input-transfer-pin" required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="off" value={transactionPin} onChange={event => setTransactionPin(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="Enter your PIN" className={inputClass} />
+            </Field>
+          </div>
+          {profile.data?.transactionPinConfigured === false && <p className="mt-4 rounded-lg border border-[#eadfbe] bg-[#fbf7eb] px-4 py-3 text-[10px] leading-5 text-[#806b3d]">Set up your transaction PIN in <Link href="/settings" className="font-bold underline">Settings</Link> before submitting a request.</p>}
+          {error && <p data-testid="status-transfer-error" role="alert" className="mt-5 rounded-lg bg-[#fff1ef] px-4 py-3 text-[11px] text-[#a24940]">{error}</p>}
+          {success && <div data-testid="status-transfer-success" role="status" className="mt-5 rounded-xl border border-[#cfe5db] bg-[#f1f8f4] p-4 text-[11px] leading-5 text-[#417461]"><b>Request recorded — no funds were sent.</b><p className="mt-1">Reference {success.reference} · {success.sourceAmount} {success.sourceCurrency} → {success.destinationAmount} {success.destinationCurrency} · {humanize(success.status)}</p></div>}
+          <button data-testid="button-submit-international-transfer" disabled={createRequest.isPending || !exchangeRate || transactionPin.length !== 6 || !amount || Number(amount) <= 0 || Number(amount) > available} className="mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#142f51] text-[12px] font-bold text-white transition hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">
+            {createRequest.isPending ? 'Recording request…' : 'Submit transfer request'} <ArrowRight size={15} />
+          </button>
+        </form>
+
+        <aside className="rounded-[22px] bg-[#eaf0f4] p-6">
+          <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[#638092]">How the calculator works</p>
+          <h2 className="bank-display mt-3 text-[23px] font-semibold leading-tight text-[#213a55]">A stored Globus rate calculates the destination amount.</h2>
+          <p className="mt-3 text-[11px] leading-5 text-[#60748a]">The request saves the source amount, converted estimate, rate and timestamp for reference. The wallet balance is unchanged, and the request is not a bank instruction or proof of an outside payment.</p>
+          <Link href="/send" className="mt-5 inline-flex items-center gap-2 rounded-lg border border-white/80 bg-white px-3.5 py-2.5 text-[10px] font-bold text-[#385874] hover:bg-[#f7fafb]"><ArrowLeft size={14} /> Send to a Globus member</Link>
+        </aside>
+      </div>
+
+      <section className="mt-7 overflow-hidden rounded-[20px] border border-[#e1e8ee] bg-white">
+        <div className="flex items-center justify-between border-b border-[#edf0f3] px-5 py-4 sm:px-7"><p className="text-[13px] font-bold text-[#28405c]">Your international transfer requests</p><span className="text-[10px] font-semibold text-[#8291a1]">{requests.data?.length ?? 0} requests</span></div>
+        {requests.isLoading ? <ListSkeleton /> : requests.isError ? <InlineError text="Transfer requests are unavailable." retry={() => requests.refetch()} /> : requests.data?.length ? (
+          <ul className="divide-y divide-[#edf0f3]">
+            {requests.data.map(request => <li key={request.id} data-testid={`request-international-${request.id}`} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 sm:px-7">
+              <div className="min-w-0"><p className="truncate text-[11px] font-bold text-[#304962]">{request.recipientAccountName} · {request.destinationCountry}</p><p className="mt-1 text-[10px] text-[#7d8b99]">{request.reference} · {request.recipientBank} · ****{request.recipientAccountLast4}</p><p className="mt-1 text-[10px] text-[#60748a]">{formatMoney(Number(request.sourceAmount), request.sourceCurrency)} → {formatMoney(Number(request.destinationAmount), request.destinationCurrency)} at {request.exchangeRate}</p></div>
+              <span className="rounded-full bg-[#fbf7eb] px-3 py-1.5 text-[9px] font-bold capitalize text-[#806b3d]">{humanize(request.status)}</span>
+            </li>)}
+          </ul>
+        ) : <EmptyState title="No transfer requests yet" text="Submitted requests will appear here. They do not debit or reserve your wallet." />}
+      </section>
     </>
   );
 }
@@ -777,7 +959,7 @@ export function SettingsPage() {
           <div className="mt-6 border-t border-[#edf0f2] pt-5"><p className="text-[10px] text-[#8995a2]">Member since</p><p className="mt-1 text-[12px] font-semibold text-[#324962]">{formatDate(profile?.createdAt)}</p><p className="mt-4 text-[10px] leading-5 text-[#8895a3]">Globus is software, not a licensed bank. Identity review is an internal account status, not verification by a financial institution or government.</p></div>
         </section>
       </div>
-      <section className="mt-6 rounded-[22px] border border-[#e1e8ee] bg-white p-5 sm:p-7">
+      <section id="identity-verification" className="mt-6 rounded-[22px] border border-[#e1e8ee] bg-white p-5 sm:p-7">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#55868b]">Transaction security</p>
@@ -799,7 +981,7 @@ export function SettingsPage() {
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#55868b]">Private identity review</p>
             <h2 className="mt-1 text-[15px] font-bold text-[#29425c]">Submit identity documents</h2>
-            <p className="mt-2 max-w-2xl text-[11px] leading-5 text-[#718296]">Upload up to five PDF, JPG or PNG files, 10 MB each. Only you and authorized Globus admins can access them. Files are deleted after approval or rejection; the review status and audit record remain.</p>
+            <p className="mt-2 max-w-2xl text-[11px] leading-5 text-[#718296]">Upload up to five PDF, JPG or PNG files, 10 MB each. Only you and authorized Globus admins can access them. Files are deleted after approval or rejection; the review status and audit record remain. Admin accounts can submit documents and approve their own review; that decision is not independent identity verification.</p>
           </div>
           <span className="shrink-0 rounded-lg border border-[#d9e8e9] bg-[#f2f8f8] px-3 py-2 text-[10px] font-bold text-[#4e777a]">{humanize(profile?.verificationStatus)}</span>
         </div>
@@ -959,6 +1141,8 @@ export function AdminPage() {
   const queryClient = useQueryClient();
   const access = useGetAdminAccess({ query: { queryKey: getGetAdminAccessQueryKey(), retry: false } });
   const summary = useGetAdminSummary({ query: { queryKey: getGetAdminSummaryQueryKey(), enabled: !!access.data?.allowed, retry: false } });
+  const adminProfile = useGetBankProfile({ query: { queryKey: getGetBankProfileQueryKey(), enabled: !!access.data?.allowed } });
+  const exchangeRates = useListBankExchangeRates({ query: { queryKey: getListBankExchangeRatesQueryKey(), enabled: !!access.data?.allowed } });
   const [search, setSearch] = useState('');
   const [statusError, setStatusError] = useState('');
   const [fundTarget, setFundTarget] = useState<AdminUser | null>(null);
@@ -979,6 +1163,12 @@ export function AdminPage() {
   const [reviewMessage, setReviewMessage] = useState('');
   const [reviewError, setReviewError] = useState('');
   const [reviewFeedback, setReviewFeedback] = useState('');
+  const [rateSource, setRateSource] = useState<Currency>('USD');
+  const [rateDestination, setRateDestination] = useState<Currency>('EUR');
+  const [rateValue, setRateValue] = useState('');
+  const [rateReason, setRateReason] = useState('');
+  const [ratePin, setRatePin] = useState('');
+  const [rateMessage, setRateMessage] = useState('');
   const [statusTarget, setStatusTarget] = useState<BankTransaction | null>(null);
   const params = useMemo(() => ({ ...(search.trim() ? { search: search.trim() } : {}), limit: 100 }), [search]);
   const users = useListAdminUsers(params, { query: { queryKey: getListAdminUsersQueryKey(params), enabled: !!access.data?.allowed } });
@@ -995,6 +1185,7 @@ export function AdminPage() {
   const funding = useCreateAdminFunding();
   const deletion = useDeleteAdminTransaction();
   const updateTransactionStatus = useUpdateAdminTransactionStatus();
+  const upsertExchangeRate = useUpsertBankExchangeRate();
   if (access.isLoading) return <PageSkeleton />;
   if (access.isError || !access.data?.allowed) return <Failure title="Operations access is restricted" text="This area is only available to authorized Globus operations staff." retry={() => access.refetch()} />;
   const setStatus = (userId: string, accountStatus: 'active' | 'suspended') => {
@@ -1093,6 +1284,28 @@ export function AdminPage() {
     setReviewError('');
     setReviewFeedback('');
   };
+  const submitExchangeRate = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setRateMessage('');
+    upsertExchangeRate.mutate({
+      data: {
+        sourceCurrency: rateSource,
+        destinationCurrency: rateDestination,
+        rate: rateValue.trim(),
+        reason: rateReason.trim(),
+        transactionPin: ratePin,
+      },
+    }, {
+      onSuccess: () => {
+        setRateMessage(`Saved ${rateSource} → ${rateDestination} rate.`);
+        setRateValue('');
+        setRateReason('');
+        setRatePin('');
+        void queryClient.invalidateQueries({ queryKey: getListBankExchangeRatesQueryKey() });
+      },
+      onError: error => setRateMessage(error instanceof Error ? error.message : 'The internal rate could not be saved.'),
+    });
+  };
   const submitIdentityReview = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!identityTarget) return;
@@ -1125,6 +1338,44 @@ export function AdminPage() {
         <Metric label="Ledger transactions" value={summary.data?.ledgerTransactions} />
       </div>
       <div className="mt-5 flex flex-wrap items-center gap-3 rounded-xl border border-[#d9e7e8] bg-[#eff7f7] px-4 py-3 text-[11px] text-[#48767b]"><ShieldCheck size={15} /> Internal ledger operations only · no outside funds are held or sent.</div>
+      <section className="mt-5 flex flex-wrap items-center justify-between gap-4 rounded-[18px] border border-[#dfe7ec] bg-white px-5 py-4">
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#718296]">Your admin identity</p>
+          <p className="mt-1 text-[12px] font-semibold text-[#304962]">Verification status: {humanize(adminProfile.data?.verificationStatus)}</p>
+          <p className="mt-1 text-[10px] leading-4 text-[#7c8b9a]">Upload your own documents in Settings. You may approve your own review; the decision is recorded in the audit log.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/settings#identity-verification" className="rounded-lg border border-[#dfe6eb] px-3 py-2.5 text-[10px] font-bold text-[#3f5c75] hover:bg-[#f5f8f9]">Manage my documents</Link>
+          {adminProfile.data?.verificationStatus === 'pending' && <button type="button" onClick={() => openIdentityReview({
+            id: adminProfile.data!.id,
+            email: adminProfile.data!.email,
+            customerId: adminProfile.data!.customerId,
+            firstName: adminProfile.data!.firstName,
+            lastName: adminProfile.data!.lastName,
+            country: adminProfile.data!.country,
+            verificationStatus: adminProfile.data!.verificationStatus,
+            verificationNote: adminProfile.data!.verificationNote,
+            accountStatus: adminProfile.data!.accountStatus,
+            walletCount: 0,
+            createdAt: adminProfile.data!.createdAt,
+          })} className="rounded-lg bg-[#142f51] px-3 py-2.5 text-[10px] font-bold text-white hover:bg-[#1b4269]">Review my identity</button>}
+        </div>
+      </section>
+      <section className="mt-6 rounded-[20px] border border-[#dfe7ec] bg-white p-5 sm:p-7">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div><p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#55868b]">Internal conversion rates</p><h2 className="mt-1 text-[15px] font-bold text-[#29425c]">Manage calculator rates</h2><p className="mt-1 max-w-2xl text-[10px] leading-5 text-[#718296]">Rates are entered by Globus administrators and are not live market quotes. Each request stores the rate and timestamp used for its estimate.</p></div>
+        </div>
+        <form onSubmit={submitExchangeRate} className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <Field label="From"><select data-testid="select-rate-source" value={rateSource} onChange={event => setRateSource(event.target.value as Currency)} className={inputClass}>{currencies.map(currency => <option key={currency} value={currency}>{currency}</option>)}</select></Field>
+          <Field label="To"><select data-testid="select-rate-destination" value={rateDestination} onChange={event => setRateDestination(event.target.value as Currency)} className={inputClass}>{currencies.map(currency => <option key={currency} value={currency}>{currency}</option>)}</select></Field>
+          <Field label="Rate (1 from = amount to)"><input data-testid="input-exchange-rate" required inputMode="decimal" pattern="[0-9]+(\\.[0-9]{1,10})?" min="0.0000000001" max="999999999999" step="0.0000000001" value={rateValue} onChange={event => setRateValue(event.target.value)} placeholder="e.g. 0.92" className={inputClass} /></Field>
+          <Field label="Audit reason"><input data-testid="input-exchange-rate-reason" required minLength={5} maxLength={500} value={rateReason} onChange={event => setRateReason(event.target.value)} placeholder="Why is this rate changing?" className={inputClass} /></Field>
+          <Field label="Your 6-digit transaction PIN"><input data-testid="input-exchange-rate-pin" required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="current-password" value={ratePin} onChange={event => setRatePin(event.target.value.replace(/\D/g, '').slice(0, 6))} className={inputClass} /></Field>
+          <button data-testid="button-save-exchange-rate" disabled={upsertExchangeRate.isPending || rateSource === rateDestination || !rateValue || rateReason.trim().length < 5 || ratePin.length !== 6} className="h-11 self-end rounded-xl bg-[#142f51] px-4 text-[10px] font-bold text-white hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">{upsertExchangeRate.isPending ? 'Saving…' : 'Save rate'}</button>
+        </form>
+        {rateMessage && <p role="status" className="mt-3 rounded-lg border border-[#dfe8ec] bg-[#f7f9fa] px-3 py-2 text-[10px] text-[#516b80]">{rateMessage}</p>}
+        {exchangeRates.isLoading ? <div className="mt-5"><ListSkeleton /></div> : exchangeRates.isError ? <InlineError text="Conversion rates are unavailable." retry={() => exchangeRates.refetch()} /> : exchangeRates.data?.length ? <div className="mt-5 overflow-x-auto rounded-xl border border-[#e7edf0]"><table className="w-full min-w-[440px] text-left"><thead className="bg-[#f7f9fa] text-[9px] uppercase tracking-[.13em] text-[#8291a0]"><tr><th className="px-4 py-3">Pair</th><th className="px-4 py-3">Rate</th><th className="px-4 py-3">Updated</th></tr></thead><tbody>{exchangeRates.data.map(rate => <tr key={`${rate.sourceCurrency}-${rate.destinationCurrency}`} data-testid={`row-rate-${rate.sourceCurrency}-${rate.destinationCurrency}`} className="border-t border-[#edf0f2] text-[10px] text-[#445a71]"><td className="px-4 py-3 font-semibold">{rate.sourceCurrency} → {rate.destinationCurrency}</td><td className="px-4 py-3 font-mono">{rate.rate}</td><td className="px-4 py-3">{formatDateTime(rate.updatedAt)}</td></tr>)}</tbody></table></div> : <div className="mt-5 rounded-xl bg-[#f7f9fa] px-4 py-3 text-[10px] text-[#75879a]">No rates are configured. Add a currency pair to enable the conversion calculator.</div>}
+      </section>
       {statusError && <p role="alert" className="mt-3 rounded-lg bg-[#fff1ef] px-4 py-3 text-[11px] text-[#a24940]">{statusError}</p>}
       {reviewFeedback && <p role="status" className="mt-3 rounded-lg border border-[#cfe5db] bg-[#f1f8f4] px-4 py-3 text-[11px] text-[#417461]">{reviewFeedback}</p>}
       {fundTarget && <section className="mt-6 rounded-[20px] border border-[#dfe7ec] bg-white p-5 sm:p-7">
@@ -1178,10 +1429,13 @@ export function AdminPage() {
             <Field label="Decision">
               <select value={reviewDecision} onChange={event => setReviewDecision(event.target.value as typeof reviewDecision)} className={inputClass}>
                 <option value="approved">Approve identity</option>
-                <option value="rejected">Reject and close review</option>
-                <option value="additional_information_required">Request more information</option>
+                {identityTarget.id !== adminProfile.data?.id && <>
+                  <option value="rejected">Reject and close review</option>
+                  <option value="additional_information_required">Request more information</option>
+                </>}
               </select>
             </Field>
+            {identityTarget.id === adminProfile.data?.id && <p className="mt-3 rounded-lg border border-[#eadfbe] bg-[#fbf7eb] px-4 py-3 text-[10px] leading-5 text-[#806b3d]">This is a self-approval. Globus records the decision but does not provide independent identity verification.</p>}
             {reviewDecision === 'additional_information_required' && <div className="mt-4"><Field label="Message for the member"><textarea required minLength={5} maxLength={500} rows={3} value={reviewMessage} onChange={event => setReviewMessage(event.target.value)} placeholder="Explain what additional documents or details are needed." className={`${inputClass} h-auto py-3`} /></Field></div>}
             <div className="mt-4"><Field label="Internal audit reason"><textarea required minLength={5} maxLength={500} rows={3} value={reviewReason} onChange={event => setReviewReason(event.target.value)} placeholder="Reason for this identity review decision." className={`${inputClass} h-auto py-3`} /></Field></div>
             {reviewError && <p role="alert" className="mt-4 rounded-lg bg-[#fff1ef] px-4 py-3 text-[11px] text-[#a24940]">{reviewError}</p>}
@@ -1539,9 +1793,9 @@ export function AdminUserManagementPage() {
 
 const disclosureCopy: Record<string, { eyebrow: string; title: string; intro: string; sections: [string, string][] }> = {
   '/about': { eyebrow: 'About Globus', title: 'An internal ledger for clear account activity.', intro: 'Globus records multi-currency wallets, member transfers, requests and administrative balance adjustments in its application database.', sections: [['A platform, not a bank', 'Globus is not a licensed bank, payment institution or custodian. It does not accept, hold or send outside funds.'], ['Internal balances', 'Wallet balances are records in the Globus ledger. No external bank, payment gateway or money-transfer provider is connected.'], ['Built for clear review', 'Balances, requests and activity include statuses, references and audit records to make each change traceable.']] },
-  '/help': { eyebrow: 'Support', title: 'Help with your Globus ledger.', intro: 'Understand how account activity is recorded inside Globus.', sections: [['How do deposits work?', 'Submit a ledger deposit request. An administrator must approve it before an internal wallet credit is recorded. No outside deposit is received.'], ['How do withdrawals work?', 'A pending withdrawal reserves the requested amount. Approval debits the internal wallet; rejection releases the reserve. No outside payout is made.'], ['Can I send someone money?', 'You can transfer an available balance to another active Globus member. Both internal wallets update together; no outside account is contacted.'], ['Where can I find my member ID?', 'Open Receive from your account navigation. Share your registered email with another member so they can address an internal transfer.']] },
-  '/fees': { eyebrow: 'Fees and rates', title: 'Understand the scope of ledger activity.', intro: 'Globus does not process external deposits, payouts, payment gateway transactions or currency conversions.', sections: [['External providers', 'No bank, payment gateway or real-money transfer provider is connected. Requests only affect the Globus ledger after the required approval.'], ['Fees', 'Globus does not charge an external transaction fee because it does not process outside payments.'], ['Currency balances', 'Currency wallets are recorded separately. Globus does not provide a live exchange quote or guarantee that balances can be converted or redeemed.']] },
-  '/privacy': { eyebrow: 'Privacy notice', title: 'Your information deserves clarity.', intro: 'This page summarizes account information Globus uses to provide its software services.', sections: [['Account details', 'Profile details and account identifiers associate internal records with your account. Authentication is provided through Clerk.'], ['Private identity documents', 'Documents submitted for internal review are stored privately and accessible only to the submitting member and authorized Globus admins. Files are deleted after approval or rejection. The verification status and an audit record of the decision remain. This review is not legal, bank or government identity verification.'], ['Operational records', 'Transactions and requests may include references, status, currency, amount, descriptions and timestamps.'], ['Your choices', 'Use Settings to review your profile and manage identity documents before submitting them. Contact the support team with questions about account information or platform operations.']] },
+  '/help': { eyebrow: 'Support', title: 'Help with your Globus ledger.', intro: 'Understand how account activity is recorded inside Globus.', sections: [['How do deposits work?', 'Submit a ledger deposit request. An administrator must approve it before an internal wallet credit is recorded. No outside deposit is received.'], ['How do withdrawals work?', 'A pending withdrawal reserves the requested amount. Approval debits the internal wallet; rejection releases the reserve. No outside payout is made.'], ['Can I send someone money?', 'You can transfer an available balance to another active Globus member. Both internal wallets update together; no outside account is contacted.'], ['How do international requests work?', 'Globus records the request and an administrator-maintained conversion estimate. It does not contact the destination bank, reserve or debit your wallet, or send outside funds.'], ['Where can I find my member ID?', 'Open Receive from your account navigation. Share your registered email with another member so they can address an internal transfer.']] },
+  '/fees': { eyebrow: 'Fees and rates', title: 'Understand the scope of ledger activity.', intro: 'Globus does not process external deposits, payouts, payment gateway transactions or real-money currency conversions.', sections: [['External providers', 'No bank, payment gateway or real-money transfer provider is connected. Requests only affect Globus records; internal member transfers are posted between member wallets.'], ['Fees', 'Globus does not charge an external transaction fee because it does not process outside payments.'], ['Currency balances', 'Currency wallets are recorded separately. International request estimates use administrator-maintained rates; they are not live quotes and do not convert or debit wallet balances.']] },
+  '/privacy': { eyebrow: 'Privacy notice', title: 'Your information deserves clarity.', intro: 'This page summarizes account information Globus uses to provide its software services.', sections: [['Account details', 'Profile details and account identifiers associate internal records with your account. Authentication is provided through Clerk.'], ['Private identity documents', 'Documents submitted for internal review are stored privately and accessible only to the submitting member and authorized Globus admins. Files are deleted after approval or rejection. The verification status and an audit record of the decision remain. This review is not legal, bank or government identity verification.'], ['Operational records', 'Transactions and requests may include references, status, currency, amount, descriptions and timestamps. For international transfer requests, only the recipient account’s last four characters are retained.'], ['Your choices', 'Use Settings to review your profile and manage identity documents before submitting them. Contact the support team with questions about account information or platform operations.']] },
   '/terms': { eyebrow: 'Terms of use', title: 'Internal ledger records, not bank deposits.', intro: 'Globus records account activity in its own database and does not move outside funds.', sections: [['No banking service', 'Globus is not a licensed bank and does not accept deposits, provide credit, custody funds or promise payment execution.'], ['Internal records', 'Displayed balances and transactions represent entries in the Globus ledger. An approved deposit request records an internal credit; an approved withdrawal records an internal debit. Neither action moves outside funds.'], ['Use responsibly', 'Do not rely on ledger balances or status labels as proof of funds held by a bank or as a promise of payment.']] },
   '/contact': { eyebrow: 'Contact', title: 'Contact information is not configured yet.', intro: 'A verified support channel has not been configured for Globus.', sections: [['Account help', 'Visit Help for guidance about the software. Do not include passwords, verification codes or sensitive payment details in support requests.'], ['Recorded activity', 'Include the transaction reference when asking about a ledger entry in your account.'], ['Operational disclosure', 'Globus support cannot complete, trace or reverse an external payment through this product.']] },
 };
@@ -1609,6 +1863,7 @@ function transactionDisplayType(transaction: BankTransaction) {
     case 'transfer_out':
       return 'Member transfer sent';
     case 'external_transfer':
+      return transaction.status === 'pending' ? 'International transfer request' : 'Prior ledger entry';
     case 'external_transfer_in':
       return 'Prior ledger entry';
     default:
@@ -1650,11 +1905,12 @@ function TransactionList({
   return <>
     <div>{transactions.map(transaction => {
       const isIncoming = transaction.type === 'transfer_in' || transaction.type === 'external_transfer_in' || transaction.type === 'simulation_credit' || transaction.type === 'admin_funding';
+      const isInternationalRequest = transaction.type === 'external_transfer' && transaction.status === 'pending';
       const canPrintReceipt = transaction.status === 'completed';
       return <div key={transaction.id} className="flex flex-wrap items-center gap-x-2 gap-y-2 border-b border-[#edf0f2] px-4 py-4 last:border-0 sm:flex-nowrap sm:gap-4 sm:px-7">
-        <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${isIncoming ? 'bg-[#edf7f3] text-[#4d8c72]' : 'bg-[#f0f4f7] text-[#658097]'}`}>{isIncoming ? <ArrowDownLeft size={16} /> : <ArrowUpRight size={16} />}</span>
+        <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${isIncoming ? 'bg-[#edf7f3] text-[#4d8c72]' : isInternationalRequest ? 'bg-[#fbf7eb] text-[#a0793b]' : 'bg-[#f0f4f7] text-[#658097]'}`}>{isInternationalRequest ? <Globe2 size={16} /> : isIncoming ? <ArrowDownLeft size={16} /> : <ArrowUpRight size={16} />}</span>
         <div className="min-w-0 flex-1"><p className="truncate text-[11px] font-semibold text-[#334a63]">{transaction.description || transactionDisplayType(transaction)}</p><p className="mt-1 truncate text-[9px] text-[#8996a4]">{transaction.counterparty || 'Internal ledger'} · {formatDate(transaction.createdAt)} · Internal ledger</p></div>
-        <div className="shrink-0 text-right"><p className={`text-[11px] font-bold ${isIncoming ? 'text-[#417f69]' : 'text-[#3c5269]'}`}>{isIncoming ? '+' : '−'}{formatMoney(Number(transaction.amount), transaction.currency)}</p><p className={`mt-1 text-[9px] capitalize ${transaction.status === 'completed' ? 'text-[#4f8c75]' : 'text-[#9b8050]'}`}>{humanize(transaction.status)}</p></div>
+        <div className="shrink-0 text-right"><p className={`text-[11px] font-bold ${isIncoming ? 'text-[#417f69]' : isInternationalRequest ? 'text-[#a0793b]' : 'text-[#3c5269]'}`}>{isInternationalRequest ? 'Request · ' : isIncoming ? '+' : '−'}{formatMoney(Number(transaction.amount), transaction.currency)}</p><p className={`mt-1 text-[9px] capitalize ${transaction.status === 'completed' ? 'text-[#4f8c75]' : 'text-[#9b8050]'}`}>{humanize(transaction.status)}</p></div>
         {(canPrintReceipt || onStatusOverride || onDelete) && <div className="flex w-full flex-wrap justify-end gap-2 sm:ml-auto sm:w-auto sm:flex-nowrap">
           {canPrintReceipt && <button type="button" onClick={() => setReceipt(transaction)} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#dfe7eb] px-2.5 py-2 text-[9px] font-bold text-[#4a667e] hover:bg-[#f5f8f9]" aria-label={`View receipt ${transaction.reference}`}><FileText size={13} /><span className="hidden sm:inline">Receipt</span></button>}
           {onStatusOverride && <button type="button" onClick={() => setHistoryTarget(transaction)} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#dfe7eb] px-2.5 py-2 text-[9px] font-bold text-[#4a667e] hover:bg-[#f5f8f9]" aria-label={`View status history for ${transaction.reference}`}><History size={13} /><span className="hidden sm:inline">History</span></button>}
@@ -1839,7 +2095,9 @@ function ReceiptDialog({ transaction, onClose }: { transaction: BankTransaction;
         description: transaction.description || transactionDisplayType(transaction),
         counterparty: transaction.counterparty || 'Internal ledger',
         activity: transactionDisplayType(transaction),
-        disclaimer: 'This receipt records an entry in the Globus internal ledger. It is not proof of funds received or sent by an outside account. Globus does not connect to a bank, payment gateway, or real-money transfer service.',
+        disclaimer: transaction.type === 'external_transfer'
+          ? 'This receipt records a Globus internal record or transfer request only. It is not proof of funds received or sent by an outside account. Internal requests do not contact the destination bank, and the conversion estimate is not a live quote.'
+          : 'This receipt records an entry in the Globus internal ledger. It is not proof of funds received or sent by an outside account. Globus does not connect to a bank, payment gateway, or real-money transfer service.',
       }, `${import.meta.env.BASE_URL}globus-wordmark.png`);
     } catch (error) {
       setDownloadError(error instanceof Error ? error.message : 'The PDF receipt could not be downloaded.');
@@ -1930,6 +2188,17 @@ function Failure({ title, text, retry }: { title: string; text?: string; retry: 
 
 function InlineError({ text, retry }: { text: string; retry: () => void }) {
   return <div className="flex items-center justify-between gap-4 px-5 py-5 text-[11px] text-[#a05c50]"><span>{text}</span><button onClick={retry} className="inline-flex shrink-0 items-center gap-1.5 font-bold"><RefreshCw size={12} />Retry</button></div>;
+}
+
+function previewConversionAmount(amount: string, rate: string): string | null {
+  const amountMatch = /^(\d{1,12})(?:\.(\d{1,2}))?$/.exec(amount);
+  const rateMatch = /^(\d{1,12})(?:\.(\d{1,10}))?$/.exec(rate);
+  if (!amountMatch || !rateMatch) return null;
+  const minor = BigInt(amountMatch[1]) * 100n + BigInt((amountMatch[2] ?? '').padEnd(2, '0'));
+  const scale = 10n ** 10n;
+  const rateScaled = BigInt(rateMatch[1]) * scale + BigInt((rateMatch[2] ?? '').padEnd(10, '0'));
+  const converted = (minor * rateScaled + scale / 2n) / scale;
+  return `${converted / 100n}.${(converted % 100n).toString().padStart(2, '0')}`;
 }
 
 function formatMoney(amount: number, currency: string) {

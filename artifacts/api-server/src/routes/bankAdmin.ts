@@ -32,6 +32,8 @@ import {
   UpdateAdminTransactionStatusBody,
   UpdateAdminTransactionStatusParams,
   UpdateAdminTransactionStatusResponse,
+  UpsertBankExchangeRateBody,
+  UpsertBankExchangeRateResponse,
   ReviewAdminLedgerRequestBody,
   ReviewAdminLedgerRequestParams,
   ReviewAdminLedgerRequestResponse,
@@ -41,6 +43,7 @@ import {
 } from "@workspace/api-zod";
 import {
   bankAuditLogsTable,
+  bankExchangeRatesTable,
   bankIdentityDocumentsTable,
   bankLedgerEntriesTable,
   bankSandboxRequestsTable,
@@ -248,6 +251,77 @@ router.get("/bank/admin/access", requireSignedIn, async (req, res): Promise<void
     GetAdminAccessResponse.parse({
       allowed,
       roles: allowed ? ["super_administrator"] : [],
+    }),
+  );
+});
+
+router.put("/bank/admin/exchange-rates", requireAdmin, async (req, res): Promise<void> => {
+  const parsed = UpsertBankExchangeRateBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  if (parsed.data.sourceCurrency === parsed.data.destinationCurrency) {
+    res.status(400).json({ error: "Choose two different currencies." });
+    return;
+  }
+  if (!Number.isFinite(Number(parsed.data.rate)) || Number(parsed.data.rate) <= 0) {
+    res.status(400).json({ error: "The rate must be greater than zero." });
+    return;
+  }
+  const clerkUserId = getAuth(req).userId;
+  if (!clerkUserId) {
+    res.status(401).json({ error: "Sign in to access your Globus account." });
+    return;
+  }
+  const actor = await ensureBankUser(clerkUserId);
+  const pinResult = await verifyTransactionPin(actor.id, parsed.data.transactionPin);
+  if (pinResult !== "valid") {
+    respondWithTransactionPinError(res, pinResult);
+    return;
+  }
+  const reason = parsed.data.reason.trim();
+  if (reason.length < 5) {
+    res.status(400).json({ error: "Enter an audit reason of at least five characters." });
+    return;
+  }
+  const rate = await db.transaction(async (tx) => {
+    const now = new Date();
+    const [savedRate] = await tx
+      .insert(bankExchangeRatesTable)
+      .values({
+        sourceCurrency: parsed.data.sourceCurrency,
+        destinationCurrency: parsed.data.destinationCurrency,
+        rate: parsed.data.rate,
+        updatedByUserId: actor.id,
+        updatedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: [
+          bankExchangeRatesTable.sourceCurrency,
+          bankExchangeRatesTable.destinationCurrency,
+        ],
+        set: {
+          rate: parsed.data.rate,
+          updatedByUserId: actor.id,
+          updatedAt: now,
+        },
+      })
+      .returning();
+    await tx.insert(bankAuditLogsTable).values({
+      actorUserId: actor.id,
+      targetUserId: actor.id,
+      action: "update_exchange_rate",
+      reason: `${parsed.data.sourceCurrency} to ${parsed.data.destinationCurrency} rate set to ${parsed.data.rate}. ${reason}`,
+    });
+    return savedRate;
+  });
+  res.json(
+    UpsertBankExchangeRateResponse.parse({
+      sourceCurrency: rate.sourceCurrency,
+      destinationCurrency: rate.destinationCurrency,
+      rate: rate.rate,
+      updatedAt: rate.updatedAt.toISOString(),
     }),
   );
 });
@@ -680,8 +754,13 @@ router.patch(
       return;
     }
     const actorUserId = (await ensureBankUser(authenticatedClerkId)).id;
-    if (params.data.userId === actorUserId) {
-      res.status(400).json({ error: "Administrators cannot review their own identity." });
+    if (
+      params.data.userId === actorUserId &&
+      parsed.data.verificationStatus !== "approved"
+    ) {
+      res.status(400).json({
+        error: "Administrators may approve their own identity, but cannot reject or request more information from themselves.",
+      });
       return;
     }
     const reason = parsed.data.reason.trim();
@@ -1374,6 +1453,15 @@ router.patch(
         .for("update");
       if (!transaction) {
         return { notFound: true as const };
+      }
+      if (
+        transaction.type === "external_transfer" &&
+        parsed.data.status === "completed"
+      ) {
+        return {
+          error:
+            "International transfer requests cannot be marked completed because Globus does not send funds to outside accounts.",
+        };
       }
       if (
         transaction.type === "deposit_request" ||
