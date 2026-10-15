@@ -25,6 +25,17 @@ export const CurrencyCode = {
   AUD: 'AUD',
 } as const;
 
+export type ActiveCurrencyCode = typeof ActiveCurrencyCode[keyof typeof ActiveCurrencyCode];
+
+
+export const ActiveCurrencyCode = {
+  USD: 'USD',
+  EUR: 'EUR',
+  GBP: 'GBP',
+  CAD: 'CAD',
+  AUD: 'AUD',
+} as const;
+
 export interface BankExchangeRate {
   sourceCurrency: CurrencyCode;
   destinationCurrency: CurrencyCode;
@@ -34,8 +45,8 @@ export interface BankExchangeRate {
 }
 
 export interface BankExchangeRateInput {
-  sourceCurrency: CurrencyCode;
-  destinationCurrency: CurrencyCode;
+  sourceCurrency: ActiveCurrencyCode;
+  destinationCurrency: ActiveCurrencyCode;
   /** @pattern ^[0-9]{1,12}(\.[0-9]{1,10})?$ */
   rate: string;
   /**
@@ -47,7 +58,16 @@ export interface BankExchangeRateInput {
   transactionPin: string;
 }
 
+export type InternationalTransferRequestInputTransferType = typeof InternationalTransferRequestInputTransferType[keyof typeof InternationalTransferRequestInputTransferType];
+
+
+export const InternationalTransferRequestInputTransferType = {
+  local_routing: 'local_routing',
+  international_wire: 'international_wire',
+} as const;
+
 export interface InternationalTransferRequestInput {
+  transferType: InternationalTransferRequestInputTransferType;
   /**
      * @minLength 2
      * @maxLength 80
@@ -59,6 +79,16 @@ export interface InternationalTransferRequestInput {
      */
   recipientBank: string;
   /**
+     * @maxLength 24
+     * @pattern ^[A-Za-z0-9 -]*$
+     */
+  routingCode?: string;
+  /**
+     * @maxLength 11
+     * @pattern ^[A-Za-z0-9]*$
+     */
+  swiftBic?: string;
+  /**
      * @minLength 1
      * @maxLength 120
      */
@@ -69,8 +99,8 @@ export interface InternationalTransferRequestInput {
      * @pattern ^[A-Za-z0-9 ]+$
      */
   recipientAccountNumber: string;
-  sourceCurrency: CurrencyCode;
-  destinationCurrency: CurrencyCode;
+  sourceCurrency: ActiveCurrencyCode;
+  destinationCurrency: ActiveCurrencyCode;
   /** @pattern ^[0-9]{1,12}(\.[0-9]{1,2})?$ */
   amount: string;
   /** @maxLength 140 */
@@ -83,6 +113,14 @@ export interface InternationalTransferRequestInput {
   /** @pattern ^[0-9]{6}$ */
   transactionPin: string;
 }
+
+export type InternationalTransferRequestTransferType = typeof InternationalTransferRequestTransferType[keyof typeof InternationalTransferRequestTransferType];
+
+
+export const InternationalTransferRequestTransferType = {
+  local_routing: 'local_routing',
+  international_wire: 'international_wire',
+} as const;
 
 export type TransactionStatus = typeof TransactionStatus[keyof typeof TransactionStatus];
 
@@ -100,6 +138,11 @@ export interface InternationalTransferRequest {
   status: TransactionStatus;
   destinationCountry: string;
   recipientBank: string;
+  transferType: InternationalTransferRequestTransferType;
+  /** @nullable */
+  routingCode: string | null;
+  /** @nullable */
+  swiftBic: string | null;
   recipientAccountName: string;
   /** @pattern ^[A-Z0-9]{4}$ */
   recipientAccountLast4: string;
@@ -416,7 +459,7 @@ export const LedgerRequestInputType = {
 
 export interface LedgerRequestInput {
   type: LedgerRequestInputType;
-  currency: CurrencyCode;
+  currency: ActiveCurrencyCode;
   /** @pattern ^[0-9]{1,12}(\.[0-9]{1,2})?$ */
   amount: string;
   /** @maxLength 140 */
@@ -694,7 +737,7 @@ export const AdminFundingInputDirection = {
 
 export interface AdminFundingInput {
   direction: AdminFundingInputDirection;
-  currency: CurrencyCode;
+  currency: ActiveCurrencyCode;
   /** @pattern ^[0-9]{1,12}(\.[0-9]{1,2})?$ */
   amount: string;
   /**

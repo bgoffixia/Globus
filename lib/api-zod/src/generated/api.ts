@@ -312,7 +312,8 @@ export const SubmitIdentityDocumentsResponse = zod.object({
 
 
 /**
- * @summary Simulate a transfer to another registered Globus user
+ * @deprecated
+ * @summary Retired member-to-member transfer endpoint
  */
 export const createBankTransferBodyAmountRegExp = new RegExp('^[0-9]{1,12}(\\.[0-9]{1,2})?$');
 export const createBankTransferBodyDescriptionMax = 140;
@@ -332,19 +333,7 @@ export const CreateBankTransferBody = zod.object({
   "transactionPin": zod.string().regex(createBankTransferBodyTransactionPinRegExp)
 })
 
-export const CreateBankTransferResponse = zod.object({
-  "id": zod.string(),
-  "reference": zod.string(),
-  "type": zod.enum(['simulation_credit', 'admin_funding', 'admin_debit', 'admin_adjustment', 'reversal', 'transfer_in', 'transfer_out', 'external_transfer', 'external_transfer_in', 'deposit_request', 'withdrawal_request', 'exchange_request']),
-  "status": zod.enum(['completed', 'pending', 'failed', 'reversed']),
-  "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
-  "amount": zod.string(),
-  "fee": zod.string(),
-  "counterparty": zod.string().nullable(),
-  "description": zod.string(),
-  "mode": zod.enum(['internal_ledger']),
-  "createdAt": zod.coerce.date()
-})
+export const CreateBankTransferResponse = zod.void()
 
 
 /**
@@ -410,6 +399,9 @@ export const ListInternationalTransferRequestsResponseItem = zod.object({
   "status": zod.enum(['completed', 'pending', 'failed', 'reversed']),
   "destinationCountry": zod.string(),
   "recipientBank": zod.string(),
+  "transferType": zod.enum(['local_routing', 'international_wire']),
+  "routingCode": zod.string().nullable(),
+  "swiftBic": zod.string().nullable(),
   "recipientAccountName": zod.string(),
   "recipientAccountLast4": zod.string().regex(listInternationalTransferRequestsResponseRecipientAccountLast4RegExp),
   "sourceCurrency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
@@ -433,6 +425,14 @@ export const createInternationalTransferRequestBodyDestinationCountryMax = 80;
 
 export const createInternationalTransferRequestBodyRecipientBankMax = 120;
 
+export const createInternationalTransferRequestBodyRoutingCodeMax = 24;
+
+
+export const createInternationalTransferRequestBodyRoutingCodeRegExp = new RegExp('^[A-Za-z0-9 -]*$');
+export const createInternationalTransferRequestBodySwiftBicMax = 11;
+
+
+export const createInternationalTransferRequestBodySwiftBicRegExp = new RegExp('^[A-Za-z0-9]*$');
 export const createInternationalTransferRequestBodyRecipientAccountNameMax = 120;
 
 export const createInternationalTransferRequestBodyRecipientAccountNumberMin = 4;
@@ -450,12 +450,15 @@ export const createInternationalTransferRequestBodyTransactionPinRegExp = new Re
 
 
 export const CreateInternationalTransferRequestBody = zod.object({
+  "transferType": zod.enum(['local_routing', 'international_wire']),
   "destinationCountry": zod.string().min(createInternationalTransferRequestBodyDestinationCountryMin).max(createInternationalTransferRequestBodyDestinationCountryMax),
   "recipientBank": zod.string().min(1).max(createInternationalTransferRequestBodyRecipientBankMax),
+  "routingCode": zod.string().max(createInternationalTransferRequestBodyRoutingCodeMax).regex(createInternationalTransferRequestBodyRoutingCodeRegExp).optional(),
+  "swiftBic": zod.string().max(createInternationalTransferRequestBodySwiftBicMax).regex(createInternationalTransferRequestBodySwiftBicRegExp).optional(),
   "recipientAccountName": zod.string().min(1).max(createInternationalTransferRequestBodyRecipientAccountNameMax),
   "recipientAccountNumber": zod.string().min(createInternationalTransferRequestBodyRecipientAccountNumberMin).max(createInternationalTransferRequestBodyRecipientAccountNumberMax).regex(createInternationalTransferRequestBodyRecipientAccountNumberRegExp),
-  "sourceCurrency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
-  "destinationCurrency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
+  "sourceCurrency": zod.enum(['USD', 'EUR', 'GBP', 'CAD', 'AUD']),
+  "destinationCurrency": zod.enum(['USD', 'EUR', 'GBP', 'CAD', 'AUD']),
   "amount": zod.string().regex(createInternationalTransferRequestBodyAmountRegExp),
   "remark": zod.string().max(createInternationalTransferRequestBodyRemarkMax).optional(),
   "idempotencyKey": zod.string().min(createInternationalTransferRequestBodyIdempotencyKeyMin).max(createInternationalTransferRequestBodyIdempotencyKeyMax),
@@ -471,6 +474,9 @@ export const CreateInternationalTransferRequestResponse = zod.object({
   "status": zod.enum(['completed', 'pending', 'failed', 'reversed']),
   "destinationCountry": zod.string(),
   "recipientBank": zod.string(),
+  "transferType": zod.enum(['local_routing', 'international_wire']),
+  "routingCode": zod.string().nullable(),
+  "swiftBic": zod.string().nullable(),
   "recipientAccountName": zod.string(),
   "recipientAccountLast4": zod.string().regex(createInternationalTransferRequestResponseRecipientAccountLast4RegExp),
   "sourceCurrency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
@@ -495,8 +501,8 @@ export const upsertBankExchangeRateBodyTransactionPinRegExp = new RegExp('^[0-9]
 
 
 export const UpsertBankExchangeRateBody = zod.object({
-  "sourceCurrency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
-  "destinationCurrency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
+  "sourceCurrency": zod.enum(['USD', 'EUR', 'GBP', 'CAD', 'AUD']),
+  "destinationCurrency": zod.enum(['USD', 'EUR', 'GBP', 'CAD', 'AUD']),
   "rate": zod.string().regex(upsertBankExchangeRateBodyRateRegExp),
   "reason": zod.string().min(upsertBankExchangeRateBodyReasonMin).max(upsertBankExchangeRateBodyReasonMax),
   "transactionPin": zod.string().regex(upsertBankExchangeRateBodyTransactionPinRegExp)
@@ -558,7 +564,7 @@ export const createLedgerRequestBodyTransactionPinRegExp = new RegExp('^[0-9]{6}
 
 export const CreateLedgerRequestBody = zod.object({
   "type": zod.enum(['deposit', 'withdrawal']),
-  "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
+  "currency": zod.enum(['USD', 'EUR', 'GBP', 'CAD', 'AUD']),
   "amount": zod.string().regex(createLedgerRequestBodyAmountRegExp),
   "description": zod.string().max(createLedgerRequestBodyDescriptionMax).optional(),
   "idempotencyKey": zod.string().min(createLedgerRequestBodyIdempotencyKeyMin).max(createLedgerRequestBodyIdempotencyKeyMax),
@@ -1175,7 +1181,7 @@ export const createAdminFundingBodyTransactionPinRegExp = new RegExp('^[0-9]{6}$
 
 export const CreateAdminFundingBody = zod.object({
   "direction": zod.enum(['credit', 'debit']),
-  "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
+  "currency": zod.enum(['USD', 'EUR', 'GBP', 'CAD', 'AUD']),
   "amount": zod.string().regex(createAdminFundingBodyAmountRegExp),
   "senderName": zod.string().min(1).max(createAdminFundingBodySenderNameMax),
   "description": zod.string().min(1).max(createAdminFundingBodyDescriptionMax),

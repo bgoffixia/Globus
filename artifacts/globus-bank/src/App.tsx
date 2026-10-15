@@ -17,7 +17,6 @@ import {
   InternationalTransferPage,
   ProviderRequestPage,
   ReceivePage,
-  SendPage,
   SettingsPage,
   TransactionsPage,
   WalletsPage,
@@ -225,7 +224,7 @@ function ClerkRoutes() {
         <Route path="/dashboard"><ProtectedPage><DashboardPage /></ProtectedPage></Route>
         <Route path="/wallets"><ProtectedPage><WalletsPage /></ProtectedPage></Route>
         <Route path="/transactions"><ProtectedPage><TransactionsPage /></ProtectedPage></Route>
-        <Route path="/send"><ProtectedPage><SendPage /></ProtectedPage></Route>
+        <Route path="/send"><Redirect to="/international-transfer" /></Route>
         <Route path="/international-transfer"><ProtectedPage><InternationalTransferPage /></ProtectedPage></Route>
         <Route path="/add-money"><ProtectedPage><ProviderRequestPage type="deposit" /></ProtectedPage></Route>
         <Route path="/withdraw"><ProtectedPage><ProviderRequestPage type="withdrawal" /></ProtectedPage></Route>

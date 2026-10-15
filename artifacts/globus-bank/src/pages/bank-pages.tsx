@@ -81,10 +81,11 @@ import {
 } from '@workspace/api-client-react';
 import type { AdminLedgerRequest, AdminUser, BankTransaction, IdentityDocument, InternationalTransferRequest, Wallet } from '@workspace/api-client-react';
 import { GlobusLoader } from '@/components/globus-loader';
+import { CountrySelect } from '@/components/country-select';
 import { downloadTransactionReceiptPdf } from '@/lib/transaction-receipt-pdf';
-const currencies = ['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD'] as const;
+const currencies = ['USD', 'EUR', 'GBP', 'CAD', 'AUD'] as const;
 type Currency = typeof currencies[number];
-const currencyNames: Record<Currency, string> = {
+const currencyNames: Record<string, string> = {
   USD: 'US dollar',
   EUR: 'Euro',
   GBP: 'Pound sterling',
@@ -140,7 +141,7 @@ export function HomePage() {
             One Wallet.
           </h1>
           <p className="mt-7 max-w-[510px] text-[16px] leading-7 text-[#64758a] sm:text-[18px] sm:leading-8">
-            Bring your currencies together, understand every movement, and record internal member transfers and reviewed ledger requests with clear statuses.
+            Bring your currencies together, understand every movement, and manage routed transfers and reviewed ledger requests with clear statuses.
           </p>
           <div className="mt-8 flex flex-col items-stretch gap-2 sm:mt-9 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
             <Link href="/sign-up" className="inline-flex w-full items-center justify-center gap-3 rounded-xl bg-[#152f50] px-5 py-3.5 text-[13px] font-bold text-white shadow-[0_10px_24px_rgba(18,43,75,.16)] transition hover:-translate-y-0.5 hover:bg-[#1b4168] sm:w-auto sm:px-6 sm:py-4">
@@ -150,7 +151,7 @@ export function HomePage() {
           </div>
           <div className="mt-8 flex min-w-0 flex-wrap gap-x-5 gap-y-3 text-[10px] font-medium text-[#68798d] sm:mt-11 sm:gap-x-7 sm:text-[11px]">
             <span className="inline-flex items-center gap-2"><ShieldCheck size={15} className="text-[#478b8e]" /> Internal ledger activity clearly identified</span>
-            <span className="inline-flex items-center gap-2"><Globe2 size={15} className="text-[#478b8e]" /> Six supported currencies</span>
+            <span className="inline-flex items-center gap-2"><Globe2 size={15} className="text-[#478b8e]" /> Five supported currencies</span>
           </div>
         </div>
         <div className="relative mx-auto w-full min-w-0 max-w-[560px]">
@@ -189,7 +190,7 @@ export function HomePage() {
               </div>
               <div className="mt-5 flex min-w-0 items-center gap-3 rounded-xl bg-white px-3 py-3 sm:px-4">
                 <span className="grid h-9 w-9 place-items-center rounded-full bg-[#eef5f5] text-[#4b898e]"><ArrowUpRight size={16} /></span>
-                <div className="min-w-0 flex-1"><p className="text-[11px] font-semibold text-[#334b66]">No ledger activity yet</p><p className="mt-0.5 break-words text-[10px] text-[#8b98a7]">Member transfers and approved requests appear here</p></div>
+                <div className="min-w-0 flex-1"><p className="text-[11px] font-semibold text-[#334b66]">No ledger activity yet</p><p className="mt-0.5 break-words text-[10px] text-[#8b98a7]">Approved and recorded activity appears here</p></div>
                 <p className="text-[12px] font-semibold text-[#2e665f]">—</p>
               </div>
             </div>
@@ -203,7 +204,7 @@ export function HomePage() {
 
       <section className="border-y border-[#e2e8ed] bg-white">
         <div className="mx-auto grid max-w-[1320px] gap-8 px-6 py-8 sm:grid-cols-3 lg:px-12">
-          <TrustNote icon={<Globe2 size={17} />} title="One view, many currencies" copy="Keep USD, EUR, GBP, NGN, CAD and AUD in view." />
+          <TrustNote icon={<Globe2 size={17} />} title="One view, many currencies" copy="Keep USD, EUR, GBP, CAD and AUD in view." />
           <TrustNote icon={<ShieldCheck size={17} />} title="Internal ledger, clearly scoped" copy="Balances and transfers are recorded in Globus only. No bank or payment network is connected, and no outside funds are held or sent." />
           <TrustNote icon={<BadgeCheck size={17} />} title="No banking claims" copy="Globus is a software platform, not a licensed bank." />
         </div>
@@ -215,14 +216,14 @@ export function HomePage() {
         </div>
         <div className="grid gap-8 sm:grid-cols-2">
           <FeatureBlock number="01" title="See the whole picture" copy="Review individual currency wallets, pending amounts and recent transactions in one focused workspace." />
-          <FeatureBlock number="02" title="Move value between members" copy="Internal transfers update the sender’s and recipient’s Globus wallets together, with a receipt and reference for every completed entry." />
+          <FeatureBlock number="02" title="Route transfers with clarity" copy="Choose local routing or an international wire, review the currency conversion, and follow the recorded status in your account." />
           <FeatureBlock number="03" title="Review deposits and withdrawals" copy="Deposit requests and reserved withdrawals require administrator approval before the internal ledger changes." />
           <FeatureBlock number="04" title="Keep a clean record" copy="Every ledger transaction has a reference, status and timestamp for straightforward review." />
         </div>
       </section>
       <section className="mx-4 mb-16 rounded-[28px] bg-[#132f51] px-5 py-10 text-white sm:mx-10 sm:px-12 sm:py-12 lg:mx-auto lg:max-w-[1240px] lg:px-16 lg:py-16">
         <div className="grid items-center gap-8 md:grid-cols-[1fr_auto]">
-          <div><p className="text-[10px] font-bold uppercase tracking-[.18em] text-[#a6d5d8]">Make your next step clearer</p><h2 className="bank-display mt-3 max-w-[640px] text-[34px] font-semibold leading-tight sm:text-[45px]">Your Globus ledger workspace, ready to use.</h2><p className="mt-4 max-w-[520px] text-[14px] leading-6 text-[#cfdae4]">Create an account to manage internal wallets, member transfers and requests reviewed by Globus administrators. No outside funds are received or sent.</p></div>
+          <div><p className="text-[10px] font-bold uppercase tracking-[.18em] text-[#a6d5d8]">Make your next step clearer</p><h2 className="bank-display mt-3 max-w-[640px] text-[34px] font-semibold leading-tight sm:text-[45px]">Your Globus ledger workspace, ready to use.</h2><p className="mt-4 max-w-[520px] text-[14px] leading-6 text-[#cfdae4]">Create an account to manage internal wallets, routed transfer requests and ledger activity reviewed by Globus administrators. No outside funds are received or sent.</p></div>
           <Link href="/sign-up" className="inline-flex items-center justify-center gap-3 rounded-xl bg-[#d5b765] px-6 py-4 text-[13px] font-bold text-[#17304d] hover:bg-[#e0c879]">Create your account <ArrowRight size={15} /></Link>
         </div>
       </section>
@@ -324,11 +325,11 @@ export function DashboardPage() {
           {selectedWallet && <span className="rounded-full bg-[#eff5f6] px-3 py-1.5 text-[10px] font-bold text-[#456c73]">Active wallet · {selectedWallet.currency}</span>}
         </div>
         <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-4">
-          <ActionTile href={currencyActionHref('/send', actionCurrency)} icon={<ArrowUpRight size={17} />} label="Send" testId="dashboard-quick-send" />
           <ActionTile href="/receive" icon={<ArrowDownLeft size={17} />} label="Receive" testId="dashboard-quick-receive" />
           <ActionTile href={currencyActionHref('/add-money', actionCurrency)} icon={<WalletCards size={17} />} label="Deposit request" testId="dashboard-quick-deposit" />
           <ActionTile href={currencyActionHref('/withdraw', actionCurrency)} icon={<ArrowDownLeft size={17} />} label="Withdrawal request" testId="dashboard-quick-withdraw" />
-          <ActionTile href={currencyActionHref('/international-transfer', actionCurrency)} icon={<Globe2 size={17} />} label="International" testId="dashboard-quick-international" />
+          <ActionTile href="/international-transfer?type=local_routing" icon={<ArrowUpRight size={17} />} label="Local routing" testId="dashboard-quick-local-routing" />
+          <ActionTile href="/international-transfer?type=international_wire" icon={<Globe2 size={17} />} label="International wire" testId="dashboard-quick-international" />
           <ActionTile href="/wallets" icon={<WalletCards size={17} />} label="All wallets" testId="dashboard-quick-wallets" />
           <ActionTile href="/transactions" icon={<History size={17} />} label="Activity" testId="dashboard-quick-activity" />
           {adminAccess.data?.allowed && <ActionTile href="/admin" icon={<ShieldCheck size={17} />} label="Admin panel" testId="dashboard-quick-admin" />}
@@ -478,8 +479,13 @@ export function InternationalTransferPage() {
     query: { queryKey: getListInternationalTransferRequestsQueryKey() },
   });
   const createRequest = useCreateInternationalTransferRequest();
+  const [transferType, setTransferType] = useState<'local_routing' | 'international_wire'>(() =>
+    new URLSearchParams(window.location.search).get('type') === 'local_routing' ? 'local_routing' : 'international_wire',
+  );
   const [destinationCountry, setDestinationCountry] = useState('');
   const [recipientBank, setRecipientBank] = useState('');
+  const [routingCode, setRoutingCode] = useState('');
+  const [swiftBic, setSwiftBic] = useState('');
   const [recipientAccountName, setRecipientAccountName] = useState('');
   const [recipientAccountNumber, setRecipientAccountNumber] = useState('');
   const [sourceCurrency, setSourceCurrency] = useState<Currency>(() => preferredCurrencyFromQuery());
@@ -489,6 +495,7 @@ export function InternationalTransferPage() {
   const [transactionPin, setTransactionPin] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState<InternationalTransferRequest | null>(null);
+  const [receipt, setReceipt] = useState<BankTransaction | null>(null);
   const available = Number(
     wallets.data?.find(wallet => wallet.currency === sourceCurrency)?.available ?? 0,
   );
@@ -510,8 +517,10 @@ export function InternationalTransferPage() {
     setSuccess(null);
     createRequest.mutate({
       data: {
+        transferType,
         destinationCountry: destinationCountry.trim(),
         recipientBank: recipientBank.trim(),
+        ...(transferType === 'local_routing' ? { routingCode: routingCode.trim() } : { swiftBic: swiftBic.trim() }),
         recipientAccountName: recipientAccountName.trim(),
         recipientAccountNumber,
         sourceCurrency,
@@ -526,6 +535,8 @@ export function InternationalTransferPage() {
         setSuccess(request);
         setDestinationCountry('');
         setRecipientBank('');
+        setRoutingCode('');
+        setSwiftBic('');
         setRecipientAccountName('');
         setRecipientAccountNumber('');
         setAmount('');
@@ -547,20 +558,33 @@ export function InternationalTransferPage() {
 
   return (
     <>
-      <PageHeading
-        eyebrow="International transfers"
-        title="Create a transfer request"
-        subtitle="Review the destination details and estimated conversion before submitting your request."
+        <PageHeading
+        eyebrow="Transfers"
+          title="Route a transfer"
+          subtitle="Choose a routing method, enter recipient details, and review the currency conversion."
       />
       <div className="mt-6">
         <form onSubmit={submit} className="min-w-0 rounded-[22px] border border-[#e1e8ee] bg-white p-5 sm:p-8">
+          <div role="group" aria-label="Transfer routing type" className="mb-6 grid grid-cols-2 gap-2 rounded-xl bg-[#f2f5f7] p-1.5">
+            <button type="button" aria-pressed={transferType === 'local_routing'} onClick={() => { setTransferType('local_routing'); setSuccess(null); setError(''); }} className={`min-h-11 rounded-lg px-3 text-[11px] font-bold transition ${transferType === 'local_routing' ? 'bg-white text-[#203851] shadow-sm' : 'text-[#718196] hover:text-[#344e67]'}`}>Local routing</button>
+            <button type="button" aria-pressed={transferType === 'international_wire'} onClick={() => { setTransferType('international_wire'); setSuccess(null); setError(''); }} className={`min-h-11 rounded-lg px-3 text-[11px] font-bold transition ${transferType === 'international_wire' ? 'bg-white text-[#203851] shadow-sm' : 'text-[#718196] hover:text-[#344e67]'}`}>International wire</button>
+          </div>
           <div className="grid gap-5 sm:grid-cols-2">
             <Field label="Destination country">
-              <input data-testid="input-destination-country" required minLength={2} maxLength={80} value={destinationCountry} onChange={event => setDestinationCountry(event.target.value)} placeholder="Country" className={inputClass} />
+              <CountrySelect value={destinationCountry} onChange={setDestinationCountry} />
             </Field>
             <Field label="Recipient bank">
               <input data-testid="input-recipient-bank" required maxLength={120} value={recipientBank} onChange={event => setRecipientBank(event.target.value)} placeholder="Bank name" className={inputClass} />
             </Field>
+            {transferType === 'local_routing' ? (
+              <Field label="Local bank routing code">
+                <input data-testid="input-local-routing-code" required maxLength={24} pattern="[A-Za-z0-9 -]+" value={routingCode} onChange={event => setRoutingCode(event.target.value)} placeholder="Routing or clearing code" className={inputClass} />
+              </Field>
+            ) : (
+              <Field label="SWIFT / BIC">
+                <input data-testid="input-swift-bic" required minLength={8} maxLength={11} pattern="[A-Za-z0-9]{8}([A-Za-z0-9]{3})?" value={swiftBic} onChange={event => setSwiftBic(event.target.value.toUpperCase())} placeholder="8 or 11 characters" className={inputClass} />
+              </Field>
+            )}
             <Field label="Recipient account name">
               <input data-testid="input-recipient-account-name" required maxLength={120} value={recipientAccountName} onChange={event => setRecipientAccountName(event.target.value)} placeholder="Name on the account" className={inputClass} />
             </Field>
@@ -602,25 +626,26 @@ export function InternationalTransferPage() {
           </div>
           {profile.data?.transactionPinConfigured === false && <p className="mt-4 rounded-lg border border-[#eadfbe] bg-[#fbf7eb] px-4 py-3 text-[10px] leading-5 text-[#806b3d]">Set up your transaction PIN in <Link href="/settings" className="font-bold underline">Settings</Link> before submitting a request.</p>}
           {error && <p data-testid="status-transfer-error" role="alert" className="mt-5 rounded-lg bg-[#fff1ef] px-4 py-3 text-[11px] text-[#a24940]">{error}</p>}
-          {success && <div data-testid="status-transfer-success" role="status" className="mt-5 rounded-xl border border-[#cfe5db] bg-[#f1f8f4] p-4 text-[11px] leading-5 text-[#417461]"><b>Request recorded.</b><p className="mt-1">Reference {success.reference} · {success.sourceAmount} {success.sourceCurrency} → {success.destinationAmount} {success.destinationCurrency} · {humanize(success.status)}</p></div>}
-          <button data-testid="button-submit-international-transfer" disabled={createRequest.isPending || !exchangeRate || transactionPin.length !== 6 || !amount || Number(amount) <= 0 || Number(amount) > available} className="mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#142f51] text-[12px] font-bold text-white transition hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">
-            {createRequest.isPending ? 'Recording request…' : 'Submit transfer request'} <ArrowRight size={15} />
+          {success && <div data-testid="status-transfer-success" role="status" className="mt-5 rounded-xl border border-[#cfe5db] bg-[#f1f8f4] p-4 text-[11px] leading-5 text-[#417461]"><b>{success.status === 'completed' ? 'Transfer recorded.' : 'Request submitted for review.'}</b><p className="mt-1">Reference {success.reference} · {success.sourceAmount} {success.sourceCurrency} → {success.destinationAmount} {success.destinationCurrency} · {humanize(success.status)}</p>{success.status === 'completed' && <button type="button" onClick={() => setReceipt({ id: success.id, reference: success.reference, type: 'external_transfer', status: success.status, currency: success.sourceCurrency, amount: success.sourceAmount, fee: '0.00', counterparty: `${success.recipientBank} · ****${success.recipientAccountLast4} · ${success.destinationCountry}`, description: `${success.transferType === 'local_routing' ? 'Local routing' : 'International wire'} transfer · ${success.sourceAmount} ${success.sourceCurrency} converted to ${success.destinationAmount} ${success.destinationCurrency} at ${success.exchangeRate}`, mode: 'internal_ledger', createdAt: success.createdAt })} className="mt-3 inline-flex items-center gap-2 rounded-lg border border-[#bfd8cc] bg-white px-3 py-2 text-[10px] font-bold text-[#3d725d]"><FileText size={14} /> View receipt</button>}</div>}
+          <button data-testid="button-submit-international-transfer" disabled={createRequest.isPending || !exchangeRate || transactionPin.length !== 6 || !destinationCountry || (transferType === 'local_routing' ? !routingCode.trim() : !/^[A-Za-z0-9]{8}([A-Za-z0-9]{3})?$/.test(swiftBic)) || !amount || Number(amount) <= 0 || Number(amount) > available} className="mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#142f51] text-[12px] font-bold text-white transition hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">
+            {createRequest.isPending ? 'Processing…' : profile.data?.verificationStatus === 'approved' ? 'Complete transfer' : 'Submit for review'} <ArrowRight size={15} />
           </button>
         </form>
 
       </div>
 
       <section className="mt-7 overflow-hidden rounded-[20px] border border-[#e1e8ee] bg-white">
-        <div className="flex items-center justify-between border-b border-[#edf0f3] px-5 py-4 sm:px-7"><p className="text-[13px] font-bold text-[#28405c]">Your international transfer requests</p><span className="text-[10px] font-semibold text-[#8291a1]">{requests.data?.length ?? 0} requests</span></div>
+        <div className="flex items-center justify-between border-b border-[#edf0f3] px-5 py-4 sm:px-7"><p className="text-[13px] font-bold text-[#28405c]">Transfer activity</p><span className="text-[10px] font-semibold text-[#8291a1]">{requests.data?.length ?? 0} transfers</span></div>
         {requests.isLoading ? <ListSkeleton /> : requests.isError ? <InlineError text="Transfer requests are unavailable." retry={() => requests.refetch()} /> : requests.data?.length ? (
           <ul className="divide-y divide-[#edf0f3]">
             {requests.data.map(request => <li key={request.id} data-testid={`request-international-${request.id}`} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 sm:px-7">
-              <div className="min-w-0"><p className="truncate text-[11px] font-bold text-[#304962]">{request.recipientAccountName} · {request.destinationCountry}</p><p className="mt-1 text-[10px] text-[#7d8b99]">{request.reference} · {request.recipientBank} · ****{request.recipientAccountLast4}</p><p className="mt-1 text-[10px] text-[#60748a]">{formatMoney(Number(request.sourceAmount), request.sourceCurrency)} → {formatMoney(Number(request.destinationAmount), request.destinationCurrency)} at {request.exchangeRate}</p></div>
+              <div className="min-w-0"><p className="truncate text-[11px] font-bold text-[#304962]">{request.recipientAccountName} · {request.destinationCountry}</p><p className="mt-1 text-[10px] text-[#7d8b99]">{humanize(request.transferType)} · {request.reference} · {request.recipientBank} · ****{request.recipientAccountLast4}</p><p className="mt-1 text-[10px] text-[#60748a]">{formatMoney(Number(request.sourceAmount), request.sourceCurrency)} → {formatMoney(Number(request.destinationAmount), request.destinationCurrency)} at {request.exchangeRate}</p></div>
               <span className="rounded-full bg-[#fbf7eb] px-3 py-1.5 text-[9px] font-bold capitalize text-[#806b3d]">{humanize(request.status)}</span>
             </li>)}
           </ul>
         ) : <EmptyState title="No transfer requests yet" text="Submitted requests will appear here." />}
       </section>
+      {receipt && <ReceiptDialog transaction={receipt} onClose={() => setReceipt(null)} />}
     </>
   );
 }
@@ -1811,9 +1836,9 @@ export function AdminUserManagementPage() {
 }
 
 const disclosureCopy: Record<string, { eyebrow: string; title: string; intro: string; sections: [string, string][] }> = {
-  '/about': { eyebrow: 'About Globus', title: 'An internal ledger for clear account activity.', intro: 'Globus records multi-currency wallets, member transfers, requests and administrative balance adjustments in its application database.', sections: [['A platform, not a bank', 'Globus is not a licensed bank, payment institution or custodian. It does not accept, hold or send outside funds.'], ['Internal balances', 'Wallet balances are records in the Globus ledger. No external bank, payment gateway or money-transfer provider is connected.'], ['Built for clear review', 'Balances, requests and activity include statuses, references and audit records to make each change traceable.']] },
+  '/about': { eyebrow: 'About Globus', title: 'An internal ledger for clear account activity.', intro: 'Globus records multi-currency wallets, routed transfer requests and administrative balance adjustments in its application database.', sections: [['A platform, not a bank', 'Globus is not a licensed bank, payment institution or custodian. It does not accept, hold or send outside funds.'], ['Internal balances', 'Wallet balances are records in the Globus ledger. No external bank, payment gateway or money-transfer provider is connected.'], ['Built for clear review', 'Balances, requests and activity include statuses, references and audit records to make each change traceable.']] },
   '/help': { eyebrow: 'Support', title: 'Help with your Globus ledger.', intro: 'Understand how account activity is recorded inside Globus.', sections: [['How do deposits work?', 'Submit a ledger deposit request. An administrator must approve it before an internal wallet credit is recorded. No outside deposit is received.'], ['How do withdrawals work?', 'A pending withdrawal reserves the requested amount. Approval debits the internal wallet; rejection releases the reserve. No outside payout is made.'], ['Can I send someone money?', 'You can transfer an available balance to another active Globus member. Both internal wallets update together; no outside account is contacted.'], ['How do international requests work?', 'Globus records the request and an administrator-maintained conversion estimate. It does not contact the destination bank, reserve or debit your wallet, or send outside funds.'], ['Where can I find my member ID?', 'Open Receive from your account navigation. Share your registered email with another member so they can address an internal transfer.']] },
-  '/fees': { eyebrow: 'Fees and rates', title: 'Understand the scope of ledger activity.', intro: 'Globus does not process external deposits, payouts, payment gateway transactions or real-money currency conversions.', sections: [['External providers', 'No bank, payment gateway or real-money transfer provider is connected. Requests only affect Globus records; internal member transfers are posted between member wallets.'], ['Fees', 'Globus does not charge an external transaction fee because it does not process outside payments.'], ['Currency balances', 'Currency wallets are recorded separately. International request estimates use administrator-maintained rates; they are not live quotes and do not convert or debit wallet balances.']] },
+  '/fees': { eyebrow: 'Fees and rates', title: 'Understand the scope of ledger activity.', intro: 'Globus does not process external deposits, payouts, payment gateway transactions or real-money currency conversions.', sections: [['External providers', 'No bank, payment gateway or real-money transfer provider is connected. Routed transfer records affect Globus ledger entries only.'], ['Fees', 'Globus does not charge an external transaction fee because it does not process outside payments.'], ['Currency balances', 'Currency wallets are recorded separately. Transfer estimates use administrator-maintained rates; they are not live quotes.']] },
   '/privacy': { eyebrow: 'Privacy notice', title: 'Your information deserves clarity.', intro: 'This page summarizes account information Globus uses to provide its software services.', sections: [['Account details', 'Profile details and account identifiers associate internal records with your account. Authentication is provided through Clerk.'], ['Private identity documents', 'Documents submitted for internal review are stored privately and accessible only to the submitting member and authorized Globus admins. Files are deleted after approval or rejection. The verification status and an audit record of the decision remain. This review is not legal, bank or government identity verification.'], ['Operational records', 'Transactions and requests may include references, status, currency, amount, descriptions and timestamps. For international transfer requests, only the recipient account’s last four characters are retained.'], ['Your choices', 'Use Settings to review your profile and manage identity documents before submitting them. Contact the support team with questions about account information or platform operations.']] },
   '/terms': { eyebrow: 'Terms of use', title: 'Internal ledger records, not bank deposits.', intro: 'Globus records account activity in its own database and does not move outside funds.', sections: [['No banking service', 'Globus is not a licensed bank and does not accept deposits, provide credit, custody funds or promise payment execution.'], ['Internal records', 'Displayed balances and transactions represent entries in the Globus ledger. An approved deposit request records an internal credit; an approved withdrawal records an internal debit. Neither action moves outside funds.'], ['Use responsibly', 'Do not rely on ledger balances or status labels as proof of funds held by a bank or as a promise of payment.']] },
   '/contact': { eyebrow: 'Contact', title: 'Contact information is not configured yet.', intro: 'A verified support channel has not been configured for Globus.', sections: [['Account help', 'Visit Help for guidance about the software. Do not include passwords, verification codes or sensitive payment details in support requests.'], ['Recorded activity', 'Include the transaction reference when asking about a ledger entry in your account.'], ['Operational disclosure', 'Globus support cannot complete, trace or reverse an external payment through this product.']] },
@@ -1882,7 +1907,7 @@ function transactionDisplayType(transaction: BankTransaction) {
     case 'transfer_out':
       return 'Member transfer sent';
     case 'external_transfer':
-      return transaction.status === 'pending' ? 'International transfer request' : 'Prior ledger entry';
+      return transaction.status === 'pending' ? 'Transfer request' : 'Routed transfer';
     case 'external_transfer_in':
       return 'Prior ledger entry';
     default:
@@ -2017,7 +2042,7 @@ function TransactionStatusDialog({
           <div><p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#55868b]">Admin transaction control</p><h2 id="transaction-status-title" className="mt-1 text-[16px] font-bold text-[#29425c]">Override recorded status</h2><p className="mt-1 break-all text-[10px] text-[#7e8d9c]">{transaction.reference}</p></div>
           <button type="button" aria-label="Close status override" onClick={onClose} className="rounded-lg p-2 text-[#6d8092] hover:bg-[#f1f5f7]"><X size={16} /></button>
         </div>
-        <p className="mt-4 rounded-lg border border-[#e5e9ed] bg-[#f7f9fa] px-4 py-3 text-[10px] leading-4 text-[#64798e]">This changes the transaction’s recorded status only. It does not change wallet balances, ledger entries, or move funds.</p>
+        <p className="mt-4 rounded-lg border border-[#e5e9ed] bg-[#f7f9fa] px-4 py-3 text-[10px] leading-4 text-[#64798e]">{transaction.type === 'external_transfer' && status === 'completed' ? 'Completing a pending routed transfer posts a source-wallet debit and a matching internal clearing entry. It does not represent payment by an outside bank.' : 'This changes the recorded transaction status. It does not otherwise change wallet balances or ledger entries.'}</p>
         <form onSubmit={submit} className="mt-5 space-y-4">
           <Field label="New status">
             <select value={status} onChange={event => setStatus(event.target.value as BankTransaction['status'])} className={inputClass}>
@@ -2072,7 +2097,7 @@ function ReceiptDialog({ transaction, onClose }: { transaction: BankTransaction;
         counterparty: transaction.counterparty || 'Internal ledger',
         activity: transactionDisplayType(transaction),
         disclaimer: transaction.type === 'external_transfer'
-          ? 'This receipt records a Globus internal record or transfer request only. It is not proof of funds received or sent by an outside account. Internal requests do not contact the destination bank, and the conversion estimate is not a live quote.'
+          ? 'This receipt records an internal Globus ledger transfer only. It is not confirmation that an outside bank received or paid funds. The recipient details and converted amount are recorded in Globus; no outside settlement is represented.'
           : 'This receipt records an entry in the Globus internal ledger. It is not proof of funds received or sent by an outside account. Globus does not connect to a bank, payment gateway, or real-money transfer service.',
       }, `${import.meta.env.BASE_URL}globus-wordmark.png`);
     } catch (error) {

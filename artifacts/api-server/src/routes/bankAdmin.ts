@@ -78,6 +78,7 @@ import {
   bankAdminSettingsTable,
   bankExchangeRatesTable,
   bankIdentityDocumentsTable,
+  bankInternationalTransferRequestsTable,
   bankLedgerEntriesTable,
   bankSandboxRequestsTable,
   bankTransactionsTable,
@@ -424,7 +425,7 @@ router.get("/bank/admin/summary", requireAdmin, async (_req, res): Promise<void>
         .where(inArray(bankUsersTable.id, recentUserIds))
     : [];
   const userById = new Map(recentUsers.map((user) => [user.id, user]));
-  const currencies = ["USD", "EUR", "GBP", "NGN", "CAD", "AUD"] as const;
+  const currencies = ["USD", "EUR", "GBP", "CAD", "AUD"] as const;
   const amountFor = (currency: (typeof currencies)[number], side: string) =>
     ledgerTotals.find((row) => row.currency === currency && row.side === side)
       ?.amount ?? "0";
@@ -476,6 +477,16 @@ router.get("/bank/admin/accounts", requireAdmin, async (req, res): Promise<void>
   const page = parsed.data.page ?? 1;
   const pageSize = parsed.data.pageSize ?? 25;
   const filters = [];
+  filters.push(sql`(
+    ${bankWalletsTable.currency} <> 'NGN'
+    OR coalesce((
+      select sum(case when ${bankLedgerEntriesTable.side} = 'credit'
+        then ${bankLedgerEntriesTable.amountMinor}
+        else -${bankLedgerEntriesTable.amountMinor} end)
+      from ${bankLedgerEntriesTable}
+      where ${bankLedgerEntriesTable.walletId} = ${bankWalletsTable.id}
+    ), 0) <> 0
+  )`);
   const search = parsed.data.search?.trim();
   if (search) {
     const needle = `%${search}%`;
@@ -2778,11 +2789,80 @@ router.patch(
       }
       if (
         transaction.type === "external_transfer" &&
-        parsed.data.status === "completed"
+        transaction.status === "completed" &&
+        parsed.data.status !== "completed"
       ) {
         return {
           error:
-            "International transfer requests cannot be marked completed because Globus does not send funds to outside accounts.",
+            "A completed routed transfer cannot have its status changed without a ledger correction. Use the audited reversal or adjustment workflow.",
+        };
+      }
+      if (
+        transaction.type === "external_transfer" &&
+        parsed.data.status === "completed" &&
+        transaction.status === "pending"
+      ) {
+        const [request] = await tx
+          .select()
+          .from(bankInternationalTransferRequestsTable)
+          .where(eq(bankInternationalTransferRequestsTable.transactionId, transaction.id))
+          .for("update");
+        if (!request) {
+          return { error: "The internal transfer request details are unavailable." };
+        }
+        const [target] = await tx
+          .select()
+          .from(bankUsersTable)
+          .where(eq(bankUsersTable.id, request.userId))
+          .for("update");
+        if (!target || target.accountStatus !== "active") {
+          return { error: "Only active customer accounts can complete a transfer." };
+        }
+        const [wallet] = await tx
+          .select()
+          .from(bankWalletsTable)
+          .where(eq(bankWalletsTable.id, request.sourceWalletId))
+          .for("update");
+        if (!wallet || wallet.status !== "active") {
+          return { error: "The source wallet is unavailable or frozen." };
+        }
+        const existingEntries = await tx
+          .select({ id: bankLedgerEntriesTable.id })
+          .from(bankLedgerEntriesTable)
+          .where(eq(bankLedgerEntriesTable.transactionId, transaction.id))
+          .limit(1);
+        if (existingEntries.length) {
+          return { error: "This request already has ledger entries and cannot be posted again." };
+        }
+        const balance = await balanceForWallet(tx, wallet.id);
+        const reserved = await reservedForWallet(tx, wallet.id);
+        if (balance - reserved < request.sourceAmountMinor) {
+          return { error: "The customer no longer has enough available balance to complete this request." };
+        }
+        await tx.insert(bankLedgerEntriesTable).values([
+          {
+            transactionId: transaction.id,
+            walletId: wallet.id,
+            accountCode: `wallet:${wallet.id}`,
+            currency: request.sourceCurrency,
+            side: "debit",
+            amountMinor: request.sourceAmountMinor,
+          },
+          {
+            transactionId: transaction.id,
+            accountCode: `internal:transfer-clearing:${request.sourceCurrency}`,
+            currency: request.sourceCurrency,
+            side: "credit",
+            amountMinor: request.sourceAmountMinor,
+          },
+        ]);
+      } else if (
+        transaction.type === "external_transfer" &&
+        parsed.data.status === "completed" &&
+        transaction.status !== "completed"
+      ) {
+        return {
+          error: "Only pending internal transfer requests can be completed.",
         };
       }
       if (

@@ -3,8 +3,6 @@ import { getAuth } from "@clerk/express";
 import { rateLimit } from "express-rate-limit";
 import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
 import {
-  CreateBankTransferBody,
-  CreateBankTransferResponse,
   CreateIdentityDocumentUploadUrlBody,
   CreateIdentityDocumentUploadUrlResponse,
   CreateExternalTransferBody,
@@ -55,7 +53,6 @@ import {
   ensureBankUser,
   formatMinorAmount,
   getRecentTransactions,
-  getTransactionByIdempotencyKey,
   getWalletsForUser,
   listUserTransactions,
   parseAmountToMinor,
@@ -149,8 +146,11 @@ function internationalTransferRequestResponse(
     id: transaction.id,
     reference: transaction.reference,
     status: transaction.status,
+    transferType: request.transferType as "local_routing" | "international_wire",
     destinationCountry: request.destinationCountry,
     recipientBank: request.recipientBank,
+    routingCode: request.routingCode,
+    swiftBic: request.swiftBic,
     recipientAccountName: request.recipientAccountName,
     recipientAccountLast4: request.recipientAccountLast4,
     sourceCurrency: request.sourceCurrency,
@@ -788,186 +788,10 @@ router.post(
   },
 );
 
-router.post("/bank/transfers", async (req, res): Promise<void> => {
-  const authUserId = getAuth(req).userId;
-  if (!authUserId) {
-    res.status(401).json({ error: "Sign in to access your Globus account." });
-    return;
-  }
-
-  const parsed = CreateBankTransferBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-
-  const sender = await getOrCreateBankUser(authUserId);
-  const userId = sender.id;
-  if (sender.accountStatus !== "active") {
-    res.status(409).json({ error: "This account is currently restricted." });
-    return;
-  }
-  if (!sender.acceptedTermsAt) {
-    res.status(409).json({ error: "Complete account setup before sending money." });
-    return;
-  }
-  const existing = await getTransactionByIdempotencyKey(
-    parsed.data.idempotencyKey,
-  );
-  if (existing) {
-    if (existing.initiatedByUserId !== userId) {
-      res.status(409).json({ error: "That request reference is already in use." });
-      return;
-    }
-    res.status(201).json(
-      CreateBankTransferResponse.parse(toBankTransaction(existing, userId)),
-    );
-    return;
-  }
-
-  let amountMinor: bigint;
-  try {
-    amountMinor = parseAmountToMinor(parsed.data.amount);
-  } catch (error) {
-    res.status(400).json({
-      error:
-        error instanceof Error ? error.message : "Enter a valid transfer amount.",
-    });
-    return;
-  }
-
-  if (amountMinor <= 0n) {
-    res.status(400).json({ error: "The transfer amount must be greater than zero." });
-    return;
-  }
-
-  const pinResult = await verifyTransactionPin(userId, parsed.data.transactionPin);
-  if (pinResult !== "valid") {
-    respondWithTransactionPinError(res, pinResult);
-    return;
-  }
-
-  const normalizedEmail = parsed.data.recipientEmail.trim().toLowerCase();
-  if (normalizedEmail === sender.email.toLowerCase()) {
-    res.status(400).json({ error: "Choose another registered Globus user." });
-    return;
-  }
-
-  const recipient = await db
-    .select()
-    .from(bankUsersTable)
-    .where(sql`lower(${bankUsersTable.email}) = ${normalizedEmail}`)
-    .limit(1);
-  const receiver = recipient[0];
-  if (!receiver || receiver.accountStatus !== "active") {
-    res.status(404).json({
-      error: "No active Globus account was found for that email address.",
-    });
-    return;
-  }
-  if (!receiver.acceptedTermsAt) {
-    res.status(409).json({
-      error: "The recipient has not completed their Globus account setup.",
-    });
-    return;
-  }
-
-  const transfer = await db.transaction(async (tx) => {
-    await tx.execute(
-      sql`select pg_advisory_xact_lock(hashtext(${parsed.data.idempotencyKey})::bigint)`,
-    );
-    const duplicate = await tx
-      .select()
-      .from(bankTransactionsTable)
-      .where(eq(bankTransactionsTable.idempotencyKey, parsed.data.idempotencyKey))
-      .limit(1);
-    if (duplicate[0]) {
-      return duplicate[0].initiatedByUserId === userId
-        ? { transaction: duplicate[0] }
-        : { error: "That request reference is already in use." };
-    }
-
-    const senderWallet = await userWallet(tx, userId, parsed.data.currency);
-    const receiverWallet = await userWallet(
-      tx,
-      receiver.id,
-      parsed.data.currency,
-    );
-    if (!senderWallet || !receiverWallet) {
-      return { error: "A wallet for the selected currency is unavailable." };
-    }
-    if (senderWallet.status !== "active") {
-      return { error: "This wallet is frozen and cannot send transfers." };
-    }
-
-    await tx
-      .select({ id: bankWalletsTable.id })
-      .from(bankWalletsTable)
-      .where(
-        inArray(bankWalletsTable.id, [senderWallet.id, receiverWallet.id].sort()),
-      )
-      .orderBy(asc(bankWalletsTable.id))
-      .for("update");
-
-    const available = await balanceForWallet(tx, senderWallet.id);
-    const reserved = await reservedForWallet(tx, senderWallet.id);
-    if (available - reserved < amountMinor) {
-      return { error: "There is not enough available ledger balance." };
-    }
-
-    const [transaction] = await tx
-      .insert(bankTransactionsTable)
-      .values({
-        reference: createReference(),
-        idempotencyKey: parsed.data.idempotencyKey,
-        initiatedByUserId: userId,
-        fromUserId: userId,
-        toUserId: receiver.id,
-        fromWalletId: senderWallet.id,
-        toWalletId: receiverWallet.id,
-        type: "transfer",
-        status: "completed",
-        currency: parsed.data.currency,
-        amountMinor,
-        feeMinor: 0n,
-        counterparty: receiver.email,
-        description: parsed.data.description?.trim() || "Internal member transfer",
-        mode: "internal_ledger",
-      })
-      .returning();
-
-    await tx.insert(bankLedgerEntriesTable).values([
-      {
-        transactionId: transaction.id,
-        walletId: senderWallet.id,
-        accountCode: `wallet:${senderWallet.id}`,
-        currency: parsed.data.currency,
-        side: "debit",
-        amountMinor,
-      },
-      {
-        transactionId: transaction.id,
-        walletId: receiverWallet.id,
-        accountCode: `wallet:${receiverWallet.id}`,
-        currency: parsed.data.currency,
-        side: "credit",
-        amountMinor,
-      },
-    ]);
-
-    return { transaction };
+router.post("/bank/transfers", (_req, res): void => {
+  res.status(410).json({
+    error: "Member-to-member transfers are no longer available.",
   });
-
-  if ("error" in transfer) {
-    res.status(409).json({ error: transfer.error });
-    return;
-  }
-
-  res.status(201).json(
-    CreateBankTransferResponse.parse(
-      toBankTransaction(transfer.transaction, userId),
-    ),
-  );
 });
 
 router.get("/bank/exchange-rates", async (req, res): Promise<void> => {
@@ -1059,6 +883,17 @@ router.post("/bank/international-transfer-requests", async (req, res): Promise<v
     res.status(400).json({ error: "The transfer amount must be greater than zero." });
     return;
   }
+  if (parsed.data.transferType === "local_routing" && !parsed.data.routingCode?.trim()) {
+    res.status(400).json({ error: "Enter the local bank routing code." });
+    return;
+  }
+  if (
+    parsed.data.transferType === "international_wire" &&
+    !/^[A-Za-z0-9]{8}(?:[A-Za-z0-9]{3})?$/.test(parsed.data.swiftBic?.trim() ?? "")
+  ) {
+    res.status(400).json({ error: "Enter a valid 8- or 11-character SWIFT/BIC code." });
+    return;
+  }
   const accountNumber = parsed.data.recipientAccountNumber
     .replace(/\s+/g, "")
     .toUpperCase();
@@ -1071,6 +906,9 @@ router.post("/bank/international-transfer-requests", async (req, res): Promise<v
     return;
   }
 
+  const completedByMember = sender.verificationStatus === "approved";
+  const routingCode = parsed.data.routingCode?.trim().toUpperCase() || null;
+  const swiftBic = parsed.data.swiftBic?.trim().toUpperCase() || null;
   const result = await db.transaction(async (tx) => {
     await tx.execute(
       sql`select pg_advisory_xact_lock(hashtext(${parsed.data.idempotencyKey})::bigint)`,
@@ -1167,14 +1005,16 @@ router.post("/bank/international-transfer-requests", async (req, res): Promise<v
         fromUserId: sender.id,
         fromWalletId: wallet.id,
         type: "external_transfer",
-        status: "pending",
+        status: completedByMember ? "completed" : "pending",
         currency: parsed.data.sourceCurrency,
         amountMinor,
         feeMinor: 0n,
-        counterparty: `${parsed.data.recipientAccountName.trim()} · ${parsed.data.recipientBank.trim()} · ****${accountNumber.slice(-4)} · ${parsed.data.destinationCountry.trim()}`,
+        counterparty: `${parsed.data.recipientAccountName.trim()} · ${parsed.data.recipientBank.trim()} · ****${accountNumber.slice(-4)} · ${parsed.data.destinationCountry.trim()}${routingCode ? ` · Routing ${routingCode}` : ""}${swiftBic ? ` · SWIFT/BIC ${swiftBic}` : ""}`,
         description: parsed.data.remark?.trim()
-          ? `International transfer request · ${parsed.data.remark.trim()}`
-          : "International transfer request",
+          ? `${parsed.data.transferType === "local_routing" ? "Local routing" : "International wire"} · ${parsed.data.remark.trim()}`
+          : parsed.data.transferType === "local_routing"
+            ? "Local routing transfer"
+            : "International wire transfer",
         mode: "internal_ledger",
       })
       .returning();
@@ -1182,6 +1022,7 @@ router.post("/bank/international-transfer-requests", async (req, res): Promise<v
       .insert(bankInternationalTransferRequestsTable)
       .values({
         transactionId: transaction.id,
+        transferType: parsed.data.transferType,
         userId: sender.id,
         sourceWalletId: wallet.id,
         sourceCurrency: parsed.data.sourceCurrency,
@@ -1192,11 +1033,32 @@ router.post("/bank/international-transfer-requests", async (req, res): Promise<v
         rateUpdatedAt,
         destinationCountry: parsed.data.destinationCountry.trim(),
         recipientBank: parsed.data.recipientBank.trim(),
+        routingCode,
+        swiftBic,
         recipientAccountName: parsed.data.recipientAccountName.trim(),
         recipientAccountLast4: accountNumber.slice(-4),
         remark: parsed.data.remark?.trim() ?? "",
       })
       .returning();
+    if (completedByMember) {
+      await tx.insert(bankLedgerEntriesTable).values([
+        {
+          transactionId: transaction.id,
+          walletId: wallet.id,
+          accountCode: `wallet:${wallet.id}`,
+          currency: parsed.data.sourceCurrency,
+          side: "debit",
+          amountMinor,
+        },
+        {
+          transactionId: transaction.id,
+          accountCode: `internal:transfer-clearing:${parsed.data.sourceCurrency}`,
+          currency: parsed.data.sourceCurrency,
+          side: "credit",
+          amountMinor,
+        },
+      ]);
+    }
     return { request, transaction };
   });
 

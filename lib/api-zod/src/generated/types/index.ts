@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './activeCurrencyCode';
 export * from './adminAccess';
 export * from './adminAccount';
 export * from './adminAccountPage';
@@ -79,6 +80,8 @@ export * from './identityVerificationSubmissionInput';
 export * from './incomingExternalTransferInput';
 export * from './internationalTransferRequest';
 export * from './internationalTransferRequestInput';
+export * from './internationalTransferRequestInputTransferType';
+export * from './internationalTransferRequestTransferType';
 export * from './ledgerRequest';
 export * from './ledgerRequestInput';
 export * from './ledgerRequestInputType';

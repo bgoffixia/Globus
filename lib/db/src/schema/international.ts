@@ -37,6 +37,7 @@ export const bankInternationalTransferRequestsTable = pgTable(
     transactionId: uuid("transaction_id")
       .primaryKey()
       .references(() => bankTransactionsTable.id, { onDelete: "cascade" }),
+    transferType: text("transfer_type").notNull().default("international_wire"),
     userId: text("user_id")
       .notNull()
       .references(() => bankUsersTable.id),
@@ -53,6 +54,8 @@ export const bankInternationalTransferRequestsTable = pgTable(
     rateUpdatedAt: timestamp("rate_updated_at", { withTimezone: true }).notNull(),
     destinationCountry: text("destination_country").notNull(),
     recipientBank: text("recipient_bank").notNull(),
+    routingCode: text("routing_code"),
+    swiftBic: text("swift_bic"),
     recipientAccountName: text("recipient_account_name").notNull(),
     recipientAccountLast4: text("recipient_account_last4").notNull(),
     remark: text("remark").notNull().default(""),

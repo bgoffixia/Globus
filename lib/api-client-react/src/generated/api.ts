@@ -1177,9 +1177,10 @@ export const getCreateBankTransferUrl = () => {
 }
 
 /**
- * @summary Simulate a transfer to another registered Globus user
+ * @deprecated
+ * @summary Retired member-to-member transfer endpoint
  */
-export const createBankTransfer = async (transferInput: TransferInput, options?: Parameters<typeof customFetch>[1]): Promise<BankTransaction> => {
+export const createBankTransfer = async (transferInput: TransferInput, options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -1195,7 +1196,7 @@ export const createBankTransfer = async (transferInput: TransferInput, options?:
     }
     return headers;
   };
-return customFetch<BankTransaction>(getCreateBankTransferUrl(),
+return customFetch<unknown>(getCreateBankTransferUrl(),
   {
     ...options,
     method: 'POST',
@@ -1210,7 +1211,7 @@ return customFetch<BankTransaction>(getCreateBankTransferUrl(),
 
 export const getCreateBankTransferMutationKey = () => ['createBankTransfer'] as const;
 
-export const getCreateBankTransferMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ConflictResponse>,
+export const getCreateBankTransferMutationOptions = <TError = ErrorType<UnauthorizedResponse | ConflictResponse | void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createBankTransfer>>, TError,CreateBankTransferMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof createBankTransfer>>, TError,CreateBankTransferMutationVariables, TContext> => {
 
@@ -1239,13 +1240,14 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type CreateBankTransferMutationResult = NonNullable<Awaited<ReturnType<typeof createBankTransfer>>>
     export type CreateBankTransferMutationBody = BodyType<TransferInput>
-    export type CreateBankTransferMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ConflictResponse>
+    export type CreateBankTransferMutationError = ErrorType<UnauthorizedResponse | ConflictResponse | void>
     export type CreateBankTransferMutationVariables = {data: BodyType<TransferInput>}
 
     /**
- * @summary Simulate a transfer to another registered Globus user
+ * @deprecated
+ * @summary Retired member-to-member transfer endpoint
  */
-export const useCreateBankTransfer = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ConflictResponse>,
+export const useCreateBankTransfer = <TError = ErrorType<UnauthorizedResponse | ConflictResponse | void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createBankTransfer>>, TError,CreateBankTransferMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof createBankTransfer>>,

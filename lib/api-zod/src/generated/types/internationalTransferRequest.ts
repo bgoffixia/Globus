@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CurrencyCode } from './currencyCode';
+import type { InternationalTransferRequestTransferType } from './internationalTransferRequestTransferType';
 import type { TransactionStatus } from './transactionStatus';
 
 export interface InternationalTransferRequest {
@@ -14,6 +15,11 @@ export interface InternationalTransferRequest {
   status: TransactionStatus;
   destinationCountry: string;
   recipientBank: string;
+  transferType: InternationalTransferRequestTransferType;
+  /** @nullable */
+  routingCode: string | null;
+  /** @nullable */
+  swiftBic: string | null;
   recipientAccountName: string;
   /** @pattern ^[A-Z0-9]{4}$ */
   recipientAccountLast4: string;

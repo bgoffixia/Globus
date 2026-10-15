@@ -11,8 +11,8 @@ import {
   db,
 } from "@workspace/db";
 
-export const currencies = ["USD", "EUR", "GBP", "NGN", "CAD", "AUD"] as const;
-export type BankCurrency = (typeof currencies)[number];
+export const currencies = ["USD", "EUR", "GBP", "CAD", "AUD"] as const;
+export type BankCurrency = (typeof bankCurrencyEnum.enumValues)[number];
 
 const customerIdAlphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
@@ -278,7 +278,16 @@ export async function getWalletsForUser(userId: string) {
     ]),
   );
 
-  return wallets.map((wallet) => ({
+  return wallets
+    .filter((wallet) => {
+      if (wallet.currency !== "NGN") return true;
+      return (
+        (balanceByWallet.get(wallet.id) ?? 0n) !== 0n ||
+        (pendingByWallet.get(wallet.id) ?? 0n) !== 0n ||
+        (reservedByWallet.get(wallet.id) ?? 0n) !== 0n
+      );
+    })
+    .map((wallet) => ({
     id: wallet.id,
     currency: wallet.currency as BankCurrency,
     available: formatMinorAmount(
@@ -288,7 +297,7 @@ export async function getWalletsForUser(userId: string) {
     pending: formatMinorAmount(pendingByWallet.get(wallet.id) ?? 0n),
     reserved: formatMinorAmount(reservedByWallet.get(wallet.id) ?? 0n),
     status: wallet.status as "active" | "restricted",
-  }));
+    }));
 }
 
 export function toBankTransaction(
@@ -324,8 +333,10 @@ export function toBankTransaction(
 
   const isInternationalRequest =
     transaction.type === "external_transfer" &&
-    transaction.status === "pending" &&
-    transaction.counterparty?.includes("****") === true;
+    transaction.counterparty?.includes("****") === true &&
+    /^(local routing|international wire|international transfer request)/i.test(
+      transaction.description,
+    );
   const isLegacyExternalEntry =
     (transaction.type === "external_transfer" && !isInternationalRequest) ||
     transaction.type === "external_transfer_in";

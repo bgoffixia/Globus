@@ -2,7 +2,6 @@ import { Link, useLocation } from 'wouter';
 import {
   ArrowDownLeft,
   ArrowLeftRight,
-  ArrowUpRight,
   CircleHelp,
   CreditCard,
   LayoutDashboard,
@@ -27,8 +26,8 @@ const primaryLinks = [
 ];
 
 const moneyLinks = [
-  { href: '/send', label: 'Send', icon: ArrowUpRight },
-  { href: '/international-transfer', label: 'International request', icon: ArrowLeftRight },
+  { href: '/international-transfer?type=local_routing', label: 'Local routing', icon: ArrowLeftRight },
+  { href: '/international-transfer?type=international_wire', label: 'International wire', icon: ArrowLeftRight },
   { href: '/receive', label: 'Receive', icon: ArrowDownLeft },
   { href: '/add-money', label: 'Deposit request', icon: CreditCard },
   { href: '/withdraw', label: 'Withdrawal request', icon: ArrowDownLeft },
@@ -146,7 +145,6 @@ function pageLabel(path: string) {
     '/dashboard': 'Overview',
     '/wallets': 'Wallets',
     '/transactions': 'Activity',
-    '/send': 'Send money',
     '/international-transfer': 'International transfer',
     '/receive': 'Receive',
     '/add-money': 'Deposit request',

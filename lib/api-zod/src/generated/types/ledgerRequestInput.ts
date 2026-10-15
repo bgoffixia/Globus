@@ -5,12 +5,12 @@
  * Globus internal ledger API; no external financial provider is connected
  * OpenAPI spec version: 0.1.0
  */
-import type { CurrencyCode } from './currencyCode';
+import type { ActiveCurrencyCode } from './activeCurrencyCode';
 import type { LedgerRequestInputType } from './ledgerRequestInputType';
 
 export interface LedgerRequestInput {
   type: LedgerRequestInputType;
-  currency: CurrencyCode;
+  currency: ActiveCurrencyCode;
   /** @pattern ^[0-9]{1,12}(\.[0-9]{1,2})?$ */
   amount: string;
   /** @maxLength 140 */

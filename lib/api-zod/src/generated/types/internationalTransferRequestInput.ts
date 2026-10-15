@@ -5,9 +5,11 @@
  * Globus internal ledger API; no external financial provider is connected
  * OpenAPI spec version: 0.1.0
  */
-import type { CurrencyCode } from './currencyCode';
+import type { ActiveCurrencyCode } from './activeCurrencyCode';
+import type { InternationalTransferRequestInputTransferType } from './internationalTransferRequestInputTransferType';
 
 export interface InternationalTransferRequestInput {
+  transferType: InternationalTransferRequestInputTransferType;
   /**
      * @minLength 2
      * @maxLength 80
@@ -19,6 +21,16 @@ export interface InternationalTransferRequestInput {
      */
   recipientBank: string;
   /**
+     * @maxLength 24
+     * @pattern ^[A-Za-z0-9 -]*$
+     */
+  routingCode?: string;
+  /**
+     * @maxLength 11
+     * @pattern ^[A-Za-z0-9]*$
+     */
+  swiftBic?: string;
+  /**
      * @minLength 1
      * @maxLength 120
      */
@@ -29,8 +41,8 @@ export interface InternationalTransferRequestInput {
      * @pattern ^[A-Za-z0-9 ]+$
      */
   recipientAccountNumber: string;
-  sourceCurrency: CurrencyCode;
-  destinationCurrency: CurrencyCode;
+  sourceCurrency: ActiveCurrencyCode;
+  destinationCurrency: ActiveCurrencyCode;
   /** @pattern ^[0-9]{1,12}(\.[0-9]{1,2})?$ */
   amount: string;
   /** @maxLength 140 */
