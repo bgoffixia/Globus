@@ -86,10 +86,10 @@ const currencyNames: Record<Currency, string> = {
 export function HomePage() {
   const health = useHealthCheck({ query: { queryKey: getHealthCheckQueryKey(), retry: false } });
   return (
-    <div className="min-h-[100dvh] overflow-hidden bg-[#f6f8fa] text-[#192e49]">
-      <header className="relative z-10 mx-auto flex max-w-[1320px] items-center justify-between px-6 py-6 lg:px-12">
-        <Link href="/" className="bank-brand flex items-center gap-3 text-[22px] font-extrabold">
-          <span className="grid h-10 w-10 place-items-center rounded-[13px] bg-[#132f52] text-[16px] text-[#d1b05f]">G</span>
+    <div className="min-h-screen min-h-[100dvh] overflow-x-clip bg-[#f6f8fa] text-[#192e49]">
+      <header className="relative z-10 mx-auto flex max-w-[1320px] items-center justify-between gap-2 px-4 pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-5 sm:gap-3 sm:px-6 sm:py-6 lg:px-12">
+        <Link href="/" className="bank-brand flex shrink-0 items-center gap-2 text-[19px] font-extrabold sm:gap-3 sm:text-[22px]">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[13px] bg-[#132f52] text-[16px] text-[#d1b05f] sm:h-10 sm:w-10">G</span>
           globus
         </Link>
         <nav className="hidden items-center gap-8 text-[13px] font-medium text-[#607187] md:flex">
@@ -97,19 +97,19 @@ export function HomePage() {
           <Link href="/fees" className="hover:text-[#142d4d]">Fees</Link>
           <Link href="/help" className="hover:text-[#142d4d]">Help</Link>
         </nav>
-        <div className="flex items-center gap-2 sm:gap-3">
-          <Link href="/sign-in" className="rounded-xl px-3 py-2.5 text-[12px] font-bold text-[#263e5b] hover:bg-[#eaf0f4] sm:px-4 sm:text-[13px]">Sign in</Link>
-          <Link href="/sign-up" className="rounded-xl bg-[#142f51] px-4 py-2.5 text-[12px] font-bold text-white shadow-sm transition hover:bg-[#1b4269] sm:px-5 sm:text-[13px]">Open an account</Link>
+        <div className="flex shrink-0 items-center gap-1 sm:gap-3">
+          <Link href="/sign-in" className="whitespace-nowrap rounded-xl px-2 py-2.5 text-[12px] font-bold text-[#263e5b] hover:bg-[#eaf0f4] sm:px-4 sm:text-[13px]">Sign in</Link>
+          <Link href="/sign-up" className="whitespace-nowrap rounded-xl bg-[#142f51] px-3 py-2.5 text-[11px] font-bold text-white shadow-sm transition hover:bg-[#1b4269] sm:px-5 sm:text-[13px]"><span className="sm:hidden">Open account</span><span className="hidden sm:inline">Open an account</span></Link>
         </div>
       </header>
 
-      <section className="relative mx-auto grid max-w-[1320px] items-center gap-14 px-6 pb-20 pt-9 lg:grid-cols-[1.04fr_.96fr] lg:px-12 lg:pb-28 lg:pt-16">
-        <div className="relative z-10">
+      <section className="relative mx-auto grid min-w-0 max-w-[1320px] items-center gap-10 px-4 pb-16 pt-7 sm:gap-14 sm:px-6 sm:pb-20 sm:pt-9 lg:grid-cols-[1.04fr_.96fr] lg:px-12 lg:pb-28 lg:pt-16">
+        <div className="relative z-10 min-w-0">
           <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-[#dbe7e9] bg-white px-3.5 py-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[#3b777d]">
             <span className="h-1.5 w-1.5 rounded-full bg-[#55a5a9]" />
             An internal multi-currency ledger
           </div>
-          <h1 className="bank-display max-w-[700px] text-[clamp(3.2rem,7.3vw,6.5rem)] font-semibold leading-[.98] tracking-[-.07em] text-[#142c49]">
+          <h1 className="bank-display max-w-full text-[clamp(2.75rem,14vw,6.5rem)] font-semibold leading-[.98] tracking-[-.07em] text-[#142c49] sm:max-w-[700px] sm:text-[clamp(3.2rem,7.3vw,6.5rem)]">
             Your Money.
             <br />
             <span className="text-[#438f98]">Your World.</span>
@@ -119,23 +119,23 @@ export function HomePage() {
           <p className="mt-7 max-w-[510px] text-[16px] leading-7 text-[#64758a] sm:text-[18px] sm:leading-8">
             Bring your currencies together, understand every movement, and record internal member transfers and reviewed ledger requests with clear statuses.
           </p>
-          <div className="mt-9 flex flex-wrap items-center gap-3">
-            <Link href="/sign-up" className="inline-flex items-center gap-3 rounded-xl bg-[#152f50] px-6 py-4 text-[13px] font-bold text-white shadow-[0_10px_24px_rgba(18,43,75,.16)] transition hover:-translate-y-0.5 hover:bg-[#1b4168]">
+          <div className="mt-8 flex flex-col items-stretch gap-2 sm:mt-9 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+            <Link href="/sign-up" className="inline-flex w-full items-center justify-center gap-3 rounded-xl bg-[#152f50] px-5 py-3.5 text-[13px] font-bold text-white shadow-[0_10px_24px_rgba(18,43,75,.16)] transition hover:-translate-y-0.5 hover:bg-[#1b4168] sm:w-auto sm:px-6 sm:py-4">
               Get started <ArrowRight size={16} />
             </Link>
-            <Link href="/about" className="rounded-xl px-5 py-4 text-[13px] font-bold text-[#36506c] hover:bg-[#eaf0f4]">How Globus works</Link>
+            <Link href="/about" className="rounded-xl px-5 py-3.5 text-center text-[13px] font-bold text-[#36506c] hover:bg-[#eaf0f4] sm:py-4">How Globus works</Link>
           </div>
-          <div className="mt-11 flex flex-wrap gap-x-7 gap-y-3 text-[11px] font-medium text-[#68798d]">
+          <div className="mt-8 flex min-w-0 flex-wrap gap-x-5 gap-y-3 text-[10px] font-medium text-[#68798d] sm:mt-11 sm:gap-x-7 sm:text-[11px]">
             <span className="inline-flex items-center gap-2"><ShieldCheck size={15} className="text-[#478b8e]" /> Internal ledger activity clearly identified</span>
             <span className="inline-flex items-center gap-2"><Globe2 size={15} className="text-[#478b8e]" /> Six supported currencies</span>
           </div>
         </div>
-        <div className="relative mx-auto w-full max-w-[560px]">
-          <div className="absolute -right-12 -top-14 h-72 w-72 rounded-full bg-[#dfeef0] blur-3xl" />
-          <div className="absolute -bottom-10 -left-10 h-64 w-64 rounded-full bg-[#eae5d6] blur-3xl" />
-          <div className="relative rotate-[1.2deg] rounded-[28px] border border-white/80 bg-white p-4 shadow-[0_34px_90px_rgba(31,56,83,.17)] sm:p-6">
-            <div className="rounded-[22px] bg-[#f4f7f9] p-5 sm:p-7">
-              <div className="flex items-center justify-between">
+        <div className="relative mx-auto w-full min-w-0 max-w-[560px]">
+          <div className="absolute right-0 top-0 h-48 w-48 rounded-full bg-[#dfeef0] blur-3xl sm:-right-12 sm:-top-14 sm:h-72 sm:w-72" />
+          <div className="absolute -bottom-8 left-0 h-48 w-48 rounded-full bg-[#eae5d6] blur-3xl sm:-bottom-10 sm:-left-10 sm:h-64 sm:w-64" />
+          <div className="relative min-w-0 max-w-full rotate-0 rounded-[24px] border border-white/80 bg-white p-3 shadow-[0_34px_90px_rgba(31,56,83,.17)] sm:rotate-[1.2deg] sm:rounded-[28px] sm:p-6">
+            <div className="min-w-0 rounded-[20px] bg-[#f4f7f9] p-4 sm:rounded-[22px] sm:p-7">
+              <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[#78889a]">Illustrative interface</p>
                   <p className="mt-1 text-[11px] text-[#8492a2]">No account or balance data shown</p>
@@ -147,26 +147,26 @@ export function HomePage() {
                   <span>Internal ledger balance</span>
                   <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-[#e4c876]" /> USD reference</span>
                 </div>
-                <div className="bank-display mt-3 text-[30px] font-semibold tracking-[-.05em] sm:text-[38px]">View after sign-in</div>
-                <div className="mt-5 flex gap-2">
-                  {currencies.map((code, i) => <span key={code} className={`rounded-full px-3 py-1.5 text-[10px] font-bold ${i === 0 ? 'bg-white/15 text-white' : 'bg-white/[.07] text-[#cedce6]'}`}>{code}</span>)}
+                <div className="bank-display mt-3 max-w-full break-words text-[clamp(1.2rem,6vw,1.875rem)] font-semibold tracking-[-.05em] sm:text-[38px]">View after sign-in</div>
+                <div className="mt-5 flex flex-wrap gap-2">
+                  {currencies.map((code, i) => <span key={code} className={`shrink-0 rounded-full px-3 py-1.5 text-[10px] font-bold ${i === 0 ? 'bg-white/15 text-white' : 'bg-white/[.07] text-[#cedce6]'}`}>{code}</span>)}
                 </div>
               </div>
-              <div className="mt-5 grid grid-cols-2 gap-3">
+              <div className="mt-5 grid min-w-0 grid-cols-2 gap-2 sm:gap-3">
                 {[
                   ['US dollar', 'Wallet balance after sign-in', 'USD'],
                   ['Euro', 'Wallet balance after sign-in', 'EUR'],
                 ].map(([name, value, code]) => (
-                  <div key={code} className="rounded-2xl border border-[#e6ebef] bg-white p-4">
+                  <div key={code} className="min-w-0 rounded-2xl border border-[#e6ebef] bg-white p-3 sm:p-4">
                     <div className="flex items-center justify-between"><span className="grid h-8 w-8 place-items-center rounded-full bg-[#edf5f6] text-[10px] font-bold text-[#43878e]">{code.slice(0, 2)}</span><span className="text-[9px] font-semibold text-[#8b98a7]">{code}</span></div>
                     <p className="mt-4 text-[10px] text-[#8290a0]">{name}</p>
-                    <p className="mt-1 font-semibold text-[#1e3653]">{value}</p>
+                    <p className="mt-1 break-words text-[12px] font-semibold text-[#1e3653] sm:text-[14px]">{value}</p>
                   </div>
                 ))}
               </div>
-              <div className="mt-5 flex items-center gap-3 rounded-xl bg-white px-4 py-3">
+              <div className="mt-5 flex min-w-0 items-center gap-3 rounded-xl bg-white px-3 py-3 sm:px-4">
                 <span className="grid h-9 w-9 place-items-center rounded-full bg-[#eef5f5] text-[#4b898e]"><ArrowUpRight size={16} /></span>
-                <div className="flex-1"><p className="text-[11px] font-semibold text-[#334b66]">No ledger activity yet</p><p className="mt-0.5 text-[10px] text-[#8b98a7]">Member transfers and approved requests appear here</p></div>
+                <div className="min-w-0 flex-1"><p className="text-[11px] font-semibold text-[#334b66]">No ledger activity yet</p><p className="mt-0.5 break-words text-[10px] text-[#8b98a7]">Member transfers and approved requests appear here</p></div>
                 <p className="text-[12px] font-semibold text-[#2e665f]">—</p>
               </div>
             </div>
@@ -197,7 +197,7 @@ export function HomePage() {
           <FeatureBlock number="04" title="Keep a clean record" copy="Every ledger transaction has a reference, status and timestamp for straightforward review." />
         </div>
       </section>
-      <section className="mx-6 mb-16 rounded-[28px] bg-[#132f51] px-7 py-12 text-white sm:mx-10 sm:px-12 lg:mx-auto lg:max-w-[1240px] lg:px-16 lg:py-16">
+      <section className="mx-4 mb-16 rounded-[28px] bg-[#132f51] px-5 py-10 text-white sm:mx-10 sm:px-12 sm:py-12 lg:mx-auto lg:max-w-[1240px] lg:px-16 lg:py-16">
         <div className="grid items-center gap-8 md:grid-cols-[1fr_auto]">
           <div><p className="text-[10px] font-bold uppercase tracking-[.18em] text-[#a6d5d8]">Make your next step clearer</p><h2 className="bank-display mt-3 max-w-[640px] text-[34px] font-semibold leading-tight sm:text-[45px]">Your Globus ledger workspace, ready to use.</h2><p className="mt-4 max-w-[520px] text-[14px] leading-6 text-[#cfdae4]">Create an account to manage internal wallets, member transfers and requests reviewed by Globus administrators. No outside funds are received or sent.</p></div>
           <Link href="/sign-up" className="inline-flex items-center justify-center gap-3 rounded-xl bg-[#d5b765] px-6 py-4 text-[13px] font-bold text-[#17304d] hover:bg-[#e0c879]">Create your account <ArrowRight size={15} /></Link>

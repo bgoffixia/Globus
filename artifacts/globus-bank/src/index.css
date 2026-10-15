@@ -97,6 +97,14 @@
     min-width: 320px;
   }
 
+  html,
+  body,
+  #root {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: clip;
+  }
+
   button,
   input,
   select,
@@ -106,13 +114,32 @@
 }
 
 .app-shell {
+  width: 100%;
+  max-width: 100%;
   min-height: 100dvh;
+  overflow-x: clip;
   background: #f4f7fa;
 }
 
 .bank-sidebar {
   background: #102747;
   color: #dce6f1;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.app-shell > div:last-child {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+@supports not (overflow-x: clip) {
+  html,
+  body,
+  #root,
+  .app-shell {
+    overflow-x: hidden;
+  }
 }
 
 .bank-brand {
@@ -154,6 +181,14 @@
 
 .cl-rootBox {
   width: 100%;
+}
+
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
 }
 
 @media print {
