@@ -20,6 +20,9 @@ export const HealthCheckResponse = zod.object({
 /**
  * @summary Get the authenticated user's Globus Bank profile
  */
+export const getBankProfileResponseDateOfBirthRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+
+
 export const GetBankProfileResponse = zod.object({
   "id": zod.string(),
   "email": zod.string(),
@@ -27,6 +30,7 @@ export const GetBankProfileResponse = zod.object({
   "lastName": zod.string().nullable(),
   "phone": zod.string().nullable(),
   "country": zod.string().nullable(),
+  "dateOfBirth": zod.string().regex(getBankProfileResponseDateOfBirthRegExp).nullable(),
   "verificationStatus": zod.enum(['not_started', 'pending', 'approved', 'rejected', 'additional_information_required']),
   "verificationNote": zod.string().nullable(),
   "accountStatus": zod.enum(['active', 'suspended']),
@@ -37,6 +41,9 @@ export const GetBankProfileResponse = zod.object({
 /**
  * @summary Get the user's simulated balances and recent activity
  */
+export const getBankDashboardResponseProfileDateOfBirthRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+
+
 export const GetBankDashboardResponse = zod.object({
   "profile": zod.object({
   "id": zod.string(),
@@ -45,6 +52,7 @@ export const GetBankDashboardResponse = zod.object({
   "lastName": zod.string().nullable(),
   "phone": zod.string().nullable(),
   "country": zod.string().nullable(),
+  "dateOfBirth": zod.string().regex(getBankDashboardResponseProfileDateOfBirthRegExp).nullable(),
   "verificationStatus": zod.enum(['not_started', 'pending', 'approved', 'rejected', 'additional_information_required']),
   "verificationNote": zod.string().nullable(),
   "accountStatus": zod.enum(['active', 'suspended']),
@@ -128,6 +136,7 @@ export const ListBankTransactionsResponse = zod.array(ListBankTransactionsRespon
  */
 export const updateBankProfileBodyFirstNameMax = 80;
 
+export const updateBankProfileBodyLastNameMin = 0;
 export const updateBankProfileBodyLastNameMax = 80;
 
 export const updateBankProfileBodyPhoneMin = 3;
@@ -136,15 +145,20 @@ export const updateBankProfileBodyPhoneMax = 32;
 export const updateBankProfileBodyCountryMin = 2;
 export const updateBankProfileBodyCountryMax = 80;
 
+export const updateBankProfileBodyDateOfBirthRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
 
 
 export const UpdateBankProfileBody = zod.object({
   "firstName": zod.string().min(1).max(updateBankProfileBodyFirstNameMax),
-  "lastName": zod.string().min(1).max(updateBankProfileBodyLastNameMax),
+  "lastName": zod.string().min(updateBankProfileBodyLastNameMin).max(updateBankProfileBodyLastNameMax),
   "phone": zod.string().min(updateBankProfileBodyPhoneMin).max(updateBankProfileBodyPhoneMax),
   "country": zod.string().min(updateBankProfileBodyCountryMin).max(updateBankProfileBodyCountryMax),
+  "dateOfBirth": zod.string().regex(updateBankProfileBodyDateOfBirthRegExp).optional(),
   "acceptedTerms": zod.literal(true)
 })
+
+export const updateBankProfileResponseDateOfBirthRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+
 
 export const UpdateBankProfileResponse = zod.object({
   "id": zod.string(),
@@ -153,6 +167,7 @@ export const UpdateBankProfileResponse = zod.object({
   "lastName": zod.string().nullable(),
   "phone": zod.string().nullable(),
   "country": zod.string().nullable(),
+  "dateOfBirth": zod.string().regex(updateBankProfileResponseDateOfBirthRegExp).nullable(),
   "verificationStatus": zod.enum(['not_started', 'pending', 'approved', 'rejected', 'additional_information_required']),
   "verificationNote": zod.string().nullable(),
   "accountStatus": zod.enum(['active', 'suspended']),
@@ -234,6 +249,9 @@ export const SubmitIdentityDocumentsBody = zod.object({
   "confirmed": zod.literal(true)
 })
 
+export const submitIdentityDocumentsResponseDateOfBirthRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+
+
 export const SubmitIdentityDocumentsResponse = zod.object({
   "id": zod.string(),
   "email": zod.string(),
@@ -241,6 +259,7 @@ export const SubmitIdentityDocumentsResponse = zod.object({
   "lastName": zod.string().nullable(),
   "phone": zod.string().nullable(),
   "country": zod.string().nullable(),
+  "dateOfBirth": zod.string().regex(submitIdentityDocumentsResponseDateOfBirthRegExp).nullable(),
   "verificationStatus": zod.enum(['not_started', 'pending', 'approved', 'rejected', 'additional_information_required']),
   "verificationNote": zod.string().nullable(),
   "accountStatus": zod.enum(['active', 'suspended']),
@@ -492,6 +511,9 @@ export const GetAdminUserDetailParams = zod.object({
   "userId": zod.coerce.string().min(1)
 })
 
+export const getAdminUserDetailResponseDateOfBirthRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+
+
 export const GetAdminUserDetailResponse = zod.object({
   "user": zod.object({
   "id": zod.string(),
@@ -506,6 +528,7 @@ export const GetAdminUserDetailResponse = zod.object({
   "createdAt": zod.coerce.date()
 }),
   "phone": zod.string().nullable(),
+  "dateOfBirth": zod.string().regex(getAdminUserDetailResponseDateOfBirthRegExp).nullable(),
   "wallets": zod.array(zod.object({
   "id": zod.string(),
   "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),

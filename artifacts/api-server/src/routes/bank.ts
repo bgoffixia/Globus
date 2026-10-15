@@ -162,6 +162,7 @@ router.get("/bank/me", async (req, res): Promise<void> => {
       lastName: user.lastName,
       phone: user.phone,
       country: user.country,
+      dateOfBirth: user.dateOfBirth,
       verificationStatus: user.verificationStatus,
       verificationNote: user.verificationNote,
       accountStatus: user.accountStatus,
@@ -192,6 +193,7 @@ router.get("/bank/dashboard", async (req, res): Promise<void> => {
         lastName: profile.lastName,
         phone: profile.phone,
         country: profile.country,
+        dateOfBirth: profile.dateOfBirth,
         verificationStatus: profile.verificationStatus,
         verificationNote: profile.verificationNote,
         accountStatus: profile.accountStatus,
@@ -253,14 +255,29 @@ router.put("/bank/profile", async (req, res): Promise<void> => {
     return;
   }
 
+  if (
+    parsed.data.dateOfBirth &&
+    (!Number.isFinite(Date.parse(`${parsed.data.dateOfBirth}T00:00:00.000Z`)) ||
+      new Date(`${parsed.data.dateOfBirth}T00:00:00.000Z`)
+        .toISOString()
+        .slice(0, 10) !== parsed.data.dateOfBirth ||
+      parsed.data.dateOfBirth > new Date().toISOString().slice(0, 10))
+  ) {
+    res.status(400).json({ error: "Enter a valid date of birth that is not in the future." });
+    return;
+  }
+
   const currentUser = await getOrCreateBankUser(authUserId);
   const [user] = await db
     .update(bankUsersTable)
     .set({
       firstName: parsed.data.firstName.trim(),
-      lastName: parsed.data.lastName.trim(),
+      lastName: parsed.data.lastName.trim() || null,
       phone: parsed.data.phone.trim(),
       country: parsed.data.country.trim(),
+      ...(parsed.data.dateOfBirth
+        ? { dateOfBirth: parsed.data.dateOfBirth }
+        : {}),
       acceptedTermsAt: new Date(),
       updatedAt: new Date(),
     })
@@ -275,6 +292,7 @@ router.put("/bank/profile", async (req, res): Promise<void> => {
       lastName: user.lastName,
       phone: user.phone,
       country: user.country,
+      dateOfBirth: user.dateOfBirth,
       verificationStatus: user.verificationStatus,
       verificationNote: user.verificationNote,
       accountStatus: user.accountStatus,

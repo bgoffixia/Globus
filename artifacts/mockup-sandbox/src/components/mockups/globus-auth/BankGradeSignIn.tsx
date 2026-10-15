@@ -38,17 +38,13 @@ export function BankGradeSignIn() {
             <h1>Welcome back</h1>
             <p>Sign in to access your Globus accounts.</p>
           </div>
-          <form className="gb-auth-form" onSubmit={(event) => event.preventDefault()}>
+          <form className="gb-auth-form">
             <label className="gb-field-label" htmlFor="gb-signin-email">Email address</label>
             <input className="gb-input" id="gb-signin-email" type="email" autoComplete="email" placeholder="name@example.com" />
-            <button className="gb-primary-button" type="submit">Continue with email <span aria-hidden="true">→</span></button>
+            <button className="gb-primary-button" type="button">Continue with email <span aria-hidden="true">→</span></button>
           </form>
-          <div className="gb-divider"><span>or</span></div>
-          <button className="gb-google-button" type="button">
-            <span className="gb-google-g" aria-hidden="true">G</span>
-            Continue with Google
-          </button>
           <p className="gb-switch-copy">New to Globus? <a href="/__mockup/preview/globus-auth/BankGradeSignUp">Create an account <span aria-hidden="true">→</span></a></p>
+          <p className="gb-preview-note">Preview only · no information is submitted</p>
           <div className="gb-form-footer"><span>Globus Bank</span><span>Member account access</span></div>
         </div>
       </section>

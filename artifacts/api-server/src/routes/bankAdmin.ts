@@ -318,6 +318,7 @@ router.get(
           createdAt: user.createdAt.toISOString(),
         },
         phone: user.phone,
+        dateOfBirth: user.dateOfBirth,
         wallets,
         transactions,
       }),

@@ -38,19 +38,23 @@ export function BankGradeSignUp() {
             <h1>Create your account</h1>
             <p>Set up your Globus member access.</p>
           </div>
-          <button className="gb-google-button gb-signup-google" type="button">
-            <span className="gb-google-g" aria-hidden="true">G</span>
-            Continue with Google
-          </button>
-          <div className="gb-divider"><span>or use your email</span></div>
-          <form className="gb-auth-form gb-signup-form" onSubmit={(event) => event.preventDefault()}>
-            <label className="gb-field-label" htmlFor="gb-signup-email">Email address</label>
+          <form className="gb-auth-form gb-signup-form">
+            <label className="gb-field-label" htmlFor="gb-signup-name">Full name</label>
+            <input className="gb-input" id="gb-signup-name" type="text" autoComplete="name" placeholder="Your full name" />
+            <label className="gb-field-label gb-signup-spaced-label" htmlFor="gb-signup-phone">Phone number</label>
+            <input className="gb-input" id="gb-signup-phone" type="tel" autoComplete="tel" placeholder="+1 (555) 000-0000" />
+            <label className="gb-field-label gb-signup-spaced-label" htmlFor="gb-signup-country">Country</label>
+            <input className="gb-input" id="gb-signup-country" type="text" autoComplete="country-name" placeholder="Country or region" />
+            <label className="gb-field-label gb-signup-spaced-label" htmlFor="gb-signup-dob">Date of birth</label>
+            <input className="gb-input" id="gb-signup-dob" type="date" autoComplete="bday" />
+            <label className="gb-field-label gb-signup-spaced-label" htmlFor="gb-signup-email">Email address</label>
             <input className="gb-input" id="gb-signup-email" type="email" autoComplete="email" placeholder="name@example.com" />
-            <label className="gb-field-label gb-password-label" htmlFor="gb-signup-password">Password</label>
+            <label className="gb-field-label gb-signup-spaced-label" htmlFor="gb-signup-password">Password</label>
             <input className="gb-input" id="gb-signup-password" type="password" autoComplete="new-password" placeholder="Create a password" />
-            <button className="gb-primary-button" type="submit">Create account <span aria-hidden="true">→</span></button>
+            <button className="gb-primary-button" type="button">Create account <span aria-hidden="true">→</span></button>
           </form>
           <p className="gb-switch-copy gb-signup-switch">Already have an account? <a href="/__mockup/preview/globus-auth/BankGradeSignIn">Sign in <span aria-hidden="true">→</span></a></p>
+          <p className="gb-preview-note">Preview only · no information is submitted</p>
           <div className="gb-form-footer"><span>Globus Bank</span><span>Member account access</span></div>
         </div>
       </section>

@@ -1,5 +1,6 @@
 import {
   bigint,
+  date,
   index,
   pgEnum,
   pgTable,
@@ -51,6 +52,7 @@ export const bankUsersTable = pgTable("bank_users", {
   lastName: text("last_name"),
   phone: text("phone"),
   country: text("country"),
+  dateOfBirth: date("date_of_birth", { mode: "string" }),
   verificationStatus: text("verification_status").notNull().default("not_started"),
   verificationNote: text("verification_note"),
   accountStatus: text("account_status").notNull().default("active"),

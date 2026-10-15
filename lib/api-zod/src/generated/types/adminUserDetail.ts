@@ -13,6 +13,11 @@ export interface AdminUserDetail {
   user: AdminUser;
   /** @nullable */
   phone: string | null;
+  /**
+     * @nullable
+     * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+     */
+  dateOfBirth: string | null;
   wallets: Wallet[];
   transactions: BankTransaction[];
 }

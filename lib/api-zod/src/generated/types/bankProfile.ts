@@ -19,6 +19,11 @@ export interface BankProfile {
   phone: string | null;
   /** @nullable */
   country: string | null;
+  /**
+     * @nullable
+     * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+     */
+  dateOfBirth: string | null;
   verificationStatus: BankProfileVerificationStatus;
   /** @nullable */
   verificationNote: string | null;

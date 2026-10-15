@@ -170,27 +170,6 @@
 }
 .gb-primary-button:hover { background: #214d76; transform: translateY(-1px); }
 .gb-primary-button span { color: #dfc579; font-size: 19px; line-height: 1; }
-.gb-divider { display: flex; align-items: center; gap: 14px; margin: 26px 0; color: #8493a0; font-size: 11px; }
-.gb-divider::before, .gb-divider::after { height: 1px; flex: 1; content: ""; background: #dfe5e8; }
-.gb-google-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  width: 100%;
-  height: 51px;
-  border: 1px solid #d7e0e5;
-  border-radius: 5px;
-  background: rgba(255,255,255,.72);
-  color: #344b60;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background .18s ease, border-color .18s ease;
-}
-.gb-google-button:hover { border-color: #aabcc5; background: #fff; }
-.gb-google-g { font-family: Arial, sans-serif; font-size: 17px; font-weight: 700; color: #4285f4; }
 .gb-switch-copy { margin: 34px 0 0; color: #718397; text-align: center; font-size: 12px; }
 .gb-switch-copy a { margin-left: 4px; color: #276b70; font-weight: 700; text-decoration: none; }
 .gb-switch-copy a:hover { color: #173b62; }
@@ -198,13 +177,14 @@
 .gb-form-footer { display: flex; justify-content: space-between; gap: 14px; margin-top: 48px; padding-top: 17px; border-top: 1px solid #dfe5e8; color: #91a0aa; font-size: 10px; }
 .gb-form-footer span:first-child { color: #64798a; font-weight: 700; letter-spacing: .08em; }
 .gb-mobile-brand { display: none; }
-.gb-signup-content .gb-form-heading { margin-bottom: 25px; }
-.gb-signup-google { margin-bottom: 0; }
-.gb-signup-content .gb-divider { margin: 21px 0; }
-.gb-password-label { margin-top: 18px; }
-.gb-signup-form .gb-primary-button { margin-top: 24px; }
-.gb-signup-switch { margin-top: 25px; }
-.gb-signup-content .gb-form-footer { margin-top: 31px; }
+.gb-auth-content > .gb-form-footer { margin-top: 28px; }
+.gb-preview-note { margin: 12px 0 0; color: #8b98a1; font-size: 10px; text-align: center; }
+.gb-signup-content .gb-form-heading { margin-bottom: 20px; }
+.gb-signup-form .gb-input { height: 45px; }
+.gb-signup-spaced-label { margin-top: 11px; }
+.gb-signup-form .gb-primary-button { margin-top: 22px; }
+.gb-signup-switch { margin-top: 20px; }
+.gb-signup-content .gb-form-footer { margin-top: 20px; }
 @keyframes gb-arrive { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: translateY(0); } }
 @media (max-width: 760px) {
   .gb-auth-shell { display: block; min-height: 100vh; min-height: 100dvh; background: #f5f7f8; }
@@ -216,15 +196,22 @@
   .gb-auth-content { max-width: 430px; margin: 0 auto; }
   .gb-form-heading { margin-bottom: 29px; }
   .gb-form-heading h1 { font-size: 33px; }
-  .gb-form-footer { margin-top: 42px; }
-  .gb-signup-content .gb-form-footer { margin-top: 30px; }
+  .gb-auth-content > .gb-form-footer { margin-top: 27px; }
+  .gb-signup-content { padding-bottom: 18px; }
+  .gb-signup-content .gb-form-heading { margin-bottom: 20px; }
+  .gb-signup-form .gb-field-label { margin-bottom: 7px; }
+  .gb-signup-form .gb-signup-spaced-label { margin-top: 9px; }
+  .gb-signup-form .gb-input { height: 43px; }
+  .gb-signup-form .gb-primary-button { margin-top: 18px; }
+  .gb-signup-switch { margin-top: 18px; }
+  .gb-signup-content .gb-form-footer { margin-top: 18px; }
 }
 @media (max-width: 390px) {
   .gb-form-side { padding-right: 20px; padding-left: 20px; }
-  .gb-mobile-brand { margin-bottom: 38px; }
+  .gb-mobile-brand { margin-bottom: 30px; }
   .gb-form-heading h1 { font-size: 30px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .gb-auth-content { animation: none; }
-  .gb-input, .gb-primary-button, .gb-google-button { transition: none; }
+  .gb-input, .gb-primary-button { transition: none; }
 }

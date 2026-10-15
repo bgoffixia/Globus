@@ -517,6 +517,7 @@ export function SettingsPage() {
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
   const [country, setCountry] = useState('');
+  const [dateOfBirth, setDateOfBirth] = useState('');
   const [accepted, setAccepted] = useState(false);
   const [initialised, setInitialised] = useState(false);
   useEffect(() => {
@@ -525,13 +526,14 @@ export function SettingsPage() {
       setLastName(profile.lastName ?? '');
       setPhone(profile.phone ?? '');
       setCountry(profile.country ?? '');
+      setDateOfBirth(profile.dateOfBirth ?? '');
       setInitialised(true);
     }
   }, [profile, initialised]);
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setNote('');
-    update.mutate({ data: { firstName: firstName.trim(), lastName: lastName.trim(), phone: phone.trim(), country: country.trim(), acceptedTerms: true } }, {
+    update.mutate({ data: { firstName: firstName.trim(), lastName: lastName.trim(), phone: phone.trim(), country: country.trim(), ...(dateOfBirth ? { dateOfBirth } : {}), acceptedTerms: true } }, {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getGetBankProfileQueryKey() });
         queryClient.invalidateQueries({ queryKey: getGetBankDashboardQueryKey() });
@@ -670,9 +672,10 @@ export function SettingsPage() {
         <form onSubmit={submit} className="rounded-[22px] border border-[#e1e8ee] bg-white p-5 sm:p-8">
           <div className="grid gap-5 sm:grid-cols-2">
             <Field label="First name"><input required maxLength={80} value={firstName} onChange={event => setFirstName(event.target.value)} className={inputClass} /></Field>
-            <Field label="Last name"><input required maxLength={80} value={lastName} onChange={event => setLastName(event.target.value)} className={inputClass} /></Field>
+            <Field label="Last name"><input maxLength={80} value={lastName} onChange={event => setLastName(event.target.value)} className={inputClass} /></Field>
             <Field label="Phone"><input required minLength={3} maxLength={32} value={phone} onChange={event => setPhone(event.target.value)} className={inputClass} /></Field>
             <Field label="Country or region"><input required minLength={2} maxLength={80} value={country} onChange={event => setCountry(event.target.value)} className={inputClass} /></Field>
+            <Field label="Date of birth"><input type="date" value={dateOfBirth} onChange={event => setDateOfBirth(event.target.value)} className={inputClass} /></Field>
             <Field label="Email address"><input disabled value={profile?.email ?? ''} className={`${inputClass} bg-[#f4f7f9] text-[#8190a0]`} /></Field>
           </div>
           <label className="mt-6 flex items-start gap-3 text-[11px] leading-5 text-[#728296]"><input type="checkbox" checked={accepted} onChange={event => setAccepted(event.target.checked)} className="mt-1 accent-[#387e84]" /><span>I confirm these profile details are accurate and accept the Globus account terms and privacy notice.</span></label>
@@ -1310,6 +1313,7 @@ export function AdminUserManagementPage() {
               <div><dt className="text-[9px] font-bold uppercase tracking-[.12em] text-[#8492a0]">Email</dt><dd className="mt-1 break-all text-[11px] font-semibold text-[#40566e]">{profile.email}</dd></div>
               <div><dt className="text-[9px] font-bold uppercase tracking-[.12em] text-[#8492a0]">Phone</dt><dd className="mt-1 text-[11px] font-semibold text-[#40566e]">{detail.data.phone || 'Not provided'}</dd></div>
               <div><dt className="text-[9px] font-bold uppercase tracking-[.12em] text-[#8492a0]">Country / region</dt><dd className="mt-1 text-[11px] font-semibold text-[#40566e]">{profile.country || 'Not provided'}</dd></div>
+              <div><dt className="text-[9px] font-bold uppercase tracking-[.12em] text-[#8492a0]">Date of birth</dt><dd className="mt-1 text-[11px] font-semibold text-[#40566e]">{detail.data.dateOfBirth || 'Not provided'}</dd></div>
               <div><dt className="text-[9px] font-bold uppercase tracking-[.12em] text-[#8492a0]">Member since</dt><dd className="mt-1 text-[11px] font-semibold text-[#40566e]">{formatDate(profile.createdAt)}</dd></div>
             </dl>
             <div className="mt-5 grid gap-3 border-t border-[#edf0f2] pt-5 sm:grid-cols-2">

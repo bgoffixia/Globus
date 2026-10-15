@@ -98,6 +98,11 @@ export interface BankProfile {
   phone: string | null;
   /** @nullable */
   country: string | null;
+  /**
+     * @nullable
+     * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+     */
+  dateOfBirth: string | null;
   verificationStatus: BankProfileVerificationStatus;
   /** @nullable */
   verificationNote: string | null;
@@ -112,7 +117,7 @@ export interface BankProfileInput {
      */
   firstName: string;
   /**
-     * @minLength 1
+     * @minLength 0
      * @maxLength 80
      */
   lastName: string;
@@ -126,6 +131,8 @@ export interface BankProfileInput {
      * @maxLength 80
      */
   country: string;
+  /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */
+  dateOfBirth?: string;
   acceptedTerms: true;
 }
 
@@ -428,6 +435,11 @@ export interface AdminUserDetail {
   user: AdminUser;
   /** @nullable */
   phone: string | null;
+  /**
+     * @nullable
+     * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+     */
+  dateOfBirth: string | null;
   wallets: Wallet[];
   transactions: BankTransaction[];
 }

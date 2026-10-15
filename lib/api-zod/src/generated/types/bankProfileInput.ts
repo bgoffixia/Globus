@@ -13,7 +13,7 @@ export interface BankProfileInput {
      */
   firstName: string;
   /**
-     * @minLength 1
+     * @minLength 0
      * @maxLength 80
      */
   lastName: string;
@@ -27,5 +27,7 @@ export interface BankProfileInput {
      * @maxLength 80
      */
   country: string;
+  /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */
+  dateOfBirth?: string;
   acceptedTerms: true;
 }

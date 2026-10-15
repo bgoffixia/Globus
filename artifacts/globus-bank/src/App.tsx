@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react';
-import { ClerkProvider, Show, SignIn, SignUp, useClerk } from '@clerk/react';
+import { ClerkProvider, Show, SignIn, useClerk } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
@@ -7,6 +7,7 @@ import { ErrorBoundary } from '@/components/error-boundary';
 import { BankShell } from '@/components/bank-shell';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { AuthFrame, ClerkSignUpForm } from '@/components/auth-pages';
 import NotFound from '@/pages/not-found';
 import {
   AdminPage,
@@ -73,9 +74,10 @@ const clerkAppearance = {
   },
   elements: {
     rootBox: 'w-full flex justify-center',
-    cardBox: 'bg-[#ffffff] rounded-2xl w-[440px] max-w-full overflow-hidden border border-[#e0e8ed] shadow-[0_24px_70px_rgba(20,47,81,.12)]',
-    card: '!shadow-none !border-0 !bg-transparent !rounded-none',
+    cardBox: 'bg-transparent rounded-none w-full max-w-[440px] overflow-hidden border-0 shadow-none',
+    card: '!shadow-none !border-0 !bg-transparent !rounded-none !p-0',
     footer: '!shadow-none !border-0 !bg-transparent !rounded-none',
+    header: 'hidden',
     headerTitle: 'font-semibold tracking-tight text-[#18324f]',
     headerSubtitle: 'text-[#718196]',
     socialButtonsBlockButtonText: 'font-semibold text-[#304761]',
@@ -88,6 +90,8 @@ const clerkAppearance = {
     alertText: 'text-[#a24940]',
     logoBox: 'mb-3',
     logoImage: 'h-auto max-h-12 max-w-[180px]',
+    socialButtonsBlock: 'hidden',
+    dividerRow: 'hidden',
     socialButtonsBlockButton: 'border-[#dfe6ec] bg-white hover:bg-[#f6f9fa]',
     formButtonPrimary: 'bg-[#173b62] hover:bg-[#214c76] text-white',
     formFieldInput: 'border-[#dfe6ec] bg-[#fbfcfd] text-[#30465f]',
@@ -128,27 +132,24 @@ function ProtectedPage({ children }: { children: ReactNode }) {
 
 function SignInPage() {
   return (
-    <div className="quiet-grid flex min-h-screen min-h-[100dvh] items-center justify-center bg-[#f4f7fa] px-4 py-10 pt-[calc(env(safe-area-inset-top)+2.5rem)] pb-[calc(env(safe-area-inset-bottom)+2.5rem)]">
-      <div className="w-full max-w-[480px]">
-        <div className="mb-5 text-center">
-          <p className="text-[11px] font-medium text-[#748498]">Your multi-currency internal ledger</p>
-        </div>
+    <AuthFrame mode="sign-in">
+      <div className="gb-form-heading">
+        <span className="gb-step-label">MEMBER ACCESS <i /></span>
+        <h1>Welcome back</h1>
+        <p>Sign in to access your Globus account.</p>
+      </div>
+      <div className="gb-clerk-signin">
         <SignIn routing="path" path={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} />
       </div>
-    </div>
+    </AuthFrame>
   );
 }
 
 function SignUpPage() {
   return (
-    <div className="quiet-grid flex min-h-screen min-h-[100dvh] items-center justify-center bg-[#f4f7fa] px-4 py-10 pt-[calc(env(safe-area-inset-top)+2.5rem)] pb-[calc(env(safe-area-inset-bottom)+2.5rem)]">
-      <div className="w-full max-w-[480px]">
-        <div className="mb-5 text-center">
-          <p className="mt-3 text-[11px] text-[#748498]">A clearer place to explore global money tools</p>
-        </div>
-        <SignUp routing="path" path={`${basePath}/sign-up`} signInUrl={`${basePath}/sign-in`} />
-      </div>
-    </div>
+    <AuthFrame mode="sign-up">
+      <ClerkSignUpForm />
+    </AuthFrame>
   );
 }
 
