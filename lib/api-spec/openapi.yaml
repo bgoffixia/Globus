@@ -1125,6 +1125,7 @@ components:
       properties:
         id: { type: string }
         email: { type: string }
+        customerId: { type: ["string", "null"], pattern: "^[A-Z0-9]{7}$" }
         firstName: { type: ["string", "null"] }
         lastName: { type: ["string", "null"] }
         country: { type: ["string", "null"] }
@@ -1133,7 +1134,7 @@ components:
         accountStatus: { type: string, enum: [active, suspended] }
         walletCount: { type: integer }
         createdAt: { type: string, format: date-time }
-      required: [id, email, firstName, lastName, country, verificationStatus, verificationNote, accountStatus, walletCount, createdAt]
+      required: [id, email, customerId, firstName, lastName, country, verificationStatus, verificationNote, accountStatus, walletCount, createdAt]
     AdminUserDetail:
       type: object
       properties:

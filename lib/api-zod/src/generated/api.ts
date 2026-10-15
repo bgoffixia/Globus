@@ -540,9 +540,13 @@ export const ListAdminUsersQueryParams = zod.object({
   "limit": zod.coerce.number().int().min(1).max(listAdminUsersQueryLimitMax).default(listAdminUsersQueryLimitDefault)
 })
 
+export const listAdminUsersResponseCustomerIdRegExp = new RegExp('^[A-Z0-9]{7}$');
+
+
 export const ListAdminUsersResponseItem = zod.object({
   "id": zod.string(),
   "email": zod.string(),
+  "customerId": zod.string().regex(listAdminUsersResponseCustomerIdRegExp).nullable(),
   "firstName": zod.string().nullable(),
   "lastName": zod.string().nullable(),
   "country": zod.string().nullable(),
@@ -565,6 +569,7 @@ export const GetAdminUserDetailParams = zod.object({
   "userId": zod.coerce.string().min(1)
 })
 
+export const getAdminUserDetailResponseUserCustomerIdRegExp = new RegExp('^[A-Z0-9]{7}$');
 export const getAdminUserDetailResponseDateOfBirthRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
 
 
@@ -572,6 +577,7 @@ export const GetAdminUserDetailResponse = zod.object({
   "user": zod.object({
   "id": zod.string(),
   "email": zod.string(),
+  "customerId": zod.string().regex(getAdminUserDetailResponseUserCustomerIdRegExp).nullable(),
   "firstName": zod.string().nullable(),
   "lastName": zod.string().nullable(),
   "country": zod.string().nullable(),
@@ -652,9 +658,13 @@ export const UpdateAdminUserStatusBody = zod.object({
   "reason": zod.string().min(updateAdminUserStatusBodyReasonMin).max(updateAdminUserStatusBodyReasonMax)
 })
 
+export const updateAdminUserStatusResponseCustomerIdRegExp = new RegExp('^[A-Z0-9]{7}$');
+
+
 export const UpdateAdminUserStatusResponse = zod.object({
   "id": zod.string(),
   "email": zod.string(),
+  "customerId": zod.string().regex(updateAdminUserStatusResponseCustomerIdRegExp).nullable(),
   "firstName": zod.string().nullable(),
   "lastName": zod.string().nullable(),
   "country": zod.string().nullable(),
@@ -724,9 +734,13 @@ export const UpdateAdminUserVerificationBody = zod.object({
   "userMessage": zod.string().max(updateAdminUserVerificationBodyUserMessageMax).optional()
 })
 
+export const updateAdminUserVerificationResponseCustomerIdRegExp = new RegExp('^[A-Z0-9]{7}$');
+
+
 export const UpdateAdminUserVerificationResponse = zod.object({
   "id": zod.string(),
   "email": zod.string(),
+  "customerId": zod.string().regex(updateAdminUserVerificationResponseCustomerIdRegExp).nullable(),
   "firstName": zod.string().nullable(),
   "lastName": zod.string().nullable(),
   "country": zod.string().nullable(),

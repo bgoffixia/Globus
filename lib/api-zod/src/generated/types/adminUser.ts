@@ -11,6 +11,11 @@ import type { AdminUserVerificationStatus } from './adminUserVerificationStatus'
 export interface AdminUser {
   id: string;
   email: string;
+  /**
+     * @nullable
+     * @pattern ^[A-Z0-9]{7}$
+     */
+  customerId: string | null;
   /** @nullable */
   firstName: string | null;
   /** @nullable */

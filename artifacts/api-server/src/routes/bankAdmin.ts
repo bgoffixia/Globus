@@ -300,6 +300,7 @@ router.get("/bank/admin/users", requireAdmin, async (req, res): Promise<void> =>
     .select({
       id: bankUsersTable.id,
       email: bankUsersTable.email,
+      customerId: bankUsersTable.customerId,
       firstName: bankUsersTable.firstName,
       lastName: bankUsersTable.lastName,
       country: bankUsersTable.country,
@@ -316,6 +317,9 @@ router.get("/bank/admin/users", requireAdmin, async (req, res): Promise<void> =>
         ? or(
             ilike(bankUsersTable.email, `%${search}%`),
             ilike(bankUsersTable.id, `%${search}%`),
+            ilike(bankUsersTable.customerId, `%${search}%`),
+            ilike(bankUsersTable.firstName, `%${search}%`),
+            ilike(bankUsersTable.lastName, `%${search}%`),
           )
         : undefined,
     )
@@ -379,6 +383,7 @@ router.get(
         user: {
           id: user.id,
           email: user.email,
+          customerId: user.customerId,
           firstName: user.firstName,
           lastName: user.lastName,
           country: user.country,
@@ -518,6 +523,7 @@ router.patch(
       UpdateAdminUserStatusResponse.parse({
         id: result.id,
         email: result.email,
+        customerId: result.customerId,
         firstName: result.firstName,
         lastName: result.lastName,
         country: result.country,
@@ -722,6 +728,7 @@ router.patch(
       UpdateAdminUserVerificationResponse.parse({
         id: result.user.id,
         email: result.user.email,
+        customerId: result.user.customerId,
         firstName: result.user.firstName,
         lastName: result.user.lastName,
         country: result.user.country,
