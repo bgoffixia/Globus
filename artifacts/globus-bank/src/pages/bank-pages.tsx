@@ -493,11 +493,6 @@ export function InternationalTransferPage() {
         title="Create a transfer request"
         subtitle="Review the destination details and internal currency conversion before submitting your request."
       />
-      <div className="mt-6 flex flex-wrap items-start gap-3 rounded-xl border border-[#eadfbe] bg-[#fbf7eb] px-4 py-3 text-[10px] leading-5 text-[#806b3d]">
-        <ShieldCheck size={16} className="mt-0.5 shrink-0" />
-        <p><b>Internal request only.</b> Globus does not contact the recipient’s bank or send outside funds. Submitting this request does not debit or reserve your wallet. Only the last four account characters are retained. Conversion rates are maintained by Globus administrators and are not live market quotes.</p>
-      </div>
-
       <div className="mt-6 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <form onSubmit={submit} className="min-w-0 rounded-[22px] border border-[#e1e8ee] bg-white p-5 sm:p-8">
           <div className="grid gap-5 sm:grid-cols-2">
