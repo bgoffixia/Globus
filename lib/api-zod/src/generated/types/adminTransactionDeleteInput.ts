@@ -12,4 +12,6 @@ export interface AdminTransactionDeleteInput {
      * @maxLength 500
      */
   reason: string;
+  /** @pattern ^[0-9]{6}$ */
+  transactionPin: string;
 }

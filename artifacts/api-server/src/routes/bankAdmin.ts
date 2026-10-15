@@ -1300,6 +1300,14 @@ router.patch(
       return;
     }
     const actorUserId = (await ensureBankUser(authenticatedClerkId)).id;
+    const pinResult = await verifyTransactionPin(
+      actorUserId,
+      parsed.data.transactionPin,
+    );
+    if (pinResult !== "valid") {
+      respondWithTransactionPinError(res, pinResult);
+      return;
+    }
     const reason = parsed.data.reason.trim();
     if (reason.length < 5) {
       res.status(400).json({ error: "Enter an audit reason of at least five characters." });
@@ -1407,6 +1415,14 @@ router.delete(
       return;
     }
     const actorUserId = (await ensureBankUser(authenticatedClerkId)).id;
+    const pinResult = await verifyTransactionPin(
+      actorUserId,
+      parsed.data.transactionPin,
+    );
+    if (pinResult !== "valid") {
+      respondWithTransactionPinError(res, pinResult);
+      return;
+    }
     const reason = parsed.data.reason.trim();
     if (reason.length < 5) {
       res.status(400).json({ error: "Enter a deletion reason of at least five characters." });

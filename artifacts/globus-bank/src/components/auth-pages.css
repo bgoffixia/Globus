@@ -139,6 +139,7 @@
   border: 1px solid rgba(217, 188, 116, .38);
   border-radius: 50%;
   transform: translate(-50%, -50%) rotate(-22deg);
+  animation: gb-ring-rotate 25s linear infinite;
 }
 
 .gb-orbit-two {
@@ -146,6 +147,8 @@
   height: 220px;
   border-color: rgba(204, 220, 232, .22);
   transform: translate(-50%, -50%) rotate(41deg);
+  animation-direction: reverse;
+  animation-duration: 34s;
 }
 
 .gb-orbit-dot {
@@ -157,6 +160,7 @@
   border-radius: 50%;
   background: #d4b35f;
   box-shadow: 0 0 0 7px rgba(212, 179, 95, .12);
+  animation: gb-star-pulse 2.8s ease-in-out infinite;
 }
 
 .gb-world-label {
@@ -443,18 +447,105 @@
   margin-top: 22px;
 }
 
-.gb-clerk-signin {
+.gb-signin-form-wrap {
   width: 100%;
 }
 
-.gb-clerk-signin .cl-socialButtonsBlock,
-.gb-clerk-signin .cl-dividerRow {
-  display: none !important;
+.gb-signin-spaced-label {
+  margin-top: 20px;
+}
+
+.gb-customer-id-input {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: .15em;
+}
+
+.gb-recovery-link {
+  margin-top: 16px;
+  text-align: right;
+}
+
+.gb-recovery-link a {
+  color: #45838b;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.gb-recovery-link a:hover {
+  text-decoration: underline;
+}
+
+.gb-customer-id-confirmation {
+  width: 100%;
+}
+
+.gb-customer-id-card {
+  display: grid;
+  gap: 10px;
+  margin: 24px 0 16px;
+  padding: 20px 22px;
+  border: 1px solid #e3eaf0;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #f7fafc, #fff);
+}
+
+.gb-customer-id-card span {
+  color: #7a8b9d;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .17em;
+}
+
+.gb-customer-id-card strong {
+  color: #15345a;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: clamp(24px, 8vw, 32px);
+  font-weight: 700;
+  letter-spacing: .17em;
+}
+
+.gb-secondary-button {
+  width: 100%;
+  min-height: 44px;
+  margin-bottom: 10px;
+  border: 1px solid #dce5ec;
+  border-radius: 12px;
+  background: #fff;
+  color: #29455f;
+  font-size: 12px;
+  font-weight: 700;
+  transition: background .18s ease, border-color .18s ease, transform .18s ease;
+}
+
+.gb-secondary-button:hover {
+  border-color: #b8cbd5;
+  background: #f5f9fb;
+  transform: translateY(-1px);
 }
 
 @keyframes gb-arrive {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes gb-ring-rotate {
+  to { rotate: 360deg; }
+}
+
+@keyframes gb-star-pulse {
+  50% { box-shadow: 0 0 0 12px rgba(212, 179, 95, .04), 0 0 24px rgba(212, 179, 95, .45); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gb-orbit,
+  .gb-orbit-dot,
+  .gb-auth-content,
+  .gb-secondary-button {
+    animation: none;
+    transition: none;
+  }
 }
 
 @media (max-width: 760px) {

@@ -15,6 +15,29 @@ tags:
   - name: admin
     description: Privileged administrative operations
 paths:
+  /bank/customer-id/lookup:
+    post:
+      operationId: lookupCustomerId
+      summary: Resolve a Globus Customer ID to its Clerk login identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomerIdLookupInput"
+      responses:
+        "200":
+          description: Customer ID resolved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerIdLookupResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          description: Too many lookup attempts
   /healthz:
     get:
       operationId: healthCheck
@@ -891,6 +914,7 @@ components:
       properties:
         id: { type: string }
         email: { type: string }
+        customerId: { type: string, pattern: "^[A-Z0-9]{7}$" }
         firstName: { type: ["string", "null"] }
         lastName: { type: ["string", "null"] }
         phone: { type: ["string", "null"] }
@@ -901,7 +925,17 @@ components:
         verificationNote: { type: ["string", "null"] }
         accountStatus: { type: string, enum: [active, suspended] }
         createdAt: { type: string, format: date-time }
-      required: [id, email, firstName, lastName, phone, country, dateOfBirth, transactionPinConfigured, verificationStatus, verificationNote, accountStatus, createdAt]
+      required: [id, email, customerId, firstName, lastName, phone, country, dateOfBirth, transactionPinConfigured, verificationStatus, verificationNote, accountStatus, createdAt]
+    CustomerIdLookupInput:
+      type: object
+      properties:
+        customerId: { type: string, pattern: "^[A-Za-z0-9]{7}$" }
+      required: [customerId]
+    CustomerIdLookupResult:
+      type: object
+      properties:
+        email: { type: string, format: email }
+      required: [email]
     TransactionPinInput:
       type: object
       properties:
@@ -1143,13 +1177,15 @@ components:
       type: object
       properties:
         reason: { type: string, minLength: 5, maxLength: 500 }
-      required: [reason]
+        transactionPin: { type: string, pattern: "^[0-9]{6}$" }
+      required: [reason, transactionPin]
     AdminTransactionStatusUpdateInput:
       type: object
       properties:
         status: { $ref: "#/components/schemas/TransactionStatus" }
         reason: { type: string, minLength: 5, maxLength: 500 }
-      required: [status, reason]
+        transactionPin: { type: string, pattern: "^[0-9]{6}$" }
+      required: [status, reason, transactionPin]
     AdminTransactionStatusChange:
       type: object
       properties:

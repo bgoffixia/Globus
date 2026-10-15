@@ -123,7 +123,7 @@ export async function updateTransactionPin(
       if (!currentPin) return "current_pin_required";
       if (user.lockedUntil && user.lockedUntil > new Date()) return "locked";
       if (!(await matchesTransactionPin(currentPin, user.transactionPinHash))) {
-        return recordFailure(tx, userId, user.failedAttempts) === "locked"
+        return (await recordFailure(tx, userId, user.failedAttempts)) === "locked"
           ? "locked"
           : "invalid";
       }

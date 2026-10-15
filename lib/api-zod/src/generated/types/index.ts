@@ -42,6 +42,8 @@ export * from './conflictResponse';
 export * from './createExternalTransfer410';
 export * from './createIncomingExternalTransfer410';
 export * from './currencyCode';
+export * from './customerIdLookupInput';
+export * from './customerIdLookupResult';
 export * from './errorResponse';
 export * from './externalTransferInput';
 export * from './forbiddenResponse';

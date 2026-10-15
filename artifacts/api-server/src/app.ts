@@ -20,7 +20,7 @@ const financialActionLimiter = rateLimit({
   standardHeaders: "draft-8",
   legacyHeaders: false,
   message: {
-    error: "Too many simulated transaction requests. Try again in a few minutes.",
+    error: "Too many transaction requests. Try again in a few minutes.",
   },
 });
 

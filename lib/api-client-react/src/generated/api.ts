@@ -43,6 +43,8 @@ import type {
   ConflictResponse,
   CreateExternalTransfer410,
   CreateIncomingExternalTransfer410,
+  CustomerIdLookupInput,
+  CustomerIdLookupResult,
   ExternalTransferInput,
   ForbiddenResponse,
   HealthStatus,
@@ -90,6 +92,94 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getLookupCustomerIdUrl = () => {
+
+
+
+
+  return `/api/bank/customer-id/lookup`
+}
+
+/**
+ * @summary Resolve a Globus Customer ID to its Clerk login identifier
+ */
+export const lookupCustomerId = async (customerIdLookupInput: CustomerIdLookupInput, options?: Parameters<typeof customFetch>[1]): Promise<CustomerIdLookupResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<CustomerIdLookupResult>(getLookupCustomerIdUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(customerIdLookupInput)
+  }
+);}
+
+
+
+
+
+export const getLookupCustomerIdMutationKey = () => ['lookupCustomerId'] as const;
+
+export const getLookupCustomerIdMutationOptions = <TError = ErrorType<BadRequestResponse | NotFoundResponse | void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof lookupCustomerId>>, TError,LookupCustomerIdMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof lookupCustomerId>>, TError,LookupCustomerIdMutationVariables, TContext> => {
+
+const mutationKey = getLookupCustomerIdMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof lookupCustomerId>>, LookupCustomerIdMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  lookupCustomerId(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type LookupCustomerIdMutationResult = NonNullable<Awaited<ReturnType<typeof lookupCustomerId>>>
+    export type LookupCustomerIdMutationBody = BodyType<CustomerIdLookupInput>
+    export type LookupCustomerIdMutationError = ErrorType<BadRequestResponse | NotFoundResponse | void>
+    export type LookupCustomerIdMutationVariables = {data: BodyType<CustomerIdLookupInput>}
+
+    /**
+ * @summary Resolve a Globus Customer ID to its Clerk login identifier
+ */
+export const useLookupCustomerId = <TError = ErrorType<BadRequestResponse | NotFoundResponse | void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof lookupCustomerId>>, TError,LookupCustomerIdMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof lookupCustomerId>>,
+        TError,
+        LookupCustomerIdMutationVariables,
+        TContext
+      > => {
+      return useMutation(getLookupCustomerIdMutationOptions(options));
+    }
 
 export const getHealthCheckUrl = () => {
 

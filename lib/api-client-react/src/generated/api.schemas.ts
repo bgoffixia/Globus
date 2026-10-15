@@ -90,6 +90,8 @@ export const BankProfileAccountStatus = {
 export interface BankProfile {
   id: string;
   email: string;
+  /** @pattern ^[A-Z0-9]{7}$ */
+  customerId: string;
   /** @nullable */
   firstName: string | null;
   /** @nullable */
@@ -109,6 +111,15 @@ export interface BankProfile {
   verificationNote: string | null;
   accountStatus: BankProfileAccountStatus;
   createdAt: string;
+}
+
+export interface CustomerIdLookupInput {
+  /** @pattern ^[A-Za-z0-9]{7}$ */
+  customerId: string;
+}
+
+export interface CustomerIdLookupResult {
+  email: string;
 }
 
 export interface TransactionPinInput {
@@ -561,6 +572,8 @@ export interface AdminTransactionDeleteInput {
      * @maxLength 500
      */
   reason: string;
+  /** @pattern ^[0-9]{6}$ */
+  transactionPin: string;
 }
 
 export interface AdminTransactionStatusUpdateInput {
@@ -570,6 +583,8 @@ export interface AdminTransactionStatusUpdateInput {
      * @maxLength 500
      */
   reason: string;
+  /** @pattern ^[0-9]{6}$ */
+  transactionPin: string;
 }
 
 export interface AdminTransactionAffectedMember {

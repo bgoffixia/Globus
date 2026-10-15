@@ -463,7 +463,7 @@ export function ReceivePage() {
   const profile = useGetBankProfile({ query: { queryKey: getGetBankProfileQueryKey() } });
   const walletsQuery = useListBankWallets({ query: { queryKey: getListBankWalletsQueryKey() } });
   const [copied, setCopied] = useState(false);
-  const identifier = profile.data?.id ?? '';
+  const identifier = profile.data?.customerId ?? '';
   const copyIdentifier = async () => {
     try {
       await navigator.clipboard.writeText(identifier);
@@ -475,18 +475,18 @@ export function ReceivePage() {
   };
   return (
     <>
-      <PageHeading eyebrow="Receive internally" title="Your Globus member ID" subtitle="Share your registered email with another Globus member to receive an internal ledger transfer." />
+      <PageHeading eyebrow="Member access" title="Your Customer ID" subtitle="Use this unique seven-character ID with your password to sign in." />
       {profile.isLoading ? <PageSkeleton /> : profile.isError ? <Failure title="Your wallet identifier isn’t available" retry={() => profile.refetch()} /> : (
         <div className="mt-8 grid gap-6 xl:grid-cols-[1fr_.78fr]">
           <section className="balance-panel rounded-[22px] p-6 text-white sm:p-9">
             <span className="grid h-12 w-12 place-items-center rounded-2xl bg-white/10 text-[#a5d8d8]"><WalletCards size={22} /></span>
-            <p className="mt-8 text-[11px] font-semibold uppercase tracking-[.16em] text-[#bfd0dd]">Globus member identifier</p>
+            <p className="mt-8 text-[11px] font-semibold uppercase tracking-[.16em] text-[#bfd0dd]">Globus Customer ID</p>
             <p className="mt-3 break-all font-mono text-[19px] font-semibold tracking-wide sm:text-[24px]">{identifier}</p>
-            <button onClick={copyIdentifier} className="mt-6 inline-flex items-center gap-2 rounded-lg bg-white px-4 py-3 text-[11px] font-bold text-[#17314f] hover:bg-[#ecf3f5]"><Copy size={14} />{copied ? 'Copied' : 'Copy identifier'}</button>
-            <p className="mt-7 max-w-lg text-[11px] leading-5 text-[#c1d0db]">This is a Globus member identifier, not a bank account or payment address. Transfers update Globus ledger records only.</p>
+            <button onClick={copyIdentifier} className="mt-6 inline-flex items-center gap-2 rounded-lg bg-white px-4 py-3 text-[11px] font-bold text-[#17314f] hover:bg-[#ecf3f5]"><Copy size={14} />{copied ? 'Copied' : 'Copy Customer ID'}</button>
+            <p className="mt-7 max-w-lg text-[11px] leading-5 text-[#c1d0db]">Keep this ID for sign-in. It identifies your Globus account and is not a bank account or payment address.</p>
           </section>
           <section className="rounded-[22px] border border-[#e1e8ee] bg-white p-6 sm:p-8">
-            <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#518c91]">How it works</p>
+            <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#518c91]">Internal transfers</p>
             <ol className="mt-5 space-y-5">{[['Share your registered email', 'The sender uses the email registered to your Globus profile.'], ['Choose the same currency', 'Both members need an active wallet in that currency.'], ['Review the ledger', 'Completed transfers appear in both members’ activity and wallet balances.']].map(([title, copy], index) => <li key={title} className="flex gap-4"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#edf5f6] text-[11px] font-bold text-[#42868b]">0{index + 1}</span><span><b className="block text-[12px] text-[#2c425c]">{title}</b><span className="mt-1 block text-[11px] leading-5 text-[#7d8b9b]">{copy}</span></span></li>)}</ol>
             <p className="mt-6 text-[10px] leading-5 text-[#7d8b9b]">Globus does not receive outside deposits or hold funds at a bank.</p>
           </section>
@@ -519,6 +519,7 @@ export function SettingsPage() {
   const submitIdentityDocuments = useSubmitIdentityDocuments();
   const { user } = useUser();
   const [note, setNote] = useState('');
+  const [customerIdCopied, setCustomerIdCopied] = useState(false);
   const [photoMessage, setPhotoMessage] = useState('');
   const [photoError, setPhotoError] = useState('');
   const [photoPending, setPhotoPending] = useState(false);
@@ -556,6 +557,16 @@ export function SettingsPage() {
       },
       onError: error => setNote(error instanceof Error ? error.message : 'Profile could not be saved. Please try again.'),
     });
+  };
+  const copyCustomerId = async () => {
+    if (!profile?.customerId) return;
+    try {
+      await navigator.clipboard.writeText(profile.customerId);
+      setCustomerIdCopied(true);
+      window.setTimeout(() => setCustomerIdCopied(false), 1800);
+    } catch {
+      setCustomerIdCopied(false);
+    }
   };
   const updatePin = useUpdateTransactionPin();
   const [currentPin, setCurrentPin] = useState('');
@@ -718,6 +729,13 @@ export function SettingsPage() {
   return (
     <>
       <PageHeading eyebrow="Account settings" title="Your profile" subtitle="Manage your details, submit identity documents, and review your account status." />
+      <section className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-[18px] border border-[#e1e8ee] bg-white px-5 py-4 sm:px-6">
+        <div>
+          <p className="text-[9px] font-bold uppercase tracking-[.15em] text-[#718296]">Your Globus Customer ID</p>
+          <p className="mt-1 font-mono text-[20px] font-bold tracking-[.16em] text-[#17314f]">{profile?.customerId}</p>
+        </div>
+        <button type="button" onClick={copyCustomerId} className="inline-flex items-center gap-2 rounded-lg border border-[#dfe6eb] px-4 py-2.5 text-[10px] font-bold text-[#355570] hover:bg-[#f5f8f9]"><Copy size={14} />{customerIdCopied ? 'Copied' : 'Copy ID'}</button>
+      </section>
       <div className="mt-7 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
         <form onSubmit={submit} className="rounded-[22px] border border-[#e1e8ee] bg-white p-5 sm:p-8">
           <div className="grid gap-5 sm:grid-cols-2">
@@ -764,7 +782,7 @@ export function SettingsPage() {
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#55868b]">Transaction security</p>
             <h2 className="mt-1 text-[15px] font-bold text-[#29425c]">{profile?.transactionPinConfigured ? 'Update transaction PIN' : 'Create transaction PIN'}</h2>
-            <p className="mt-2 max-w-2xl text-[11px] leading-5 text-[#718296]">Use a six-digit PIN to authorize each transfer, deposit request, withdrawal request, and administrator balance action. Your PIN is stored as a secure hash and cannot be viewed by administrators.</p>
+            <p className="mt-2 max-w-2xl text-[11px] leading-5 text-[#718296]">Use a six-digit PIN to authorize every transfer, deposit request, and withdrawal request from your account. Your PIN is stored as a secure hash and cannot be viewed by administrators.</p>
           </div>
           <span className={`rounded-full px-3 py-1.5 text-[9px] font-bold ${profile?.transactionPinConfigured ? 'bg-[#eef7f3] text-[#4b826d]' : 'bg-[#fbf7eb] text-[#92773e]'}`}>{profile?.transactionPinConfigured ? 'PIN active' : 'PIN not set'}</span>
         </div>
@@ -953,7 +971,6 @@ export function AdminPage() {
   const [fundTransactionPin, setFundTransactionPin] = useState('');
   const [fundingError, setFundingError] = useState('');
   const [fundingSuccess, setFundingSuccess] = useState<BankTransaction | null>(null);
-  const [deleteError, setDeleteError] = useState('');
   const [identityTarget, setIdentityTarget] = useState<AdminUser | null>(null);
   const [reviewDecision, setReviewDecision] = useState<
     'approved' | 'rejected' | 'additional_information_required'
@@ -1027,40 +1044,33 @@ export function AdminPage() {
       onError: error => setFundingError(error instanceof Error ? error.message : 'The balance adjustment could not be recorded.'),
     });
   };
-  const deleteLedgerTransaction = (transaction: BankTransaction) => {
-    const confirmed = window.confirm(
-      `Permanently delete transaction ${transaction.reference}? Its ledger entries will be removed and affected wallet balances will change. This cannot be undone.`,
-    );
-    if (!confirmed) return;
-    const reason = window.prompt('Enter a reason for permanently deleting this transaction (at least 5 characters).');
-    if (!reason || reason.trim().length < 5) {
-      if (reason !== null) setDeleteError('Enter a deletion reason of at least five characters.');
-      return;
-    }
-    setDeleteError('');
-    deletion.mutate({
+  const deleteLedgerTransaction = async (
+    transaction: BankTransaction,
+    reason: string,
+    transactionPin: string,
+  ) => {
+    await deletion.mutateAsync({
       transactionId: transaction.id,
-      data: { reason: reason.trim() },
-    }, {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getListAdminLedgerQueryKey() });
-        queryClient.invalidateQueries({ queryKey: getGetAdminSummaryQueryKey() });
-        queryClient.invalidateQueries({ queryKey: getListAdminUsersQueryKey() });
-        queryClient.invalidateQueries({ queryKey: getGetBankDashboardQueryKey() });
-        queryClient.invalidateQueries({ queryKey: getListBankWalletsQueryKey() });
-        queryClient.invalidateQueries({ queryKey: getListBankTransactionsQueryKey() });
-      },
-      onError: error => setDeleteError(error instanceof Error ? error.message : 'The transaction could not be deleted.'),
+      data: { reason, transactionPin },
     });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: getListAdminLedgerQueryKey() }),
+      queryClient.invalidateQueries({ queryKey: getGetAdminSummaryQueryKey() }),
+      queryClient.invalidateQueries({ queryKey: getListAdminUsersQueryKey() }),
+      queryClient.invalidateQueries({ queryKey: getGetBankDashboardQueryKey() }),
+      queryClient.invalidateQueries({ queryKey: getListBankWalletsQueryKey() }),
+      queryClient.invalidateQueries({ queryKey: getListBankTransactionsQueryKey() }),
+    ]);
   };
   const saveTransactionStatus = async (
     status: BankTransaction['status'],
     reason: string,
+    transactionPin: string,
   ) => {
     if (!statusTarget) return;
     await updateTransactionStatus.mutateAsync({
       transactionId: statusTarget.id,
-      data: { status, reason },
+      data: { status, reason, transactionPin },
     });
     setStatusTarget(null);
     await Promise.all([
@@ -1143,7 +1153,6 @@ export function AdminPage() {
       </section>
       <section className="mt-6 overflow-hidden rounded-[20px] border border-[#e1e8ee] bg-white">
         <div className="border-b border-[#edf0f3] px-5 py-4 sm:px-7"><h2 className="text-[14px] font-bold text-[#28405c]">Ledger review</h2><p className="mt-1 text-[10px] text-[#8592a1]">Review ledger activity and transaction status. Deposit and withdrawal approvals are handled in the queue above. Permanent deletion removes the transaction and its ledger entries; a reason is recorded in the audit log, and deletions that would make available balances negative or consume reserved withdrawals are blocked.</p></div>
-        {deleteError && <p role="alert" className="border-b border-[#edf0f3] bg-[#fff1ef] px-5 py-3 text-[11px] text-[#a24940]">{deleteError}</p>}
         {ledger.isLoading ? <ListSkeleton /> : ledger.isError ? <InlineError text="Ledger records are unavailable." retry={() => ledger.refetch()} /> : ledger.data?.length ? <TransactionList transactions={ledger.data} onDelete={deleteLedgerTransaction} deletePending={deletion.isPending} onStatusOverride={transaction => setStatusTarget(transaction)} statusPending={updateTransactionStatus.isPending} /> : <EmptyState title="Ledger is clear" text="There are no recorded transactions to review." />}
       </section>
       {identityTarget && <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#14263e]/55 p-4" role="presentation">
@@ -1323,37 +1332,28 @@ export function AdminUserManagementPage() {
     }
   };
 
-  const deleteUserTransaction = async (transaction: BankTransaction) => {
-    const confirmed = window.confirm(
-      `Permanently delete transaction ${transaction.reference}? Its ledger entries will be removed and the affected wallet balance will change. This cannot be undone.`,
-    );
-    if (!confirmed) return;
-    const reason = window.prompt('Enter a reason for permanently deleting this transaction (at least 5 characters).');
-    if (!reason || reason.trim().length < 5) {
-      if (reason !== null) setPageError('Enter a deletion reason of at least five characters.');
-      return;
-    }
-    setPageError('');
-    try {
-      await deleteTransaction.mutateAsync({
-        transactionId: transaction.id,
-        data: { reason: reason.trim() },
-      });
-      await refreshUserData();
-      setPageMessage(`Transaction ${transaction.reference} was permanently deleted.`);
-    } catch (error) {
-      setPageError(error instanceof Error ? error.message : 'The transaction could not be deleted.');
-    }
+  const deleteUserTransaction = async (
+    transaction: BankTransaction,
+    reason: string,
+    transactionPin: string,
+  ) => {
+    await deleteTransaction.mutateAsync({
+      transactionId: transaction.id,
+      data: { reason, transactionPin },
+    });
+    await refreshUserData();
+    setPageMessage(`Transaction ${transaction.reference} was permanently deleted.`);
   };
 
   const saveUserTransactionStatus = async (
     status: BankTransaction['status'],
     reason: string,
+    transactionPin: string,
   ) => {
     if (!statusTarget) return;
     await updateTransactionStatus.mutateAsync({
       transactionId: statusTarget.id,
-      data: { status, reason },
+      data: { status, reason, transactionPin },
     });
     setStatusTarget(null);
     await refreshUserData();
@@ -1649,13 +1649,30 @@ function TransactionList({
   statusPending = false,
 }: {
   transactions: BankTransaction[];
-  onDelete?: (transaction: BankTransaction) => void;
+  onDelete?: (transaction: BankTransaction, reason: string, transactionPin: string) => Promise<void>;
   deletePending?: boolean;
   onStatusOverride?: (transaction: BankTransaction) => void;
   statusPending?: boolean;
 }) {
   const [receipt, setReceipt] = useState<BankTransaction | null>(null);
   const [historyTarget, setHistoryTarget] = useState<BankTransaction | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<BankTransaction | null>(null);
+  const [deleteReason, setDeleteReason] = useState('');
+  const [deletePin, setDeletePin] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+  const submitDelete = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!deleteTarget || !onDelete) return;
+    setDeleteError('');
+    try {
+      await onDelete(deleteTarget, deleteReason.trim(), deletePin);
+      setDeleteTarget(null);
+      setDeleteReason('');
+      setDeletePin('');
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : 'The transaction could not be deleted.');
+    }
+  };
   return <>
     <div>{transactions.map(transaction => {
       const isIncoming = transaction.type === 'transfer_in' || transaction.type === 'external_transfer_in' || transaction.type === 'simulation_credit' || transaction.type === 'admin_funding';
@@ -1668,12 +1685,33 @@ function TransactionList({
           {canPrintReceipt && <button type="button" onClick={() => setReceipt(transaction)} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#dfe7eb] px-2.5 py-2 text-[9px] font-bold text-[#4a667e] hover:bg-[#f5f8f9]" aria-label={`View receipt ${transaction.reference}`}><FileText size={13} /><span className="hidden sm:inline">Receipt</span></button>}
           {onStatusOverride && <button type="button" onClick={() => setHistoryTarget(transaction)} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#dfe7eb] px-2.5 py-2 text-[9px] font-bold text-[#4a667e] hover:bg-[#f5f8f9]" aria-label={`View status history for ${transaction.reference}`}><History size={13} /><span className="hidden sm:inline">History</span></button>}
           {onStatusOverride && transaction.type !== 'deposit_request' && transaction.type !== 'withdrawal_request' && <button type="button" disabled={statusPending} onClick={() => onStatusOverride(transaction)} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#dfe7eb] px-2.5 py-2 text-[9px] font-bold text-[#4a667e] hover:bg-[#f5f8f9] disabled:cursor-not-allowed disabled:opacity-50" aria-label={`Override status for ${transaction.reference}`}><RefreshCw size={13} /><span className="hidden sm:inline">Status</span></button>}
-          {onDelete && <button type="button" disabled={deletePending} onClick={() => onDelete(transaction)} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#ead8d5] px-2.5 py-2 text-[9px] font-bold text-[#a24940] hover:bg-[#fff7f5] disabled:cursor-not-allowed disabled:opacity-50" aria-label={`Permanently delete transaction ${transaction.reference}`}><Trash2 size={13} /><span className="hidden sm:inline">Delete</span></button>}
+          {onDelete && <button type="button" disabled={deletePending} onClick={() => { setDeleteTarget(transaction); setDeleteReason(''); setDeletePin(''); setDeleteError(''); }} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#ead8d5] px-2.5 py-2 text-[9px] font-bold text-[#a24940] hover:bg-[#fff7f5] disabled:cursor-not-allowed disabled:opacity-50" aria-label={`Permanently delete transaction ${transaction.reference}`}><Trash2 size={13} /><span className="hidden sm:inline">Delete</span></button>}
         </div>}
       </div>;
     })}</div>
     {receipt && <ReceiptDialog transaction={receipt} onClose={() => setReceipt(null)} />}
     {historyTarget && <TransactionStatusHistoryDialog transaction={historyTarget} onClose={() => setHistoryTarget(null)} />}
+    {deleteTarget && onDelete && <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#14263e]/55 p-4">
+      <section role="dialog" aria-modal="true" aria-labelledby="delete-transaction-title" className="w-full max-w-lg rounded-[22px] border border-[#dfe7ec] bg-white p-5 shadow-2xl sm:p-7">
+        <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#a24940]">Permanent action</p>
+        <h2 id="delete-transaction-title" className="mt-1 text-[16px] font-bold text-[#29425c]">Delete transaction?</h2>
+        <p className="mt-2 break-all text-[10px] text-[#7e8d9c]">{deleteTarget.reference}</p>
+        <p className="mt-4 rounded-lg border border-[#f0d6d2] bg-[#fff7f5] px-4 py-3 text-[10px] leading-5 text-[#8f4a43]">This permanently removes the transaction and its ledger entries. Affected wallet balances will change, and this cannot be undone.</p>
+        <form onSubmit={submitDelete} className="mt-5 space-y-4">
+          <Field label="Audit reason">
+            <textarea required minLength={5} maxLength={500} rows={3} value={deleteReason} onChange={event => setDeleteReason(event.target.value)} className={`${inputClass} h-auto py-3`} />
+          </Field>
+          <Field label="Your 6-digit transaction PIN">
+            <input required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="current-password" value={deletePin} onChange={event => setDeletePin(event.target.value.replace(/\D/g, '').slice(0, 6))} className={inputClass} />
+          </Field>
+          {deleteError && <p role="alert" className="rounded-lg bg-[#fff1ef] px-4 py-3 text-[11px] text-[#a24940]">{deleteError}</p>}
+          <div className="flex flex-wrap justify-end gap-2">
+            <button type="button" onClick={() => setDeleteTarget(null)} className="rounded-xl border border-[#dfe6eb] px-4 py-3 text-[10px] font-bold text-[#546b80] hover:bg-[#f5f8f9]">Cancel</button>
+            <button disabled={deletePending || deleteReason.trim().length < 5 || deletePin.length !== 6} className="rounded-xl bg-[#a24940] px-4 py-3 text-[10px] font-bold text-white hover:bg-[#8f3c34] disabled:cursor-not-allowed disabled:opacity-50">{deletePending ? 'Deleting…' : 'Permanently delete'}</button>
+          </div>
+        </form>
+      </section>
+    </div>}
   </>;
 }
 
@@ -1742,15 +1780,17 @@ function TransactionStatusDialog({
   transaction: BankTransaction;
   pending: boolean;
   onClose: () => void;
-  onSave: (status: BankTransaction['status'], reason: string) => Promise<void>;
+  onSave: (status: BankTransaction['status'], reason: string, transactionPin: string) => Promise<void>;
 }) {
   const [status, setStatus] = useState<BankTransaction['status']>(transaction.status);
   const [reason, setReason] = useState('');
+  const [transactionPin, setTransactionPin] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
     setStatus(transaction.status);
     setReason('');
+    setTransactionPin('');
     setError('');
   }, [transaction.id, transaction.status]);
 
@@ -1758,7 +1798,7 @@ function TransactionStatusDialog({
     event.preventDefault();
     setError('');
     try {
-      await onSave(status, reason.trim());
+      await onSave(status, reason.trim(), transactionPin);
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'The transaction status could not be updated.');
     }
@@ -1784,10 +1824,13 @@ function TransactionStatusDialog({
           <Field label="Audit reason">
             <textarea required minLength={5} maxLength={500} rows={3} value={reason} onChange={event => setReason(event.target.value)} placeholder="Explain why this recorded status is being changed." className={`${inputClass} h-auto py-3`} />
           </Field>
+          <Field label="Your 6-digit transaction PIN">
+            <input required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="current-password" value={transactionPin} onChange={event => setTransactionPin(event.target.value.replace(/\D/g, '').slice(0, 6))} className={inputClass} />
+          </Field>
           {error && <p role="alert" className="rounded-lg bg-[#fff1ef] px-4 py-3 text-[11px] text-[#a24940]">{error}</p>}
           <div className="flex flex-wrap justify-end gap-2">
             <button type="button" onClick={onClose} className="rounded-xl border border-[#dfe6eb] px-4 py-3 text-[10px] font-bold text-[#546b80] hover:bg-[#f5f8f9]">Cancel</button>
-            <button disabled={pending || status === transaction.status || reason.trim().length < 5} className="rounded-xl bg-[#142f51] px-4 py-3 text-[10px] font-bold text-white hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">{pending ? 'Saving status…' : 'Save status'}</button>
+            <button disabled={pending || status === transaction.status || reason.trim().length < 5 || transactionPin.length !== 6} className="rounded-xl bg-[#142f51] px-4 py-3 text-[10px] font-bold text-white hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">{pending ? 'Saving status…' : 'Save status'}</button>
           </div>
         </form>
       </section>

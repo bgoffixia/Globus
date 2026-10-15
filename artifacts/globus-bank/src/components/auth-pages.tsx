@@ -1,6 +1,6 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
-import { useSignUp } from '@clerk/react';
-import { useUpdateBankProfile } from '@workspace/api-client-react';
+import { useSignIn, useSignUp } from '@clerk/react';
+import { useLookupCustomerId, useUpdateBankProfile } from '@workspace/api-client-react';
 import { Link, useLocation } from 'wouter';
 import './auth-pages.css';
 
@@ -64,7 +64,135 @@ export function AuthFrame({ mode, children }: AuthFrameProps) {
   );
 }
 
-type SignUpStage = 'details' | 'verify' | 'finishing' | 'profile-error';
+export function ClerkSignInForm() {
+  const [, setLocation] = useLocation();
+  const { signIn, fetchStatus } = useSignIn();
+  const lookupCustomerId = useLookupCustomerId();
+  const [customerId, setCustomerId] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const busy = fetchStatus === 'fetching' || lookupCustomerId.isPending;
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError('');
+    try {
+      const resolved = await lookupCustomerId.mutateAsync({
+        data: { customerId: customerId.trim().toUpperCase() },
+      });
+      const result = await signIn.password({
+        identifier: resolved.email,
+        password,
+      });
+      if (result.error || signIn.status !== 'complete') {
+        setError('Customer ID or password could not be verified. Check your details and try again.');
+        return;
+      }
+      const finalized = await signIn.finalize({ navigate: () => undefined });
+      if (finalized.error) {
+        setError('Sign-in could not be completed. Please try again.');
+        return;
+      }
+      setLocation('/dashboard');
+    } catch {
+      setError('Customer ID or password could not be verified. Check your details and try again.');
+    }
+  };
+
+  return (
+    <div className="gb-signin-form-wrap">
+      <div className="gb-form-heading">
+        <span className="gb-step-label">MEMBER ACCESS <i /></span>
+        <h1>Welcome back</h1>
+        <p>Use your Globus Customer ID to access your account.</p>
+      </div>
+      <form className="gb-auth-form" onSubmit={submit}>
+        <label className="gb-field-label" htmlFor="gb-customer-id">Customer ID</label>
+        <input
+          id="gb-customer-id"
+          className="gb-input gb-customer-id-input"
+          type="text"
+          autoComplete="username"
+          autoCapitalize="characters"
+          inputMode="text"
+          minLength={7}
+          maxLength={7}
+          pattern="[A-Za-z0-9]{7}"
+          placeholder="7-character ID"
+          value={customerId}
+          onChange={event => setCustomerId(event.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 7))}
+          required
+        />
+        <label className="gb-field-label gb-signin-spaced-label" htmlFor="gb-customer-password">Password</label>
+        <input
+          id="gb-customer-password"
+          className="gb-input"
+          type="password"
+          autoComplete="current-password"
+          value={password}
+          onChange={event => setPassword(event.target.value)}
+          required
+        />
+        {error && <p role="alert" className="gb-auth-error">{error}</p>}
+        <button className="gb-primary-button" type="submit" disabled={busy || customerId.length !== 7 || !password}>
+          <span>{busy ? 'Securely signing in…' : 'Sign in'}</span>
+          <span aria-hidden="true">→</span>
+        </button>
+      </form>
+      <p className="gb-switch-copy gb-recovery-link"><Link href="/sign-in/email">Forgot your Customer ID?</Link></p>
+      <p className="gb-switch-copy">New to Globus? <Link href="/sign-up">Create an account <span aria-hidden="true">→</span></Link></p>
+    </div>
+  );
+}
+
+export function EmailRecoverySignInForm() {
+  const [, setLocation] = useLocation();
+  const { signIn, fetchStatus } = useSignIn();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const busy = fetchStatus === 'fetching';
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError('');
+    const result = await signIn.password({ identifier: email.trim(), password });
+    if (result.error || signIn.status !== 'complete') {
+      setError('Email or password could not be verified. Check your details and try again.');
+      return;
+    }
+    const finalized = await signIn.finalize({ navigate: () => undefined });
+    if (finalized.error) {
+      setError('Sign-in could not be completed. Please try again.');
+      return;
+    }
+    setLocation('/settings');
+  };
+
+  return (
+    <div className="gb-signin-form-wrap">
+      <div className="gb-form-heading">
+        <span className="gb-step-label">CUSTOMER ID RECOVERY <i /></span>
+        <h1>Sign in with email</h1>
+        <p>After signing in, find your Customer ID in Settings or Receive.</p>
+      </div>
+      <form className="gb-auth-form" onSubmit={submit}>
+        <label className="gb-field-label" htmlFor="gb-recovery-email">Email address</label>
+        <input id="gb-recovery-email" className="gb-input" type="email" autoComplete="email" maxLength={254} value={email} onChange={event => setEmail(event.target.value)} required />
+        <label className="gb-field-label gb-signin-spaced-label" htmlFor="gb-recovery-password">Password</label>
+        <input id="gb-recovery-password" className="gb-input" type="password" autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} required />
+        {error && <p role="alert" className="gb-auth-error">{error}</p>}
+        <button className="gb-primary-button" type="submit" disabled={busy || !email.trim() || !password}>
+          <span>{busy ? 'Signing in…' : 'Sign in and retrieve ID'}</span>
+          <span aria-hidden="true">→</span>
+        </button>
+      </form>
+      <p className="gb-switch-copy"><Link href="/sign-in">Back to Customer ID sign-in</Link></p>
+    </div>
+  );
+}
+
+type SignUpStage = 'details' | 'verify' | 'finishing' | 'profile-error' | 'created';
 
 export function ClerkSignUpForm() {
   const [, setLocation] = useLocation();
@@ -77,6 +205,8 @@ export function ClerkSignUpForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
+  const [customerId, setCustomerId] = useState('');
+  const [customerIdCopied, setCustomerIdCopied] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [stage, setStage] = useState<SignUpStage>('details');
   const [error, setError] = useState('');
@@ -91,7 +221,7 @@ export function ClerkSignUpForm() {
     setError('');
     setNotice('');
     try {
-      await updateProfile.mutateAsync({
+      const savedProfile = await updateProfile.mutateAsync({
         data: {
           firstName,
           lastName,
@@ -101,7 +231,8 @@ export function ClerkSignUpForm() {
           acceptedTerms: true,
         },
       });
-      setLocation('/dashboard');
+      setCustomerId(savedProfile.customerId);
+      setStage('created');
     } catch {
       setStage('profile-error');
       setError('Your sign-in is active, but your Globus profile could not be saved. Retry to finish setting up the account.');
@@ -192,6 +323,16 @@ export function ClerkSignUpForm() {
     setStage('details');
   };
 
+  const copyCustomerId = async () => {
+    try {
+      await navigator.clipboard.writeText(customerId);
+      setCustomerIdCopied(true);
+      window.setTimeout(() => setCustomerIdCopied(false), 1800);
+    } catch {
+      setCustomerIdCopied(false);
+    }
+  };
+
   return (
     <div className="gb-signup-form-wrap">
       {stage === 'details' && (
@@ -279,6 +420,25 @@ export function ClerkSignUpForm() {
           {error && <p role="alert" className="gb-auth-error">{error}</p>}
           <button type="button" className="gb-primary-button" onClick={saveBankProfile} disabled={updateProfile.isPending}>
             <span>{updateProfile.isPending ? 'Saving profile…' : 'Retry profile save'}</span>
+            <span aria-hidden="true">→</span>
+          </button>
+        </div>
+      )}
+
+      {stage === 'created' && (
+        <div className="gb-form-heading gb-customer-id-confirmation">
+          <span className="gb-step-label">ACCOUNT READY <i /></span>
+          <h1>Your Customer ID</h1>
+          <p>Save this unique ID. You’ll use it with your password whenever you sign in.</p>
+          <div className="gb-customer-id-card">
+            <span>GLOBUS CUSTOMER ID</span>
+            <strong>{customerId}</strong>
+          </div>
+          <button type="button" className="gb-secondary-button" onClick={copyCustomerId}>
+            {customerIdCopied ? 'Copied' : 'Copy Customer ID'}
+          </button>
+          <button type="button" className="gb-primary-button" onClick={() => setLocation('/dashboard')}>
+            <span>Continue to account</span>
             <span aria-hidden="true">→</span>
           </button>
         </div>

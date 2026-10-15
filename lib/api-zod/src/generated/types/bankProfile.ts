@@ -11,6 +11,8 @@ import type { BankProfileVerificationStatus } from './bankProfileVerificationSta
 export interface BankProfile {
   id: string;
   email: string;
+  /** @pattern ^[A-Z0-9]{7}$ */
+  customerId: string;
   /** @nullable */
   firstName: string | null;
   /** @nullable */

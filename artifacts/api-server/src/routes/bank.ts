@@ -1,5 +1,6 @@
 import { Router, type IRouter, type RequestHandler, type Response } from "express";
 import { getAuth } from "@clerk/express";
+import { rateLimit } from "express-rate-limit";
 import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
 import {
   CreateBankTransferBody,
@@ -22,6 +23,8 @@ import {
   ListBankTransactionsQueryParams,
   ListBankTransactionsResponse,
   ListBankWalletsResponse,
+  LookupCustomerIdBody,
+  LookupCustomerIdResponse,
   SubmitIdentityDocumentsBody,
   SubmitIdentityDocumentsResponse,
   UpdateTransactionPinBody,
@@ -67,6 +70,13 @@ import {
 } from "../lib/transaction-pin";
 
 const router: IRouter = Router();
+const customerIdLookupLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 8,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { error: "Unable to verify those details. Try again later." },
+});
 
 function rejectExternalTransfer(res: Response, kind: "deposit" | "payout"): boolean {
   res.status(410).json({
@@ -174,6 +184,31 @@ async function completeIdentityDocument(input: {
   });
 }
 
+router.post(
+  "/bank/customer-id/lookup",
+  customerIdLookupLimiter,
+  async (req, res): Promise<void> => {
+    const parsed = LookupCustomerIdBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Enter a valid seven-character Customer ID." });
+      return;
+    }
+
+    const [user] = await db
+      .select({ email: bankUsersTable.email })
+      .from(bankUsersTable)
+      .where(eq(bankUsersTable.customerId, parsed.data.customerId.toUpperCase()))
+      .limit(1);
+    if (!user) {
+      res.status(404).json({ error: "Customer ID or password could not be verified." });
+      return;
+    }
+
+    res.setHeader("Cache-Control", "no-store");
+    res.json(LookupCustomerIdResponse.parse({ email: user.email }));
+  },
+);
+
 router.use("/bank", requireSignedIn);
 
 router.get("/bank/me", async (req, res): Promise<void> => {
@@ -188,6 +223,7 @@ router.get("/bank/me", async (req, res): Promise<void> => {
     GetBankProfileResponse.parse({
       id: user.id,
       email: user.email,
+      customerId: user.customerId,
       firstName: user.firstName,
       lastName: user.lastName,
       phone: user.phone,
@@ -319,6 +355,7 @@ router.put("/bank/profile", async (req, res): Promise<void> => {
     UpdateBankProfileResponse.parse({
       id: user.id,
       email: user.email,
+      customerId: user.customerId,
       firstName: user.firstName,
       lastName: user.lastName,
       phone: user.phone,

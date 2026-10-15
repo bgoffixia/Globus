@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react';
-import { ClerkProvider, Show, SignIn, useClerk } from '@clerk/react';
+import { ClerkProvider, Show, useClerk } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
@@ -7,7 +7,7 @@ import { ErrorBoundary } from '@/components/error-boundary';
 import { BankShell } from '@/components/bank-shell';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { AuthFrame, ClerkSignUpForm } from '@/components/auth-pages';
+import { AuthFrame, ClerkSignInForm, ClerkSignUpForm, EmailRecoverySignInForm } from '@/components/auth-pages';
 import { PwaInstallPrompt } from '@/components/pwa-install-prompt';
 import NotFound from '@/pages/not-found';
 import {
@@ -81,7 +81,6 @@ const clerkAppearance = {
     header: 'hidden',
     headerTitle: 'font-semibold tracking-tight text-[#18324f]',
     headerSubtitle: 'text-[#718196]',
-    socialButtonsBlockButtonText: 'font-semibold text-[#304761]',
     formFieldLabel: 'font-semibold text-[#435971]',
     footerActionLink: 'font-semibold text-[#357b83]',
     footerActionText: 'text-[#718196]',
@@ -93,7 +92,7 @@ const clerkAppearance = {
     logoImage: 'h-auto max-h-12 max-w-[180px]',
     socialButtonsBlock: 'hidden',
     dividerRow: 'hidden',
-    socialButtonsBlockButton: 'border-[#dfe6ec] bg-white hover:bg-[#f6f9fa]',
+    socialButtonsBlockButton: 'hidden',
     formButtonPrimary: 'bg-[#173b62] hover:bg-[#214c76] text-white',
     formFieldInput: 'border-[#dfe6ec] bg-[#fbfcfd] text-[#30465f]',
     footerAction: 'text-[#718196]',
@@ -134,14 +133,15 @@ function ProtectedPage({ children }: { children: ReactNode }) {
 function SignInPage() {
   return (
     <AuthFrame mode="sign-in">
-      <div className="gb-form-heading">
-        <span className="gb-step-label">MEMBER ACCESS <i /></span>
-        <h1>Welcome back</h1>
-        <p>Sign in to access your Globus account.</p>
-      </div>
-      <div className="gb-clerk-signin">
-        <SignIn routing="path" path={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} />
-      </div>
+      <ClerkSignInForm />
+    </AuthFrame>
+  );
+}
+
+function EmailRecoveryPage() {
+  return (
+    <AuthFrame mode="sign-in">
+      <EmailRecoverySignInForm />
     </AuthFrame>
   );
 }
@@ -206,6 +206,7 @@ function ClerkRoutes() {
       <ClerkQueryClientCacheInvalidator />
       <Switch>
         <Route path="/" component={HomeRedirect} />
+        <Route path="/sign-in/email" component={EmailRecoveryPage} />
         <Route path="/sign-in/*?" component={SignInPage} />
         <Route path="/sign-up/*?" component={SignUpPage} />
         <Route path="/dashboard"><ProtectedPage><DashboardPage /></ProtectedPage></Route>

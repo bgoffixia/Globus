@@ -1,6 +1,6 @@
-import { randomUUID } from "node:crypto";
+import { randomInt, randomUUID } from "node:crypto";
 import { clerkClient } from "@clerk/express";
-import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import {
   bankCurrencyEnum,
   bankLedgerEntriesTable,
@@ -13,6 +13,51 @@ import {
 
 export const currencies = ["USD", "EUR", "GBP", "NGN", "CAD", "AUD"] as const;
 export type BankCurrency = (typeof currencies)[number];
+
+const customerIdAlphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+export function generateCustomerId(): string {
+  return Array.from(
+    { length: 7 },
+    () => customerIdAlphabet.charAt(randomInt(customerIdAlphabet.length)),
+  ).join("");
+}
+
+export async function backfillCustomerIds(): Promise<void> {
+  const missing = await db
+    .select({ id: bankUsersTable.id })
+    .from(bankUsersTable)
+    .where(isNull(bankUsersTable.customerId));
+
+  for (const user of missing) {
+    let assigned = false;
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      try {
+        await db
+          .update(bankUsersTable)
+          .set({ customerId: generateCustomerId(), updatedAt: new Date() })
+          .where(
+            and(
+              eq(bankUsersTable.id, user.id),
+              isNull(bankUsersTable.customerId),
+            ),
+          );
+        assigned = true;
+        break;
+      } catch (error) {
+        const uniqueConflict =
+          typeof error === "object" &&
+          error !== null &&
+          "code" in error &&
+          error.code === "23505";
+        if (!uniqueConflict) throw error;
+      }
+    }
+    if (!assigned) {
+      throw new Error("Could not allocate a unique Globus Customer ID.");
+    }
+  }
+}
 
 export function parseAmountToMinor(amount: string): bigint {
   const match = /^(\d{1,12})(?:\.(\d{1,2}))?$/.exec(amount);
@@ -84,7 +129,11 @@ export async function ensureBankUser(
 
     const [user] = await tx
       .insert(bankUsersTable)
-      .values({ id: clerkUserId, email: primaryEmail })
+      .values({
+        id: clerkUserId,
+        email: primaryEmail,
+        customerId: generateCustomerId(),
+      })
       .onConflictDoNothing()
       .returning();
 

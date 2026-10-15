@@ -9,6 +9,21 @@ import * as zod from 'zod';
 
 
 /**
+ * @summary Resolve a Globus Customer ID to its Clerk login identifier
+ */
+export const lookupCustomerIdBodyCustomerIdRegExp = new RegExp('^[A-Za-z0-9]{7}$');
+
+
+export const LookupCustomerIdBody = zod.object({
+  "customerId": zod.string().regex(lookupCustomerIdBodyCustomerIdRegExp)
+})
+
+export const LookupCustomerIdResponse = zod.object({
+  "email": zod.string().email()
+})
+
+
+/**
  * Returns server health status
  * @summary Health check
  */
@@ -20,12 +35,14 @@ export const HealthCheckResponse = zod.object({
 /**
  * @summary Get the authenticated user's Globus Bank profile
  */
+export const getBankProfileResponseCustomerIdRegExp = new RegExp('^[A-Z0-9]{7}$');
 export const getBankProfileResponseDateOfBirthRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
 
 
 export const GetBankProfileResponse = zod.object({
   "id": zod.string(),
   "email": zod.string(),
+  "customerId": zod.string().regex(getBankProfileResponseCustomerIdRegExp),
   "firstName": zod.string().nullable(),
   "lastName": zod.string().nullable(),
   "phone": zod.string().nullable(),
@@ -42,6 +59,7 @@ export const GetBankProfileResponse = zod.object({
 /**
  * @summary Get the user's simulated balances and recent activity
  */
+export const getBankDashboardResponseProfileCustomerIdRegExp = new RegExp('^[A-Z0-9]{7}$');
 export const getBankDashboardResponseProfileDateOfBirthRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
 
 
@@ -49,6 +67,7 @@ export const GetBankDashboardResponse = zod.object({
   "profile": zod.object({
   "id": zod.string(),
   "email": zod.string(),
+  "customerId": zod.string().regex(getBankDashboardResponseProfileCustomerIdRegExp),
   "firstName": zod.string().nullable(),
   "lastName": zod.string().nullable(),
   "phone": zod.string().nullable(),
@@ -159,12 +178,14 @@ export const UpdateBankProfileBody = zod.object({
   "acceptedTerms": zod.literal(true)
 })
 
+export const updateBankProfileResponseCustomerIdRegExp = new RegExp('^[A-Z0-9]{7}$');
 export const updateBankProfileResponseDateOfBirthRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
 
 
 export const UpdateBankProfileResponse = zod.object({
   "id": zod.string(),
   "email": zod.string(),
+  "customerId": zod.string().regex(updateBankProfileResponseCustomerIdRegExp),
   "firstName": zod.string().nullable(),
   "lastName": zod.string().nullable(),
   "phone": zod.string().nullable(),
@@ -269,12 +290,14 @@ export const SubmitIdentityDocumentsBody = zod.object({
   "confirmed": zod.literal(true)
 })
 
+export const submitIdentityDocumentsResponseCustomerIdRegExp = new RegExp('^[A-Z0-9]{7}$');
 export const submitIdentityDocumentsResponseDateOfBirthRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
 
 
 export const SubmitIdentityDocumentsResponse = zod.object({
   "id": zod.string(),
   "email": zod.string(),
+  "customerId": zod.string().regex(submitIdentityDocumentsResponseCustomerIdRegExp),
   "firstName": zod.string().nullable(),
   "lastName": zod.string().nullable(),
   "phone": zod.string().nullable(),
@@ -832,11 +855,13 @@ export const UpdateAdminTransactionStatusParams = zod.object({
 export const updateAdminTransactionStatusBodyReasonMin = 5;
 export const updateAdminTransactionStatusBodyReasonMax = 500;
 
+export const updateAdminTransactionStatusBodyTransactionPinRegExp = new RegExp('^[0-9]{6}$');
 
 
 export const UpdateAdminTransactionStatusBody = zod.object({
   "status": zod.enum(['completed', 'pending', 'failed', 'reversed']),
-  "reason": zod.string().min(updateAdminTransactionStatusBodyReasonMin).max(updateAdminTransactionStatusBodyReasonMax)
+  "reason": zod.string().min(updateAdminTransactionStatusBodyReasonMin).max(updateAdminTransactionStatusBodyReasonMax),
+  "transactionPin": zod.string().regex(updateAdminTransactionStatusBodyTransactionPinRegExp)
 })
 
 export const UpdateAdminTransactionStatusResponse = zod.object({
@@ -867,10 +892,12 @@ export const DeleteAdminTransactionParams = zod.object({
 export const deleteAdminTransactionBodyReasonMin = 5;
 export const deleteAdminTransactionBodyReasonMax = 500;
 
+export const deleteAdminTransactionBodyTransactionPinRegExp = new RegExp('^[0-9]{6}$');
 
 
 export const DeleteAdminTransactionBody = zod.object({
-  "reason": zod.string().min(deleteAdminTransactionBodyReasonMin).max(deleteAdminTransactionBodyReasonMax)
+  "reason": zod.string().min(deleteAdminTransactionBodyReasonMin).max(deleteAdminTransactionBodyReasonMax),
+  "transactionPin": zod.string().regex(deleteAdminTransactionBodyTransactionPinRegExp)
 })
 
 export const DeleteAdminTransactionResponse = zod.object({

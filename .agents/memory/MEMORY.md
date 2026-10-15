@@ -1,3 +1,4 @@
 - [Identity-document retention](identity-document-retention.md) — Keep uploads private; delete files after approval/rejection, retaining them during requests for more information.
 - [Clerk user identity reconciliation](clerk-bank-user-resolution.md) — Resolve cross-environment Clerk IDs to a canonical bank profile using a server-verified primary email.
 - [Internal ledger boundaries](internal-ledger-boundaries.md) — Keep all money movement inside Globus; deposits and withdrawals require admin review, with withdrawals reserved until decision.
+- [Transaction PIN security](transaction-pin-security.md) — Store only PIN hashes; admins reset member PINs but never view or assign their values.

@@ -49,6 +49,7 @@ export const bankRequestTypeEnum = pgEnum("bank_request_type", [
 export const bankUsersTable = pgTable("bank_users", {
   id: text("id").primaryKey(),
   email: text("email").notNull().unique(),
+  customerId: text("customer_id").unique(),
   firstName: text("first_name"),
   lastName: text("last_name"),
   phone: text("phone"),
