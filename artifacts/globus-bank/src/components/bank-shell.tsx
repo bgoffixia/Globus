@@ -45,7 +45,7 @@ export function BankShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="app-shell">
-      <aside className={`bank-sidebar fixed inset-y-0 left-0 z-40 flex w-[252px] flex-col transition-transform duration-200 lg:translate-x-0 ${mobileMenu ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside className={`bank-sidebar fixed inset-y-0 left-0 z-40 flex w-[min(252px,84vw)] flex-col transition-transform duration-200 lg:translate-x-0 ${mobileMenu ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="flex h-[78px] items-center justify-between px-7">
           <Link href="/dashboard" className="bank-brand flex items-center gap-3 text-[20px] font-extrabold text-white">
             <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#c8a75c] text-[15px] font-extrabold text-[#102747]">G</span>
@@ -102,22 +102,22 @@ export function BankShell({ children }: { children: ReactNode }) {
         </div>
       </aside>
       {mobileMenu && <button aria-label="Close menu overlay" className="fixed inset-0 z-30 bg-[#071729]/50 lg:hidden" onClick={() => setMobileMenu(false)} />}
-      <div className="min-h-[100dvh] lg:pl-[252px]">
-        <header className="sticky top-0 z-20 flex h-[72px] items-center justify-between border-b border-[#e3e9ef] bg-[#f7f9fb]/95 px-5 backdrop-blur-md sm:px-8">
-          <div className="flex items-center gap-3">
-            <button aria-label="Open navigation" onClick={() => setMobileMenu(true)} className="rounded-lg p-2 text-[#283c55] hover:bg-[#e9eff4] lg:hidden">
+      <div className="min-h-screen min-h-[100dvh] min-w-0 w-full lg:pl-[252px]">
+        <header className="sticky top-0 z-20 flex min-h-[64px] items-center justify-between gap-2 border-b border-[#e3e9ef] bg-[#f7f9fb]/95 px-3 py-2 backdrop-blur-md sm:h-[72px] sm:px-8">
+          <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+            <button aria-label="Open navigation" onClick={() => setMobileMenu(true)} className="shrink-0 rounded-lg p-2 text-[#283c55] hover:bg-[#e9eff4] lg:hidden">
               <Menu size={19} />
             </button>
-            <p className="text-[12px] font-medium text-[#738297]">Globus Bank <span className="px-1.5 text-[#c5ced7]">/</span> <span className="text-[#253850]">{pageLabel(location)}</span></p>
+            <p className="min-w-0 truncate text-[11px] font-medium text-[#738297] sm:text-[12px]"><span className="hidden sm:inline">Globus Bank <span className="px-1.5 text-[#c5ced7]">/</span> </span><span className="text-[#253850]">{pageLabel(location)}</span></p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
             <span className="hidden rounded-full border border-[#d6e8e9] bg-[#eff8f8] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-[#377d83] sm:inline-flex">Internal ledger</span>
             <div className="grid h-9 w-9 place-items-center overflow-hidden rounded-full border border-[#dbe3eb] bg-white text-xs font-bold text-[#27445e]">
               {user?.imageUrl ? <img src={user.imageUrl} alt="" className="h-full w-full object-cover" /> : initials}
             </div>
           </div>
         </header>
-        <main className="page-enter mx-auto w-full max-w-[1440px] px-5 py-7 sm:px-8 sm:py-9 lg:px-10">{children}</main>
+        <main className="page-enter mx-auto min-w-0 w-full max-w-[1440px] px-4 py-6 sm:px-8 sm:py-9 lg:px-10">{children}</main>
       </div>
     </div>
   );
