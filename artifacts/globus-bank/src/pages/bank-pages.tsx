@@ -257,26 +257,6 @@ export function DashboardPage() {
     <>
       <PageHeading eyebrow="Your dashboard" title={`Good to see you${dash?.profile.firstName ? `, ${dash.profile.firstName}` : ''}.`} subtitle="Your currency wallets, quick actions, and recent activity in one place." />
 
-      <section className="mt-6 rounded-[22px] border border-[#e2e9ef] bg-white p-4 sm:p-5">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[#589198]">Quick actions</p>
-            <p className="mt-1 text-[11px] text-[#8190a0]">Shortcuts use {actionCurrency} where a wallet currency applies.</p>
-          </div>
-          {selectedWallet && <span className="rounded-full bg-[#eff5f6] px-3 py-1.5 text-[10px] font-bold text-[#456c73]">Active wallet · {selectedWallet.currency}</span>}
-        </div>
-        <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-4">
-          <ActionTile href={currencyActionHref('/send', actionCurrency)} icon={<ArrowUpRight size={17} />} label="Send" testId="dashboard-quick-send" />
-          <ActionTile href="/receive" icon={<ArrowDownLeft size={17} />} label="Receive" testId="dashboard-quick-receive" />
-          <ActionTile href={currencyActionHref('/add-money', actionCurrency)} icon={<WalletCards size={17} />} label="Deposit request" testId="dashboard-quick-deposit" />
-          <ActionTile href={currencyActionHref('/withdraw', actionCurrency)} icon={<ArrowDownLeft size={17} />} label="Withdrawal request" testId="dashboard-quick-withdraw" />
-          <ActionTile href={currencyActionHref('/international-transfer', actionCurrency)} icon={<Globe2 size={17} />} label="International" testId="dashboard-quick-international" />
-          <ActionTile href="/wallets" icon={<WalletCards size={17} />} label="All wallets" testId="dashboard-quick-wallets" />
-          <ActionTile href="/transactions" icon={<History size={17} />} label="Activity" testId="dashboard-quick-activity" />
-          {adminAccess.data?.allowed && <ActionTile href="/admin" icon={<ShieldCheck size={17} />} label="Admin panel" testId="dashboard-quick-admin" />}
-        </div>
-      </section>
-
       <div className="mt-5 grid gap-5 xl:grid-cols-[1.32fr_.68fr]">
         <section className="balance-panel relative min-w-0 overflow-hidden rounded-[22px] p-5 text-white sm:p-7">
           <div className="absolute -right-12 -top-16 h-64 w-64 rounded-full border border-white/[.08]" />
@@ -335,6 +315,25 @@ export function DashboardPage() {
           <Link href="/settings" className="mt-6 inline-flex items-center gap-1.5 text-[11px] font-bold text-[#377b82]">Review profile <ChevronRight size={14} /></Link>
         </section>
       </div>
+      <section className="mt-5 rounded-[22px] border border-[#e2e9ef] bg-white p-4 sm:p-5">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[#589198]">Quick actions</p>
+            <p className="mt-1 text-[11px] text-[#8190a0]">Shortcuts use {actionCurrency} where a wallet currency applies.</p>
+          </div>
+          {selectedWallet && <span className="rounded-full bg-[#eff5f6] px-3 py-1.5 text-[10px] font-bold text-[#456c73]">Active wallet · {selectedWallet.currency}</span>}
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-4">
+          <ActionTile href={currencyActionHref('/send', actionCurrency)} icon={<ArrowUpRight size={17} />} label="Send" testId="dashboard-quick-send" />
+          <ActionTile href="/receive" icon={<ArrowDownLeft size={17} />} label="Receive" testId="dashboard-quick-receive" />
+          <ActionTile href={currencyActionHref('/add-money', actionCurrency)} icon={<WalletCards size={17} />} label="Deposit request" testId="dashboard-quick-deposit" />
+          <ActionTile href={currencyActionHref('/withdraw', actionCurrency)} icon={<ArrowDownLeft size={17} />} label="Withdrawal request" testId="dashboard-quick-withdraw" />
+          <ActionTile href={currencyActionHref('/international-transfer', actionCurrency)} icon={<Globe2 size={17} />} label="International" testId="dashboard-quick-international" />
+          <ActionTile href="/wallets" icon={<WalletCards size={17} />} label="All wallets" testId="dashboard-quick-wallets" />
+          <ActionTile href="/transactions" icon={<History size={17} />} label="Activity" testId="dashboard-quick-activity" />
+          {adminAccess.data?.allowed && <ActionTile href="/admin" icon={<ShieldCheck size={17} />} label="Admin panel" testId="dashboard-quick-admin" />}
+        </div>
+      </section>
       <section className="mt-5 overflow-hidden rounded-[22px] border border-[#e2e9ef] bg-white">
         <div className="flex items-center justify-between border-b border-[#edf0f3] px-5 py-5 sm:px-7">
           <div><h2 className="text-[16px] font-bold text-[#203851]">Recent activity{selectedWallet ? ` · ${selectedWallet.currency}` : ''}</h2><p className="mt-1 text-[11px] text-[#8592a1]">Latest entries for this wallet</p></div>
