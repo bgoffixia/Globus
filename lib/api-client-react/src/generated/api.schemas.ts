@@ -462,6 +462,15 @@ export interface AdminTransactionDeleteInput {
   reason: string;
 }
 
+export interface AdminTransactionStatusUpdateInput {
+  status: TransactionStatus;
+  /**
+     * @minLength 5
+     * @maxLength 500
+     */
+  reason: string;
+}
+
 export interface AdminTransactionDeleteResult {
   transactionId: string;
   reference: string;

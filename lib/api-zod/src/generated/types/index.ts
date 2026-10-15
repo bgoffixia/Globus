@@ -14,6 +14,7 @@ export * from './adminSummary';
 export * from './adminSummaryProviderStatus';
 export * from './adminTransactionDeleteInput';
 export * from './adminTransactionDeleteResult';
+export * from './adminTransactionStatusUpdateInput';
 export * from './adminUser';
 export * from './adminUserAccountStatus';
 export * from './adminUserDetail';

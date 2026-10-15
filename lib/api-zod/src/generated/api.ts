@@ -680,6 +680,41 @@ export const ListAdminLedgerResponse = zod.array(ListAdminLedgerResponseItem)
 
 
 /**
+ * @summary Override a transaction status without changing ledger balances
+ */
+
+
+
+export const UpdateAdminTransactionStatusParams = zod.object({
+  "transactionId": zod.coerce.string().min(1)
+})
+
+export const updateAdminTransactionStatusBodyReasonMin = 5;
+export const updateAdminTransactionStatusBodyReasonMax = 500;
+
+
+
+export const UpdateAdminTransactionStatusBody = zod.object({
+  "status": zod.enum(['completed', 'pending', 'failed', 'reversed']),
+  "reason": zod.string().min(updateAdminTransactionStatusBodyReasonMin).max(updateAdminTransactionStatusBodyReasonMax)
+})
+
+export const UpdateAdminTransactionStatusResponse = zod.object({
+  "id": zod.string(),
+  "reference": zod.string(),
+  "type": zod.enum(['simulation_credit', 'admin_funding', 'transfer_in', 'transfer_out', 'external_transfer', 'external_transfer_in', 'deposit_request', 'withdrawal_request', 'exchange_request']),
+  "status": zod.enum(['completed', 'pending', 'failed', 'reversed']),
+  "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
+  "amount": zod.string(),
+  "fee": zod.string(),
+  "counterparty": zod.string().nullable(),
+  "description": zod.string(),
+  "mode": zod.enum(['simulation']),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
  * @summary Permanently delete a transaction and its ledger entries
  */
 

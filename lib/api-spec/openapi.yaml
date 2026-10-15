@@ -614,6 +614,40 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
   /bank/admin/transactions/{transactionId}:
+    patch:
+      operationId: updateAdminTransactionStatus
+      tags: [admin]
+      summary: Override a transaction status without changing ledger balances
+      parameters:
+        - name: transactionId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminTransactionStatusUpdateInput"
+      responses:
+        "200":
+          description: Updated transaction status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BankTransaction"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
     delete:
       operationId: deleteAdminTransaction
       tags: [admin]
@@ -919,6 +953,12 @@ components:
       properties:
         reason: { type: string, minLength: 5, maxLength: 500 }
       required: [reason]
+    AdminTransactionStatusUpdateInput:
+      type: object
+      properties:
+        status: { $ref: "#/components/schemas/TransactionStatus" }
+        reason: { type: string, minLength: 5, maxLength: 500 }
+      required: [status, reason]
     AdminTransactionDeleteResult:
       type: object
       properties:

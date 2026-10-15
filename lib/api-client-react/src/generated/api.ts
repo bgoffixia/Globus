@@ -26,6 +26,7 @@ import type {
   AdminSummary,
   AdminTransactionDeleteInput,
   AdminTransactionDeleteResult,
+  AdminTransactionStatusUpdateInput,
   AdminUser,
   AdminUserDetail,
   AdminUserStatusInput,
@@ -2134,6 +2135,95 @@ export function useListAdminLedger<TData = Awaited<ReturnType<typeof listAdminLe
 
 
 
+
+export const getUpdateAdminTransactionStatusUrl = (transactionId: string,) => {
+
+
+
+
+  return `/api/bank/admin/transactions/${transactionId}`
+}
+
+/**
+ * @summary Override a transaction status without changing ledger balances
+ */
+export const updateAdminTransactionStatus = async (transactionId: string,
+    adminTransactionStatusUpdateInput: AdminTransactionStatusUpdateInput, options?: Parameters<typeof customFetch>[1]): Promise<BankTransaction> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<BankTransaction>(getUpdateAdminTransactionStatusUrl(transactionId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(adminTransactionStatusUpdateInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateAdminTransactionStatusMutationKey = () => ['updateAdminTransactionStatus'] as const;
+
+export const getUpdateAdminTransactionStatusMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminTransactionStatus>>, TError,UpdateAdminTransactionStatusMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAdminTransactionStatus>>, TError,UpdateAdminTransactionStatusMutationVariables, TContext> => {
+
+const mutationKey = getUpdateAdminTransactionStatusMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAdminTransactionStatus>>, UpdateAdminTransactionStatusMutationVariables> = (props) => {
+          const {transactionId,data} = props ?? {};
+
+          return  updateAdminTransactionStatus(transactionId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAdminTransactionStatusMutationResult = NonNullable<Awaited<ReturnType<typeof updateAdminTransactionStatus>>>
+    export type UpdateAdminTransactionStatusMutationBody = BodyType<AdminTransactionStatusUpdateInput>
+    export type UpdateAdminTransactionStatusMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>
+    export type UpdateAdminTransactionStatusMutationVariables = {transactionId: string;data: BodyType<AdminTransactionStatusUpdateInput>}
+
+    /**
+ * @summary Override a transaction status without changing ledger balances
+ */
+export const useUpdateAdminTransactionStatus = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminTransactionStatus>>, TError,UpdateAdminTransactionStatusMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAdminTransactionStatus>>,
+        TError,
+        UpdateAdminTransactionStatusMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateAdminTransactionStatusMutationOptions(options));
+    }
 
 export const getDeleteAdminTransactionUrl = (transactionId: string,) => {
 

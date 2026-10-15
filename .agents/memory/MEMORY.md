@@ -1,1 +1,2 @@
 - [Identity-document retention](identity-document-retention.md) — Keep uploads private; delete files after approval/rejection, retaining them during requests for more information.
+- [Clerk user identity reconciliation](clerk-bank-user-resolution.md) — Resolve cross-environment Clerk IDs to a canonical bank profile using a server-verified primary email.

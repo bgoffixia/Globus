@@ -62,6 +62,7 @@ import {
   useListBankTransactions,
   useListBankWallets,
   useUpdateAdminUserStatus,
+  useUpdateAdminTransactionStatus,
   useUpdateAdminUserVerification,
   useUpdateBankProfile,
   useDeleteMyIdentityDocument,
@@ -883,6 +884,7 @@ export function AdminPage() {
   const [reviewMessage, setReviewMessage] = useState('');
   const [reviewError, setReviewError] = useState('');
   const [reviewFeedback, setReviewFeedback] = useState('');
+  const [statusTarget, setStatusTarget] = useState<BankTransaction | null>(null);
   const params = useMemo(() => ({ ...(search.trim() ? { search: search.trim() } : {}), limit: 100 }), [search]);
   const users = useListAdminUsers(params, { query: { queryKey: getListAdminUsersQueryKey(params), enabled: !!access.data?.allowed } });
   const reviewDocuments = useListAdminIdentityDocuments(identityTarget?.id ?? '', {
@@ -897,6 +899,7 @@ export function AdminPage() {
   const updateVerification = useUpdateAdminUserVerification();
   const funding = useCreateAdminFunding();
   const deletion = useDeleteAdminTransaction();
+  const updateTransactionStatus = useUpdateAdminTransactionStatus();
   if (access.isLoading) return <PageSkeleton />;
   if (access.isError || !access.data?.allowed) return <Failure title="Operations access is restricted" text="This area is only available to authorized Globus operations staff." retry={() => access.refetch()} />;
   const setStatus = (userId: string, accountStatus: 'active' | 'suspended') => {
@@ -969,6 +972,24 @@ export function AdminPage() {
       onError: error => setDeleteError(error instanceof Error ? error.message : 'The transaction could not be deleted.'),
     });
   };
+  const saveTransactionStatus = async (
+    status: BankTransaction['status'],
+    reason: string,
+  ) => {
+    if (!statusTarget) return;
+    await updateTransactionStatus.mutateAsync({
+      transactionId: statusTarget.id,
+      data: { status, reason },
+    });
+    setStatusTarget(null);
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: getListAdminLedgerQueryKey() }),
+      queryClient.invalidateQueries({ queryKey: getListAdminUsersQueryKey() }),
+      queryClient.invalidateQueries({ queryKey: getGetAdminSummaryQueryKey() }),
+      queryClient.invalidateQueries({ queryKey: getGetBankDashboardQueryKey() }),
+      queryClient.invalidateQueries({ queryKey: getListBankTransactionsQueryKey() }),
+    ]);
+  };
   const openIdentityReview = (user: AdminUser) => {
     setIdentityTarget(user);
     setReviewDecision('approved');
@@ -1035,7 +1056,7 @@ export function AdminPage() {
       <section className="mt-6 overflow-hidden rounded-[20px] border border-[#e1e8ee] bg-white">
         <div className="border-b border-[#edf0f3] px-5 py-4 sm:px-7"><h2 className="text-[14px] font-bold text-[#28405c]">Ledger review</h2><p className="mt-1 text-[10px] text-[#8592a1]">Review completed activity and pending simulation requests. Permanent deletion removes the transaction and its ledger entries; a reason is recorded in the audit log, and deletions that would create a negative wallet balance are blocked.</p></div>
         {deleteError && <p role="alert" className="border-b border-[#edf0f3] bg-[#fff1ef] px-5 py-3 text-[11px] text-[#a24940]">{deleteError}</p>}
-        {ledger.isLoading ? <ListSkeleton /> : ledger.isError ? <InlineError text="Ledger records are unavailable." retry={() => ledger.refetch()} /> : ledger.data?.length ? <TransactionList transactions={ledger.data} onDelete={deleteLedgerTransaction} deletePending={deletion.isPending} /> : <EmptyState title="Ledger is clear" text="There are no recorded transactions to review." />}
+        {ledger.isLoading ? <ListSkeleton /> : ledger.isError ? <InlineError text="Ledger records are unavailable." retry={() => ledger.refetch()} /> : ledger.data?.length ? <TransactionList transactions={ledger.data} onDelete={deleteLedgerTransaction} deletePending={deletion.isPending} onStatusOverride={transaction => setStatusTarget(transaction)} statusPending={updateTransactionStatus.isPending} /> : <EmptyState title="Ledger is clear" text="There are no recorded transactions to review." />}
       </section>
       {identityTarget && <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#14263e]/55 p-4" role="presentation">
         <section role="dialog" aria-modal="true" aria-labelledby="identity-review-title" className="max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-[22px] border border-[#dfe7ec] bg-white p-5 shadow-2xl sm:p-7">
@@ -1071,6 +1092,12 @@ export function AdminPage() {
           </form>
         </section>
       </div>}
+      {statusTarget && <TransactionStatusDialog
+        transaction={statusTarget}
+        pending={updateTransactionStatus.isPending}
+        onClose={() => setStatusTarget(null)}
+        onSave={saveTransactionStatus}
+      />}
     </>
   );
 }
@@ -1101,6 +1128,7 @@ export function AdminUserManagementPage() {
   const updateStatus = useUpdateAdminUserStatus();
   const createFunding = useCreateAdminFunding();
   const deleteTransaction = useDeleteAdminTransaction();
+  const updateTransactionStatus = useUpdateAdminTransactionStatus();
   const updateVerification = useUpdateAdminUserVerification();
 
   const [currency, setCurrency] = useState<Currency>('USD');
@@ -1112,6 +1140,7 @@ export function AdminUserManagementPage() {
   const [fundingReference, setFundingReference] = useState('');
   const [pageMessage, setPageMessage] = useState('');
   const [pageError, setPageError] = useState('');
+  const [statusTarget, setStatusTarget] = useState<BankTransaction | null>(null);
   const [decision, setDecision] = useState<
     'approved' | 'rejected' | 'additional_information_required'
   >('approved');
@@ -1199,6 +1228,20 @@ export function AdminUserManagementPage() {
     } catch (error) {
       setPageError(error instanceof Error ? error.message : 'The transaction could not be deleted.');
     }
+  };
+
+  const saveUserTransactionStatus = async (
+    status: BankTransaction['status'],
+    reason: string,
+  ) => {
+    if (!statusTarget) return;
+    await updateTransactionStatus.mutateAsync({
+      transactionId: statusTarget.id,
+      data: { status, reason },
+    });
+    setStatusTarget(null);
+    await refreshUserData();
+    setPageMessage(`Transaction ${statusTarget.reference} status was updated.`);
   };
 
   const submitIdentityDecision = async (event: FormEvent<HTMLFormElement>) => {
@@ -1307,7 +1350,7 @@ export function AdminUserManagementPage() {
 
           <section className="overflow-hidden rounded-[20px] border border-[#e1e8ee] bg-white">
             <div className="border-b border-[#edf0f3] px-5 py-4 sm:px-7"><h2 className="text-[14px] font-bold text-[#28405c]">Recent activity</h2><p className="mt-1 text-[10px] text-[#8592a1]">Latest 50 transactions. Deletion is permanent and requires a reason.</p></div>
-            {detail.data.transactions.length ? <TransactionList transactions={detail.data.transactions} onDelete={deleteUserTransaction} deletePending={deleteTransaction.isPending} /> : <EmptyState title="No activity yet" text="This member has no recorded transactions." />}
+            {detail.data.transactions.length ? <TransactionList transactions={detail.data.transactions} onDelete={deleteUserTransaction} deletePending={deleteTransaction.isPending} onStatusOverride={transaction => setStatusTarget(transaction)} statusPending={updateTransactionStatus.isPending} /> : <EmptyState title="No activity yet" text="This member has no recorded transactions." />}
           </section>
         </div>
 
@@ -1359,6 +1402,12 @@ export function AdminUserManagementPage() {
           </section>
         </aside>
       </div>
+      {statusTarget && <TransactionStatusDialog
+        transaction={statusTarget}
+        pending={updateTransactionStatus.isPending}
+        onClose={() => setStatusTarget(null)}
+        onSave={saveUserTransactionStatus}
+      />}
     </>
   );
 }
@@ -1426,10 +1475,14 @@ function TransactionList({
   transactions,
   onDelete,
   deletePending = false,
+  onStatusOverride,
+  statusPending = false,
 }: {
   transactions: BankTransaction[];
   onDelete?: (transaction: BankTransaction) => void;
   deletePending?: boolean;
+  onStatusOverride?: (transaction: BankTransaction) => void;
+  statusPending?: boolean;
 }) {
   const [receipt, setReceipt] = useState<BankTransaction | null>(null);
   return <>
@@ -1441,11 +1494,74 @@ function TransactionList({
         <div className="min-w-0 flex-1"><p className="truncate text-[11px] font-semibold text-[#334a63]">{transaction.description || humanize(transaction.type)}</p><p className="mt-1 truncate text-[9px] text-[#8996a4]">{transaction.counterparty || 'Simulation ledger'} · {formatDate(transaction.createdAt)} · {transaction.mode}</p></div>
         <div className="shrink-0 text-right"><p className={`text-[11px] font-bold ${isIncoming ? 'text-[#417f69]' : 'text-[#3c5269]'}`}>{isIncoming ? '+' : '−'}{formatMoney(Number(transaction.amount), transaction.currency)}</p><p className={`mt-1 text-[9px] capitalize ${transaction.status === 'completed' ? 'text-[#4f8c75]' : 'text-[#9b8050]'}`}>{humanize(transaction.status)}</p></div>
         {canPrintReceipt && <button type="button" onClick={() => setReceipt(transaction)} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#dfe7eb] px-2.5 py-2 text-[9px] font-bold text-[#4a667e] hover:bg-[#f5f8f9]" aria-label={`View receipt ${transaction.reference}`}><FileText size={13} /><span className="hidden sm:inline">Receipt</span></button>}
+        {onStatusOverride && <button type="button" disabled={statusPending} onClick={() => onStatusOverride(transaction)} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#dfe7eb] px-2.5 py-2 text-[9px] font-bold text-[#4a667e] hover:bg-[#f5f8f9] disabled:cursor-not-allowed disabled:opacity-50" aria-label={`Override status for ${transaction.reference}`}><RefreshCw size={13} /><span className="hidden sm:inline">Status</span></button>}
         {onDelete && <button type="button" disabled={deletePending} onClick={() => onDelete(transaction)} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#ead8d5] px-2.5 py-2 text-[9px] font-bold text-[#a24940] hover:bg-[#fff7f5] disabled:cursor-not-allowed disabled:opacity-50" aria-label={`Permanently delete transaction ${transaction.reference}`}><Trash2 size={13} /><span className="hidden sm:inline">Delete</span></button>}
       </div>;
     })}</div>
     {receipt && <ReceiptDialog transaction={receipt} onClose={() => setReceipt(null)} />}
   </>;
+}
+
+function TransactionStatusDialog({
+  transaction,
+  pending,
+  onClose,
+  onSave,
+}: {
+  transaction: BankTransaction;
+  pending: boolean;
+  onClose: () => void;
+  onSave: (status: BankTransaction['status'], reason: string) => Promise<void>;
+}) {
+  const [status, setStatus] = useState<BankTransaction['status']>(transaction.status);
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    setStatus(transaction.status);
+    setReason('');
+    setError('');
+  }, [transaction.id, transaction.status]);
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError('');
+    try {
+      await onSave(status, reason.trim());
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'The transaction status could not be updated.');
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#14263e]/55 p-4">
+      <section role="dialog" aria-modal="true" aria-labelledby="transaction-status-title" className="w-full max-w-lg rounded-[22px] border border-[#dfe7ec] bg-white p-5 shadow-2xl sm:p-7">
+        <div className="flex items-start justify-between gap-4">
+          <div><p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#55868b]">Admin transaction control</p><h2 id="transaction-status-title" className="mt-1 text-[16px] font-bold text-[#29425c]">Override recorded status</h2><p className="mt-1 break-all text-[10px] text-[#7e8d9c]">{transaction.reference}</p></div>
+          <button type="button" aria-label="Close status override" onClick={onClose} className="rounded-lg p-2 text-[#6d8092] hover:bg-[#f1f5f7]"><X size={16} /></button>
+        </div>
+        <p className="mt-4 rounded-lg border border-[#e5e9ed] bg-[#f7f9fa] px-4 py-3 text-[10px] leading-4 text-[#64798e]">This changes the transaction’s recorded status only. It does not change wallet balances, ledger entries, or move funds.</p>
+        <form onSubmit={submit} className="mt-5 space-y-4">
+          <Field label="New status">
+            <select value={status} onChange={event => setStatus(event.target.value as BankTransaction['status'])} className={inputClass}>
+              <option value="pending">Pending</option>
+              <option value="completed">Completed</option>
+              <option value="failed">Failed</option>
+              <option value="reversed">Reversed</option>
+            </select>
+          </Field>
+          <Field label="Audit reason">
+            <textarea required minLength={5} maxLength={500} rows={3} value={reason} onChange={event => setReason(event.target.value)} placeholder="Explain why this recorded status is being changed." className={`${inputClass} h-auto py-3`} />
+          </Field>
+          {error && <p role="alert" className="rounded-lg bg-[#fff1ef] px-4 py-3 text-[11px] text-[#a24940]">{error}</p>}
+          <div className="flex flex-wrap justify-end gap-2">
+            <button type="button" onClick={onClose} className="rounded-xl border border-[#dfe6eb] px-4 py-3 text-[10px] font-bold text-[#546b80] hover:bg-[#f5f8f9]">Cancel</button>
+            <button disabled={pending || status === transaction.status || reason.trim().length < 5} className="rounded-xl bg-[#142f51] px-4 py-3 text-[10px] font-bold text-white hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">{pending ? 'Saving status…' : 'Save status'}</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  );
 }
 
 function ReceiptDialog({ transaction, onClose }: { transaction: BankTransaction; onClose: () => void }) {

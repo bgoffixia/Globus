@@ -26,6 +26,9 @@ import {
   UpdateAdminUserStatusBody,
   UpdateAdminUserStatusParams,
   UpdateAdminUserStatusResponse,
+  UpdateAdminTransactionStatusBody,
+  UpdateAdminTransactionStatusParams,
+  UpdateAdminTransactionStatusResponse,
 } from "@workspace/api-zod";
 import {
   bankAuditLogsTable,
@@ -781,6 +784,87 @@ router.get("/bank/admin/ledger", requireAdmin, async (req, res): Promise<void> =
     ),
   );
 });
+
+router.patch(
+  "/bank/admin/transactions/:transactionId",
+  requireAdmin,
+  async (req, res): Promise<void> => {
+    const params = UpdateAdminTransactionStatusParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const parsed = UpdateAdminTransactionStatusBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+    const authenticatedClerkId = getAuth(req).userId;
+    if (!authenticatedClerkId) {
+      res.status(401).json({ error: "Sign in to access your Globus account." });
+      return;
+    }
+    const actorUserId = (await ensureBankUser(authenticatedClerkId)).id;
+    const reason = parsed.data.reason.trim();
+    if (reason.length < 5) {
+      res.status(400).json({ error: "Enter an audit reason of at least five characters." });
+      return;
+    }
+
+    const result = await db.transaction(async (tx) => {
+      const [transaction] = await tx
+        .select()
+        .from(bankTransactionsTable)
+        .where(eq(bankTransactionsTable.id, params.data.transactionId))
+        .for("update");
+      if (!transaction) {
+        return { notFound: true as const };
+      }
+      if (transaction.status === parsed.data.status) {
+        return { transaction };
+      }
+
+      const [updated] = await tx
+        .update(bankTransactionsTable)
+        .set({ status: parsed.data.status })
+        .where(eq(bankTransactionsTable.id, transaction.id))
+        .returning();
+      const targetUserIds = [
+        ...new Set(
+          [
+            transaction.fromUserId,
+            transaction.toUserId,
+            transaction.initiatedByUserId,
+          ].filter((userId): userId is string => Boolean(userId)),
+        ),
+      ];
+      await tx.insert(bankAuditLogsTable).values(
+        targetUserIds.map((targetUserId) => ({
+          actorUserId,
+          targetUserId,
+          action: "override_transaction_status",
+          reason: `Transaction ${transaction.reference}: ${transaction.status} → ${parsed.data.status}. ${reason}`,
+        })),
+      );
+      return { transaction: updated };
+    });
+
+    if ("notFound" in result) {
+      res.status(404).json({ error: "Transaction not found." });
+      return;
+    }
+    res.json(
+      UpdateAdminTransactionStatusResponse.parse(
+        toBankTransaction(
+          result.transaction,
+          result.transaction.fromUserId ??
+            result.transaction.toUserId ??
+            actorUserId,
+        ),
+      ),
+    );
+  },
+);
 
 router.delete(
   "/bank/admin/transactions/:transactionId",
