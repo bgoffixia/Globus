@@ -10,5 +10,5 @@ export type BankTransactionMode = typeof BankTransactionMode[keyof typeof BankTr
 
 
 export const BankTransactionMode = {
-  simulation: 'simulation',
+  internal_ledger: 'internal_ledger',
 } as const;

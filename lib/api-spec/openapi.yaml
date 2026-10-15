@@ -3,7 +3,7 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: Simulation-only Globus wallet API
+  description: Globus internal ledger API; no external financial provider is connected
 servers:
   - url: /api
     description: Base API path
@@ -256,7 +256,7 @@ paths:
               $ref: "#/components/schemas/TransferInput"
       responses:
         "201":
-          description: Posted simulated transfer
+          description: Internal member transfer posted to both wallets
           content:
             application/json:
               schema:
@@ -271,7 +271,8 @@ paths:
     post:
       operationId: createExternalTransfer
       tags: [bank]
-      summary: Simulate a transfer to an external recipient
+      summary: Disabled legacy external-transfer route
+      deprecated: true
       requestBody:
         required: true
         content:
@@ -279,23 +280,22 @@ paths:
             schema:
               $ref: "#/components/schemas/ExternalTransferInput"
       responses:
-        "201":
-          description: Posted simulated external transfer
+        "410":
+          description: External transfers are not supported
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BankTransaction"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "409":
-          $ref: "#/components/responses/Conflict"
+                type: object
+                required: [error]
+                properties:
+                  error:
+                    type: string
   /bank/incoming-external-transfers:
     post:
       operationId: createIncomingExternalTransfer
       tags: [bank]
-      summary: Simulate an incoming transfer from an external source
+      summary: Disabled legacy incoming-transfer route
+      deprecated: true
       requestBody:
         required: true
         content:
@@ -303,40 +303,40 @@ paths:
             schema:
               $ref: "#/components/schemas/IncomingExternalTransferInput"
       responses:
-        "201":
-          description: Posted simulated incoming external transfer
+        "410":
+          description: External deposits are not supported
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BankTransaction"
+                type: object
+                required: [error]
+                properties:
+                  error:
+                    type: string
+  /bank/ledger-requests:
+    post:
+      operationId: createLedgerRequest
+      tags: [bank]
+      summary: Request an internal ledger deposit or withdrawal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LedgerRequestInput"
+      responses:
+        "201":
+          description: Recorded internal ledger request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LedgerRequest"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "409":
           $ref: "#/components/responses/Conflict"
-  /bank/simulation-requests:
-    post:
-      operationId: createSimulationRequest
-      tags: [bank]
-      summary: Record a simulated deposit, withdrawal, or exchange request
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/SimulationRequestInput"
-      responses:
-        "201":
-          description: Recorded simulated request
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SimulationRequest"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
   /bank/admin/access:
     get:
       operationId: getAdminAccess
@@ -355,7 +355,7 @@ paths:
     get:
       operationId: getAdminSummary
       tags: [admin]
-      summary: Get operational totals from stored simulation records
+      summary: Get operational totals from stored ledger records
       responses:
         "200":
           description: Admin summary
@@ -367,6 +367,59 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+  /bank/admin/ledger-requests:
+    get:
+      operationId: listAdminLedgerRequests
+      tags: [admin]
+      summary: List pending internal ledger deposit and withdrawal requests
+      responses:
+        "200":
+          description: Pending requests for administrator review
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminLedgerRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /bank/admin/ledger-requests/{requestId}:
+    patch:
+      operationId: reviewAdminLedgerRequest
+      tags: [admin]
+      summary: Approve or reject an internal ledger request
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminLedgerRequestReviewInput"
+      responses:
+        "200":
+          description: Reviewed request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminLedgerRequest"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
   /bank/admin/users:
     get:
       operationId: listAdminUsers
@@ -736,7 +789,7 @@ components:
       enum: [completed, pending, failed, reversed]
     TransactionType:
       type: string
-      enum: [simulation_credit, admin_funding, transfer_in, transfer_out, external_transfer, external_transfer_in, deposit_request, withdrawal_request, exchange_request]
+      enum: [simulation_credit, admin_funding, admin_debit, transfer_in, transfer_out, external_transfer, external_transfer_in, deposit_request, withdrawal_request, exchange_request]
     Wallet:
       type: object
       properties:
@@ -812,7 +865,7 @@ components:
         fee: { type: string }
         counterparty: { type: ["string", "null"] }
         description: { type: string }
-        mode: { type: string, enum: [simulation] }
+        mode: { type: string, enum: [internal_ledger] }
         createdAt: { type: string, format: date-time }
       required: [id, reference, type, status, currency, amount, fee, counterparty, description, mode, createdAt]
     BankDashboard:
@@ -826,8 +879,8 @@ components:
           type: array
           items: { $ref: "#/components/schemas/BankTransaction" }
         referenceCurrency: { $ref: "#/components/schemas/CurrencyCode" }
-        simulationMode: { type: boolean, const: true }
-      required: [profile, wallets, recentTransactions, referenceCurrency, simulationMode]
+        internalLedger: { type: boolean, const: true }
+      required: [profile, wallets, recentTransactions, referenceCurrency, internalLedger]
     TransferInput:
       type: object
       properties:
@@ -859,28 +912,49 @@ components:
         description: { type: string, maxLength: 140 }
         idempotencyKey: { type: string, minLength: 16, maxLength: 100 }
       required: [sourceName, sourceCountry, currency, amount, idempotencyKey]
-    SimulationRequestInput:
+    LedgerRequestInput:
       type: object
       properties:
-        type: { type: string, enum: [deposit, withdrawal, exchange] }
+        type: { type: string, enum: [deposit, withdrawal] }
         currency: { $ref: "#/components/schemas/CurrencyCode" }
-        destinationCurrency: { anyOf: [{ $ref: "#/components/schemas/CurrencyCode" }, { type: "null" }] }
         amount: { type: string, pattern: "^[0-9]{1,12}(\\.[0-9]{1,2})?$" }
+        description: { type: string, maxLength: 140 }
         idempotencyKey: { type: string, minLength: 16, maxLength: 100 }
       required: [type, currency, amount, idempotencyKey]
-    SimulationRequest:
+    LedgerRequest:
       type: object
       properties:
         id: { type: string }
         reference: { type: string }
-        type: { type: string, enum: [deposit, withdrawal, exchange] }
+        type: { type: string, enum: [deposit, withdrawal] }
         currency: { $ref: "#/components/schemas/CurrencyCode" }
-        destinationCurrency: { type: ["string", "null"] }
         amount: { type: string }
-        status: { type: string, enum: [pending_provider_setup] }
+        status: { type: string, enum: [pending_review, approved, rejected] }
         message: { type: string }
         createdAt: { type: string, format: date-time }
-      required: [id, reference, type, currency, destinationCurrency, amount, status, message, createdAt]
+      required: [id, reference, type, currency, amount, status, message, createdAt]
+    AdminLedgerRequest:
+      type: object
+      properties:
+        id: { type: string }
+        transactionId: { type: string }
+        reference: { type: string }
+        userId: { type: string }
+        memberName: { type: string }
+        email: { type: string, format: email }
+        type: { type: string, enum: [deposit, withdrawal] }
+        currency: { $ref: "#/components/schemas/CurrencyCode" }
+        amount: { type: string }
+        description: { type: string }
+        status: { type: string, enum: [pending_review, pending_provider_setup, approved, rejected] }
+        createdAt: { type: string, format: date-time }
+      required: [id, transactionId, reference, userId, memberName, email, type, currency, amount, description, status, createdAt]
+    AdminLedgerRequestReviewInput:
+      type: object
+      properties:
+        decision: { type: string, enum: [approve, reject] }
+        reason: { type: string, minLength: 5, maxLength: 500 }
+      required: [decision, reason]
     AdminAccess:
       type: object
       properties:
@@ -894,11 +968,9 @@ components:
       properties:
         registeredUsers: { type: integer }
         activeWallets: { type: integer }
-        pendingProviderRequests: { type: integer }
+        pendingLedgerRequests: { type: integer }
         ledgerTransactions: { type: integer }
-        simulationMode: { type: boolean, const: true }
-        providerStatus: { type: string, enum: [not_configured] }
-      required: [registeredUsers, activeWallets, pendingProviderRequests, ledgerTransactions, simulationMode, providerStatus]
+      required: [registeredUsers, activeWallets, pendingLedgerRequests, ledgerTransactions]
     AdminUser:
       type: object
       properties:
@@ -941,13 +1013,14 @@ components:
     AdminFundingInput:
       type: object
       properties:
+        direction: { type: string, enum: [credit, debit] }
         currency: { $ref: "#/components/schemas/CurrencyCode" }
         amount: { type: string, pattern: "^[0-9]{1,12}(\\.[0-9]{1,2})?$" }
         senderName: { type: string, minLength: 1, maxLength: 120 }
         description: { type: string, minLength: 1, maxLength: 240 }
         reason: { type: string, minLength: 5, maxLength: 500 }
         idempotencyKey: { type: string, minLength: 16, maxLength: 100 }
-      required: [currency, amount, senderName, description, reason, idempotencyKey]
+      required: [direction, currency, amount, senderName, description, reason, idempotencyKey]
     AdminTransactionDeleteInput:
       type: object
       properties:

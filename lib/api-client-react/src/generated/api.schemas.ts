@@ -41,6 +41,7 @@ export type TransactionType = typeof TransactionType[keyof typeof TransactionTyp
 export const TransactionType = {
   simulation_credit: 'simulation_credit',
   admin_funding: 'admin_funding',
+  admin_debit: 'admin_debit',
   transfer_in: 'transfer_in',
   transfer_out: 'transfer_out',
   external_transfer: 'external_transfer',
@@ -182,7 +183,7 @@ export type BankTransactionMode = typeof BankTransactionMode[keyof typeof BankTr
 
 
 export const BankTransactionMode = {
-  simulation: 'simulation',
+  internal_ledger: 'internal_ledger',
 } as const;
 
 export interface BankTransaction {
@@ -205,7 +206,7 @@ export interface BankDashboard {
   wallets: Wallet[];
   recentTransactions: BankTransaction[];
   referenceCurrency: CurrencyCode;
-  simulationMode: true;
+  internalLedger: true;
 }
 
 export interface TransferInput {
@@ -275,21 +276,21 @@ export interface IncomingExternalTransferInput {
   idempotencyKey: string;
 }
 
-export type SimulationRequestInputType = typeof SimulationRequestInputType[keyof typeof SimulationRequestInputType];
+export type LedgerRequestInputType = typeof LedgerRequestInputType[keyof typeof LedgerRequestInputType];
 
 
-export const SimulationRequestInputType = {
+export const LedgerRequestInputType = {
   deposit: 'deposit',
   withdrawal: 'withdrawal',
-  exchange: 'exchange',
 } as const;
 
-export interface SimulationRequestInput {
-  type: SimulationRequestInputType;
+export interface LedgerRequestInput {
+  type: LedgerRequestInputType;
   currency: CurrencyCode;
-  destinationCurrency?: CurrencyCode | null;
   /** @pattern ^[0-9]{1,12}(\.[0-9]{1,2})?$ */
   amount: string;
+  /** @maxLength 140 */
+  description?: string;
   /**
      * @minLength 16
      * @maxLength 100
@@ -297,33 +298,82 @@ export interface SimulationRequestInput {
   idempotencyKey: string;
 }
 
-export type SimulationRequestType = typeof SimulationRequestType[keyof typeof SimulationRequestType];
+export type LedgerRequestType = typeof LedgerRequestType[keyof typeof LedgerRequestType];
 
 
-export const SimulationRequestType = {
+export const LedgerRequestType = {
   deposit: 'deposit',
   withdrawal: 'withdrawal',
-  exchange: 'exchange',
 } as const;
 
-export type SimulationRequestStatus = typeof SimulationRequestStatus[keyof typeof SimulationRequestStatus];
+export type LedgerRequestStatus = typeof LedgerRequestStatus[keyof typeof LedgerRequestStatus];
 
 
-export const SimulationRequestStatus = {
-  pending_provider_setup: 'pending_provider_setup',
+export const LedgerRequestStatus = {
+  pending_review: 'pending_review',
+  approved: 'approved',
+  rejected: 'rejected',
 } as const;
 
-export interface SimulationRequest {
+export interface LedgerRequest {
   id: string;
   reference: string;
-  type: SimulationRequestType;
+  type: LedgerRequestType;
   currency: CurrencyCode;
-  /** @nullable */
-  destinationCurrency: string | null;
   amount: string;
-  status: SimulationRequestStatus;
+  status: LedgerRequestStatus;
   message: string;
   createdAt: string;
+}
+
+export type AdminLedgerRequestType = typeof AdminLedgerRequestType[keyof typeof AdminLedgerRequestType];
+
+
+export const AdminLedgerRequestType = {
+  deposit: 'deposit',
+  withdrawal: 'withdrawal',
+} as const;
+
+export type AdminLedgerRequestStatus = typeof AdminLedgerRequestStatus[keyof typeof AdminLedgerRequestStatus];
+
+
+export const AdminLedgerRequestStatus = {
+  pending_review: 'pending_review',
+  pending_provider_setup: 'pending_provider_setup',
+  approved: 'approved',
+  rejected: 'rejected',
+} as const;
+
+export interface AdminLedgerRequest {
+  id: string;
+  transactionId: string;
+  reference: string;
+  userId: string;
+  memberName: string;
+  email: string;
+  type: AdminLedgerRequestType;
+  currency: CurrencyCode;
+  amount: string;
+  description: string;
+  status: AdminLedgerRequestStatus;
+  createdAt: string;
+}
+
+export type AdminLedgerRequestReviewInputDecision = typeof AdminLedgerRequestReviewInputDecision[keyof typeof AdminLedgerRequestReviewInputDecision];
+
+
+export const AdminLedgerRequestReviewInputDecision = {
+  approve: 'approve',
+  reject: 'reject',
+} as const;
+
+export interface AdminLedgerRequestReviewInput {
+  decision: AdminLedgerRequestReviewInputDecision;
+  /**
+     * @minLength 5
+     * @maxLength 500
+     */
+  reason: string;
 }
 
 export interface AdminAccess {
@@ -331,20 +381,11 @@ export interface AdminAccess {
   roles: string[];
 }
 
-export type AdminSummaryProviderStatus = typeof AdminSummaryProviderStatus[keyof typeof AdminSummaryProviderStatus];
-
-
-export const AdminSummaryProviderStatus = {
-  not_configured: 'not_configured',
-} as const;
-
 export interface AdminSummary {
   registeredUsers: number;
   activeWallets: number;
-  pendingProviderRequests: number;
+  pendingLedgerRequests: number;
   ledgerTransactions: number;
-  simulationMode: true;
-  providerStatus: AdminSummaryProviderStatus;
 }
 
 export type AdminUserVerificationStatus = typeof AdminUserVerificationStatus[keyof typeof AdminUserVerificationStatus];
@@ -428,7 +469,16 @@ export interface AdminIdentityVerificationInput {
   userMessage?: string;
 }
 
+export type AdminFundingInputDirection = typeof AdminFundingInputDirection[keyof typeof AdminFundingInputDirection];
+
+
+export const AdminFundingInputDirection = {
+  credit: 'credit',
+  debit: 'debit',
+} as const;
+
 export interface AdminFundingInput {
+  direction: AdminFundingInputDirection;
   currency: CurrencyCode;
   /** @pattern ^[0-9]{1,12}(\.[0-9]{1,2})?$ */
   amount: string;
@@ -514,6 +564,14 @@ search?: string;
  * @maximum 100
  */
 limit?: number;
+};
+
+export type CreateExternalTransfer410 = {
+  error: string;
+};
+
+export type CreateIncomingExternalTransfer410 = {
+  error: string;
 };
 
 export type ListAdminUsersParams = {

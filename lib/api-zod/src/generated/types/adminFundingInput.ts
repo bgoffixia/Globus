@@ -5,9 +5,11 @@
  * Simulation-only Globus wallet API
  * OpenAPI spec version: 0.1.0
  */
+import type { AdminFundingInputDirection } from './adminFundingInputDirection';
 import type { CurrencyCode } from './currencyCode';
 
 export interface AdminFundingInput {
+  direction: AdminFundingInputDirection;
   currency: CurrencyCode;
   /** @pattern ^[0-9]{1,12}(\.[0-9]{1,2})?$ */
   amount: string;

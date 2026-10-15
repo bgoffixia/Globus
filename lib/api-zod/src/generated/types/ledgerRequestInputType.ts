@@ -6,11 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type SimulationRequestInputType = typeof SimulationRequestInputType[keyof typeof SimulationRequestInputType];
+export type LedgerRequestInputType = typeof LedgerRequestInputType[keyof typeof LedgerRequestInputType];
 
 
-export const SimulationRequestInputType = {
+export const LedgerRequestInputType = {
   deposit: 'deposit',
   withdrawal: 'withdrawal',
-  exchange: 'exchange',
 } as const;

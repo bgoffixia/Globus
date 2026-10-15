@@ -4,6 +4,7 @@ import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import {
   bankCurrencyEnum,
   bankLedgerEntriesTable,
+  bankSandboxRequestsTable,
   bankTransactionsTable,
   bankUsersTable,
   bankWalletsTable,
@@ -12,8 +13,6 @@ import {
 
 export const currencies = ["USD", "EUR", "GBP", "NGN", "CAD", "AUD"] as const;
 export type BankCurrency = (typeof currencies)[number];
-
-const welcomeSimulationAmount = 250_000n;
 
 export function parseAmountToMinor(amount: string): bigint {
   const match = /^(\d{1,12})(?:\.(\d{1,2}))?$/.exec(amount);
@@ -122,58 +121,6 @@ export async function ensureBankUser(clerkUserId: string) {
       )
       .onConflictDoNothing();
 
-    const [usdWallet] = await tx
-      .select()
-      .from(bankWalletsTable)
-      .where(
-        and(
-          eq(bankWalletsTable.userId, resolvedUser.id),
-          eq(bankWalletsTable.currency, "USD"),
-        ),
-      )
-      .limit(1);
-
-    const [welcomeTransaction] = await tx
-      .insert(bankTransactionsTable)
-      .values({
-        reference: createReference(),
-        idempotencyKey: `sandbox-welcome:${resolvedUser.id}`,
-        initiatedByUserId: resolvedUser.id,
-        toUserId: resolvedUser.id,
-        toWalletId: usdWallet.id,
-        type: "simulation_credit",
-        status: "completed",
-        currency: "USD",
-        amountMinor: welcomeSimulationAmount,
-        counterparty: "Simulation ledger",
-        description: "Starting simulated balance — no real funds.",
-        mode: "simulation",
-      })
-      .onConflictDoNothing({
-        target: bankTransactionsTable.idempotencyKey,
-      })
-      .returning();
-
-    if (welcomeTransaction) {
-      await tx.insert(bankLedgerEntriesTable).values([
-        {
-          transactionId: welcomeTransaction.id,
-          accountCode: "simulation:clearing:USD",
-          currency: "USD",
-          side: "debit",
-          amountMinor: welcomeSimulationAmount,
-        },
-        {
-          transactionId: welcomeTransaction.id,
-          walletId: usdWallet.id,
-          accountCode: `wallet:${usdWallet.id}`,
-          currency: "USD",
-          side: "credit",
-          amountMinor: welcomeSimulationAmount,
-        },
-      ]);
-    }
-
     return resolvedUser;
   });
 }
@@ -201,13 +148,72 @@ export async function getWalletsForUser(userId: string) {
   const balanceByWallet = new Map(
     balances.map((balance) => [balance.walletId, BigInt(balance.balance)]),
   );
+  const activeRequestStatuses = ["pending_review", "pending_provider_setup"];
+  const [pendingDeposits, pendingWithdrawals] =
+    walletIds.length === 0
+      ? [[], []]
+      : await Promise.all([
+          db
+            .select({
+              walletId: bankTransactionsTable.toWalletId,
+              amountMinor: sql<string>`coalesce(sum(${bankSandboxRequestsTable.amountMinor}), 0)::text`,
+            })
+            .from(bankSandboxRequestsTable)
+            .innerJoin(
+              bankTransactionsTable,
+              eq(bankSandboxRequestsTable.transactionId, bankTransactionsTable.id),
+            )
+            .where(
+              and(
+                eq(bankSandboxRequestsTable.userId, userId),
+                eq(bankSandboxRequestsTable.type, "deposit"),
+                inArray(bankSandboxRequestsTable.status, activeRequestStatuses),
+                inArray(bankTransactionsTable.toWalletId, walletIds),
+              ),
+            )
+            .groupBy(bankTransactionsTable.toWalletId),
+          db
+            .select({
+              walletId: bankTransactionsTable.fromWalletId,
+              amountMinor: sql<string>`coalesce(sum(${bankSandboxRequestsTable.amountMinor}), 0)::text`,
+            })
+            .from(bankSandboxRequestsTable)
+            .innerJoin(
+              bankTransactionsTable,
+              eq(bankSandboxRequestsTable.transactionId, bankTransactionsTable.id),
+            )
+            .where(
+              and(
+                eq(bankSandboxRequestsTable.userId, userId),
+                eq(bankSandboxRequestsTable.type, "withdrawal"),
+                inArray(bankSandboxRequestsTable.status, activeRequestStatuses),
+                inArray(bankTransactionsTable.fromWalletId, walletIds),
+              ),
+            )
+            .groupBy(bankTransactionsTable.fromWalletId),
+        ]);
+  const pendingByWallet = new Map(
+    pendingDeposits.map((request) => [
+      request.walletId,
+      BigInt(request.amountMinor),
+    ]),
+  );
+  const reservedByWallet = new Map(
+    pendingWithdrawals.map((request) => [
+      request.walletId,
+      BigInt(request.amountMinor),
+    ]),
+  );
 
   return wallets.map((wallet) => ({
     id: wallet.id,
     currency: wallet.currency as BankCurrency,
-    available: formatMinorAmount(balanceByWallet.get(wallet.id) ?? 0n),
-    pending: "0.00",
-    reserved: "0.00",
+    available: formatMinorAmount(
+      (balanceByWallet.get(wallet.id) ?? 0n) -
+        (reservedByWallet.get(wallet.id) ?? 0n),
+    ),
+    pending: formatMinorAmount(pendingByWallet.get(wallet.id) ?? 0n),
+    reserved: formatMinorAmount(reservedByWallet.get(wallet.id) ?? 0n),
     status: wallet.status as "active" | "restricted",
   }));
 }
@@ -219,6 +225,7 @@ export function toBankTransaction(
   let type:
     | "simulation_credit"
     | "admin_funding"
+    | "admin_debit"
     | "transfer_in"
     | "transfer_out"
     | "external_transfer"
@@ -229,18 +236,30 @@ export function toBankTransaction(
 
   if (transaction.type === "transfer") {
     type = transaction.toUserId === viewerUserId ? "transfer_in" : "transfer_out";
+  } else if (
+    transaction.type === "admin_funding" &&
+    transaction.fromUserId === viewerUserId
+  ) {
+    type = "admin_debit";
   } else if (transaction.type === "sandbox_credit") {
     type = "simulation_credit";
   } else {
     type = transaction.type;
   }
 
-  const description =
-    transaction.type === "sandbox_credit"
-      ? "Starting simulated balance — no real funds."
+  const isLegacyExternalEntry =
+    transaction.type === "external_transfer" ||
+    transaction.type === "external_transfer_in";
+  const description = isLegacyExternalEntry
+    ? "Prior internal ledger entry"
+    : transaction.type === "sandbox_credit"
+      ? "Opening ledger balance"
       : transaction.description === "Sandbox transfer"
-        ? "Simulated member transfer"
-        : transaction.description;
+        ? "Member ledger transfer"
+        : transaction.description.replace(
+            /\b(simulated|simulation|sandbox)\b/gi,
+            "internal ledger",
+          );
 
   return {
     id: transaction.id,
@@ -251,13 +270,16 @@ export function toBankTransaction(
     amount: formatMinorAmount(transaction.amountMinor),
     fee: formatMinorAmount(transaction.feeMinor),
     counterparty:
-      transaction.type === "transfer" && transaction.toUserId === viewerUserId
+      isLegacyExternalEntry
+        ? "Internal ledger"
+        : transaction.type === "transfer" && transaction.toUserId === viewerUserId
         ? "Globus member"
-        : transaction.counterparty === "Globus sandbox ledger"
-        ? "Simulation ledger"
+        : transaction.counterparty &&
+          /^(globus )?(sandbox|simulation) ledger$/i.test(transaction.counterparty)
+        ? "Internal ledger"
         : transaction.counterparty,
     description,
-    mode: "simulation" as const,
+    mode: "internal_ledger" as const,
     createdAt: transaction.createdAt.toISOString(),
   };
 }
@@ -300,6 +322,33 @@ export async function balanceForWallet(
     .where(eq(bankLedgerEntriesTable.walletId, walletId));
 
   return BigInt(result.balance);
+}
+
+export async function reservedForWallet(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  walletId: string,
+): Promise<bigint> {
+  const [result] = await tx
+    .select({
+      amount: sql<string>`coalesce(sum(${bankSandboxRequestsTable.amountMinor}), 0)::text`,
+    })
+    .from(bankSandboxRequestsTable)
+    .innerJoin(
+      bankTransactionsTable,
+      eq(bankSandboxRequestsTable.transactionId, bankTransactionsTable.id),
+    )
+    .where(
+      and(
+        eq(bankSandboxRequestsTable.type, "withdrawal"),
+        inArray(bankSandboxRequestsTable.status, [
+          "pending_review",
+          "pending_provider_setup",
+        ]),
+        eq(bankTransactionsTable.fromWalletId, walletId),
+      ),
+    );
+
+  return BigInt(result.amount);
 }
 
 export async function userWallet(

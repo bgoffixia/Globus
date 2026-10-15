@@ -1,4 +1,4 @@
-import { Router, type IRouter, type RequestHandler } from "express";
+import { Router, type IRouter, type RequestHandler, type Response } from "express";
 import { getAuth } from "@clerk/express";
 import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
 import {
@@ -9,13 +9,13 @@ import {
   CreateExternalTransferBody,
   CreateExternalTransferResponse,
   CreateIncomingExternalTransferBody,
-  CreateSimulationRequestBody,
+  CreateLedgerRequestBody,
   CompleteIdentityDocumentUploadParams,
   CompleteIdentityDocumentUploadResponse,
   DeleteMyIdentityDocumentParams,
   DeleteMyIdentityDocumentResponse,
   CreateIncomingExternalTransferResponse,
-  CreateSimulationRequestResponse,
+  CreateLedgerRequestResponse,
   GetBankDashboardResponse,
   GetBankProfileResponse,
   ListMyIdentityDocumentsResponse,
@@ -47,6 +47,7 @@ import {
   getWalletsForUser,
   listUserTransactions,
   parseAmountToMinor,
+  reservedForWallet,
   toBankTransaction,
   userWallet,
 } from "../lib/bank";
@@ -59,6 +60,16 @@ import {
 } from "../lib/identityDocumentStorage";
 
 const router: IRouter = Router();
+
+function rejectExternalTransfer(res: Response, kind: "deposit" | "payout"): boolean {
+  res.status(410).json({
+    error:
+      kind === "deposit"
+        ? "External deposits are not available. Submit an internal ledger deposit request instead."
+        : "External payouts are not available. Submit a ledger withdrawal request instead.",
+  });
+  return true;
+}
 
 const requireSignedIn: RequestHandler = (req, res, next) => {
   if (!getAuth(req).userId) {
@@ -189,7 +200,7 @@ router.get("/bank/dashboard", async (req, res): Promise<void> => {
       wallets,
       recentTransactions,
       referenceCurrency: "USD",
-      simulationMode: true,
+      internalLedger: true,
     }),
   );
 });
@@ -733,8 +744,9 @@ router.post("/bank/transfers", async (req, res): Promise<void> => {
       .for("update");
 
     const available = await balanceForWallet(tx, senderWallet.id);
-    if (available < amountMinor) {
-    return { error: "There are not enough simulated funds available." };
+    const reserved = await reservedForWallet(tx, senderWallet.id);
+    if (available - reserved < amountMinor) {
+      return { error: "There is not enough available ledger balance." };
     }
 
     const [transaction] = await tx
@@ -753,8 +765,8 @@ router.post("/bank/transfers", async (req, res): Promise<void> => {
         amountMinor,
         feeMinor: 0n,
         counterparty: receiver.email,
-        description: parsed.data.description?.trim() || "Simulated member transfer",
-        mode: "simulation",
+        description: parsed.data.description?.trim() || "Internal member transfer",
+        mode: "internal_ledger",
       })
       .returning();
 
@@ -793,6 +805,7 @@ router.post("/bank/transfers", async (req, res): Promise<void> => {
 });
 
 router.post("/bank/external-transfers", async (req, res): Promise<void> => {
+  if (rejectExternalTransfer(res, "payout")) return;
   const authUserId = getAuth(req).userId;
   if (!authUserId) {
     res.status(401).json({ error: "Sign in to access your Globus account." });
@@ -890,7 +903,7 @@ router.post("/bank/external-transfers", async (req, res): Promise<void> => {
         feeMinor: 0n,
         counterparty: `${recipientName} · ${bankName} · ****${accountNumberLast4} · ${destinationCountry}`,
         description: parsed.data.description?.trim() || "Simulated external transfer",
-        mode: "simulation",
+        mode: "internal_ledger",
       })
       .returning();
 
@@ -928,6 +941,7 @@ router.post("/bank/external-transfers", async (req, res): Promise<void> => {
 });
 
 router.post("/bank/incoming-external-transfers", async (req, res): Promise<void> => {
+  if (rejectExternalTransfer(res, "deposit")) return;
   const authUserId = getAuth(req).userId;
   if (!authUserId) {
     res.status(401).json({ error: "Sign in to access your Globus account." });
@@ -1013,7 +1027,7 @@ router.post("/bank/incoming-external-transfers", async (req, res): Promise<void>
         feeMinor: 0n,
         counterparty: `${sourceName} · ${sourceCountry} (simulated source)`,
         description: parsed.data.description?.trim() || "Simulated incoming external transfer",
-        mode: "simulation",
+        mode: "internal_ledger",
       })
       .returning();
 
@@ -1050,14 +1064,14 @@ router.post("/bank/incoming-external-transfers", async (req, res): Promise<void>
   );
 });
 
-router.post("/bank/simulation-requests", async (req, res): Promise<void> => {
+router.post("/bank/ledger-requests", async (req, res): Promise<void> => {
   const authUserId = getAuth(req).userId;
   if (!authUserId) {
     res.status(401).json({ error: "Sign in to access your Globus account." });
     return;
   }
 
-  const parsed = CreateSimulationRequestBody.safeParse(req.body);
+  const parsed = CreateLedgerRequestBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
@@ -1071,17 +1085,6 @@ router.post("/bank/simulation-requests", async (req, res): Promise<void> => {
   }
   if (!user.acceptedTermsAt) {
     res.status(409).json({ error: "Complete account setup before continuing." });
-    return;
-  }
-
-  if (
-    parsed.data.type === "exchange" &&
-    (!parsed.data.destinationCurrency ||
-      parsed.data.destinationCurrency === parsed.data.currency)
-  ) {
-    res.status(400).json({
-      error: "Choose a different destination currency for the simulated quote.",
-    });
     return;
   }
 
@@ -1100,6 +1103,10 @@ router.post("/bank/simulation-requests", async (req, res): Promise<void> => {
     res.status(400).json({ error: "The amount must be greater than zero." });
     return;
   }
+  if (amountMinor > 100_000_000n) {
+    res.status(400).json({ error: "Requests cannot exceed 1,000,000.00." });
+    return;
+  }
 
   const existing = await db
     .select()
@@ -1108,21 +1115,31 @@ router.post("/bank/simulation-requests", async (req, res): Promise<void> => {
     .limit(1);
 
   if (existing[0]) {
-    if (existing[0].userId !== userId) {
+    if (
+      existing[0].userId !== userId ||
+      existing[0].type !== parsed.data.type ||
+      existing[0].currency !== parsed.data.currency ||
+      existing[0].amountMinor !== amountMinor
+    ) {
       res.status(409).json({ error: "That request reference is already in use." });
       return;
     }
+    const existingStatus =
+      existing[0].status === "approved" || existing[0].status === "rejected"
+        ? existing[0].status
+        : "pending_review";
     res.status(201).json(
-      CreateSimulationRequestResponse.parse({
+      CreateLedgerRequestResponse.parse({
         id: existing[0].id,
         reference: existing[0].reference,
         type: existing[0].type,
         currency: existing[0].currency,
-        destinationCurrency: existing[0].destinationCurrency,
         amount: formatMinorAmount(existing[0].amountMinor),
-        status: existing[0].status,
+        status: existingStatus,
         message:
-          "This simulated request is recorded only. No provider is connected and no funds move.",
+          existingStatus === "pending_review"
+            ? "Your request is waiting for an administrator to review it."
+            : `Your request was ${existingStatus}.`,
         createdAt: existing[0].createdAt.toISOString(),
       }),
     );
@@ -1148,10 +1165,26 @@ router.post("/bank/simulation-requests", async (req, res): Promise<void> => {
     }
 
     const reference = createReference();
-    const transactionType = `${parsed.data.type}_request` as
-      | "deposit_request"
-      | "withdrawal_request"
-      | "exchange_request";
+    const wallet = await userWallet(tx, userId, parsed.data.currency);
+    if (!wallet || wallet.status !== "active") {
+      return { error: "An active wallet for the selected currency is unavailable." };
+    }
+    await tx
+      .select({ id: bankWalletsTable.id })
+      .from(bankWalletsTable)
+      .where(eq(bankWalletsTable.id, wallet.id))
+      .for("update");
+    if (parsed.data.type === "withdrawal") {
+      const balance = await balanceForWallet(tx, wallet.id);
+      const reserved = await reservedForWallet(tx, wallet.id);
+      if (balance - reserved < amountMinor) {
+        return {
+          error: "The available ledger balance is not enough for this withdrawal request.",
+        };
+      }
+    }
+    const transactionType =
+      parsed.data.type === "deposit" ? "deposit_request" : "withdrawal_request";
     const [transaction] = await tx
       .insert(bankTransactionsTable)
       .values({
@@ -1159,13 +1192,18 @@ router.post("/bank/simulation-requests", async (req, res): Promise<void> => {
         idempotencyKey: parsed.data.idempotencyKey,
         initiatedByUserId: userId,
         fromUserId: userId,
+        fromWalletId:
+          parsed.data.type === "withdrawal" ? wallet.id : null,
+        toWalletId: parsed.data.type === "deposit" ? wallet.id : null,
         type: transactionType,
         status: "pending",
         currency: parsed.data.currency,
         amountMinor,
         counterparty: null,
-        description: `${parsed.data.type} request awaiting provider setup`,
-        mode: "simulation",
+        description:
+          parsed.data.description?.trim() ||
+          `${parsed.data.type === "deposit" ? "Deposit" : "Withdrawal"} request awaiting administrator review`,
+        mode: "internal_ledger",
       })
       .returning();
 
@@ -1178,8 +1216,9 @@ router.post("/bank/simulation-requests", async (req, res): Promise<void> => {
         idempotencyKey: parsed.data.idempotencyKey,
         type: parsed.data.type,
         currency: parsed.data.currency,
-        destinationCurrency: parsed.data.destinationCurrency ?? null,
+        destinationCurrency: null,
         amountMinor,
+        status: "pending_review",
       })
       .returning();
 
@@ -1192,16 +1231,17 @@ router.post("/bank/simulation-requests", async (req, res): Promise<void> => {
   }
 
   res.status(201).json(
-    CreateSimulationRequestResponse.parse({
+    CreateLedgerRequestResponse.parse({
       id: request.sandboxRequest.id,
       reference: request.sandboxRequest.reference,
       type: request.sandboxRequest.type,
       currency: request.sandboxRequest.currency,
-      destinationCurrency: request.sandboxRequest.destinationCurrency,
       amount: formatMinorAmount(request.sandboxRequest.amountMinor),
-      status: request.sandboxRequest.status,
+      status: "pending_review",
       message:
-        "This simulated request is recorded only. No provider is connected and no funds move.",
+        parsed.data.type === "deposit"
+          ? "Your request is waiting for admin approval. Approval posts an internal ledger credit; no outside funds are received."
+          : "Your available ledger balance is reserved while an administrator reviews this request. Approval posts a ledger debit; no outside payout is made.",
       createdAt: request.sandboxRequest.createdAt.toISOString(),
     }),
   );

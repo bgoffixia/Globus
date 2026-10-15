@@ -14,6 +14,7 @@ import {
   GetAdminSummaryResponse,
   GetAdminUserDetailParams,
   GetAdminUserDetailResponse,
+  ListAdminLedgerRequestsResponse,
   ListAdminLedgerQueryParams,
   ListAdminLedgerResponse,
   ListAdminIdentityDocumentsParams,
@@ -29,6 +30,9 @@ import {
   UpdateAdminTransactionStatusBody,
   UpdateAdminTransactionStatusParams,
   UpdateAdminTransactionStatusResponse,
+  ReviewAdminLedgerRequestBody,
+  ReviewAdminLedgerRequestParams,
+  ReviewAdminLedgerRequestResponse,
 } from "@workspace/api-zod";
 import {
   bankAuditLogsTable,
@@ -44,9 +48,11 @@ import {
   balanceForWallet,
   createReference,
   ensureBankUser,
+  formatMinorAmount,
   getWalletsForUser,
   listUserTransactions,
   parseAmountToMinor,
+  reservedForWallet,
   toBankTransaction,
   userWallet,
 } from "../lib/bank";
@@ -184,7 +190,15 @@ router.get("/bank/admin/summary", requireAdmin, async (_req, res): Promise<void>
       db
         .select({ value: count() })
         .from(bankSandboxRequestsTable)
-        .where(eq(bankSandboxRequestsTable.status, "pending_provider_setup")),
+        .where(
+          and(
+            inArray(bankSandboxRequestsTable.status, [
+              "pending_review",
+              "pending_provider_setup",
+            ]),
+            inArray(bankSandboxRequestsTable.type, ["deposit", "withdrawal"]),
+          ),
+        ),
       db
         .select({ value: count() })
         .from(bankTransactionsTable)
@@ -195,10 +209,8 @@ router.get("/bank/admin/summary", requireAdmin, async (_req, res): Promise<void>
     GetAdminSummaryResponse.parse({
       registeredUsers: userCount[0]?.value ?? 0,
       activeWallets: walletCount[0]?.value ?? 0,
-      pendingProviderRequests: requestCount[0]?.value ?? 0,
+      pendingLedgerRequests: requestCount[0]?.value ?? 0,
       ledgerTransactions: transactionCount[0]?.value ?? 0,
-      simulationMode: true,
-      providerStatus: "not_configured",
     }),
   );
 });
@@ -658,7 +670,11 @@ router.post(
       if (duplicate) {
         const sameRequest =
           duplicate.initiatedByUserId === actorUserId &&
-          duplicate.toUserId === params.data.userId &&
+          (parsed.data.direction === "credit"
+            ? duplicate.toUserId === params.data.userId &&
+              duplicate.fromUserId === null
+            : duplicate.fromUserId === params.data.userId &&
+              duplicate.toUserId === null) &&
           duplicate.type === "admin_funding" &&
           duplicate.currency === parsed.data.currency &&
           duplicate.amountMinor === amountMinor &&
@@ -678,7 +694,7 @@ router.post(
         return { notFound: true as const };
       }
       if (target.accountStatus !== "active") {
-        return { error: "Only active user accounts can receive simulated funding." };
+        return { error: "Only active user accounts can receive balance adjustments." };
       }
 
       const wallet = await userWallet(tx, target.id, parsed.data.currency);
@@ -690,6 +706,13 @@ router.post(
         .from(bankWalletsTable)
         .where(eq(bankWalletsTable.id, wallet.id))
         .for("update");
+      if (parsed.data.direction === "debit") {
+        const balance = await balanceForWallet(tx, wallet.id);
+        const reserved = await reservedForWallet(tx, wallet.id);
+        if (balance - reserved < amountMinor) {
+          return { error: "The adjustment exceeds the member's available ledger balance." };
+        }
+      }
 
       const [transaction] = await tx
         .insert(bankTransactionsTable)
@@ -697,8 +720,10 @@ router.post(
           reference: createReference(),
           idempotencyKey: parsed.data.idempotencyKey,
           initiatedByUserId: actorUserId,
-          toUserId: target.id,
-          toWalletId: wallet.id,
+          fromUserId: parsed.data.direction === "debit" ? target.id : null,
+          toUserId: parsed.data.direction === "credit" ? target.id : null,
+          fromWalletId: parsed.data.direction === "debit" ? wallet.id : null,
+          toWalletId: parsed.data.direction === "credit" ? wallet.id : null,
           type: "admin_funding",
           status: "completed",
           currency: parsed.data.currency,
@@ -706,16 +731,16 @@ router.post(
           feeMinor: 0n,
           counterparty: senderName,
           description,
-          mode: "simulation",
+          mode: "internal_ledger",
         })
         .returning();
 
       await tx.insert(bankLedgerEntriesTable).values([
         {
           transactionId: transaction.id,
-          accountCode: `simulation:admin-funding:${parsed.data.currency}`,
+          accountCode: `internal:balance-adjustment:${parsed.data.currency}`,
           currency: parsed.data.currency,
-          side: "debit",
+          side: parsed.data.direction === "credit" ? "debit" : "credit",
           amountMinor,
         },
         {
@@ -723,7 +748,7 @@ router.post(
           walletId: wallet.id,
           accountCode: `wallet:${wallet.id}`,
           currency: parsed.data.currency,
-          side: "credit",
+          side: parsed.data.direction === "credit" ? "credit" : "debit",
           amountMinor,
         },
       ]);
@@ -731,8 +756,8 @@ router.post(
       await tx.insert(bankAuditLogsTable).values({
         actorUserId,
         targetUserId: target.id,
-        action: "fund_user",
-        reason,
+        action: "adjust_user_balance",
+        reason: `${parsed.data.direction} ${formatMinorAmount(amountMinor)} ${parsed.data.currency}: ${reason}`,
       });
 
       return { transaction };
@@ -751,6 +776,258 @@ router.post(
       CreateAdminFundingResponse.parse(
         toBankTransaction(result.transaction, params.data.userId),
       ),
+    );
+  },
+);
+
+router.get(
+  "/bank/admin/ledger-requests",
+  requireAdmin,
+  async (_req, res): Promise<void> => {
+    const rows = await db
+      .select({
+        request: bankSandboxRequestsTable,
+        transaction: bankTransactionsTable,
+        user: bankUsersTable,
+      })
+      .from(bankSandboxRequestsTable)
+      .innerJoin(
+        bankTransactionsTable,
+        eq(bankSandboxRequestsTable.transactionId, bankTransactionsTable.id),
+      )
+      .innerJoin(
+        bankUsersTable,
+        eq(bankSandboxRequestsTable.userId, bankUsersTable.id),
+      )
+      .where(
+        and(
+          inArray(bankSandboxRequestsTable.status, [
+            "pending_review",
+            "pending_provider_setup",
+          ]),
+          inArray(bankSandboxRequestsTable.type, ["deposit", "withdrawal"]),
+        ),
+      )
+      .orderBy(desc(bankSandboxRequestsTable.createdAt))
+      .limit(100);
+
+    res.json(
+      ListAdminLedgerRequestsResponse.parse(
+        rows.map(({ request, transaction, user }) => ({
+          id: request.id,
+          transactionId: transaction.id,
+          reference: request.reference,
+          userId: user.id,
+          memberName:
+            [user.firstName, user.lastName].filter(Boolean).join(" ") ||
+            "Globus member",
+          email: user.email,
+          type: request.type,
+          currency: request.currency,
+          amount: formatMinorAmount(request.amountMinor),
+          description: transaction.description,
+          status:
+            request.status === "pending_provider_setup"
+              ? "pending_review"
+              : request.status,
+          createdAt: request.createdAt.toISOString(),
+        })),
+      ),
+    );
+  },
+);
+
+router.patch(
+  "/bank/admin/ledger-requests/:requestId",
+  requireAdmin,
+  async (req, res): Promise<void> => {
+    const params = ReviewAdminLedgerRequestParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const parsed = ReviewAdminLedgerRequestBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+    const authenticatedClerkId = getAuth(req).userId;
+    if (!authenticatedClerkId) {
+      res.status(401).json({ error: "Sign in to access operations." });
+      return;
+    }
+    const actorUserId = (await ensureBankUser(authenticatedClerkId)).id;
+    const reason = parsed.data.reason.trim();
+    if (reason.length < 5) {
+      res.status(400).json({ error: "Enter an audit reason of at least five characters." });
+      return;
+    }
+
+    const result = await db.transaction(async (tx) => {
+      const [request] = await tx
+        .select()
+        .from(bankSandboxRequestsTable)
+        .where(eq(bankSandboxRequestsTable.id, params.data.requestId))
+        .for("update");
+      if (!request) return { notFound: true as const };
+      if (request.type !== "deposit" && request.type !== "withdrawal") {
+        return { error: "Only deposit and withdrawal requests can be reviewed here." };
+      }
+      if (
+        request.status !== "pending_review" &&
+        request.status !== "pending_provider_setup"
+      ) {
+        return { error: "This request has already been reviewed." };
+      }
+
+      const [transaction] = await tx
+        .select()
+        .from(bankTransactionsTable)
+        .where(eq(bankTransactionsTable.id, request.transactionId))
+        .for("update");
+      if (!transaction) return { notFound: true as const };
+      const [target] = await tx
+        .select()
+        .from(bankUsersTable)
+        .where(eq(bankUsersTable.id, request.userId))
+        .for("update");
+      if (!target) return { notFound: true as const };
+      if (parsed.data.decision === "approve" && target.accountStatus !== "active") {
+        return { error: "Only active accounts can receive approved ledger requests." };
+      }
+
+      const savedWallet =
+        request.type === "deposit"
+          ? transaction.toWalletId
+          : transaction.fromWalletId;
+      const wallet = savedWallet
+        ? (
+            await tx
+              .select()
+              .from(bankWalletsTable)
+              .where(eq(bankWalletsTable.id, savedWallet))
+              .limit(1)
+          )[0]
+        : await userWallet(tx, target.id, request.currency);
+      if (!wallet || wallet.status !== "active") {
+        return { error: "An active wallet for this request is unavailable." };
+      }
+      await tx
+        .select({ id: bankWalletsTable.id })
+        .from(bankWalletsTable)
+        .where(eq(bankWalletsTable.id, wallet.id))
+        .for("update");
+
+      if (parsed.data.decision === "approve") {
+        if (request.type === "withdrawal") {
+          const balance = await balanceForWallet(tx, wallet.id);
+          const reserved = await reservedForWallet(tx, wallet.id);
+          if (balance < request.amountMinor || balance < reserved) {
+            return {
+              error:
+                "The reserved ledger balance is no longer available. Resolve other balance changes before approving.",
+            };
+          }
+        }
+
+        await tx.insert(bankLedgerEntriesTable).values(
+          request.type === "deposit"
+            ? [
+                {
+                  transactionId: transaction.id,
+                  accountCode: `internal:deposit:${request.currency}`,
+                  currency: request.currency,
+                  side: "debit",
+                  amountMinor: request.amountMinor,
+                },
+                {
+                  transactionId: transaction.id,
+                  walletId: wallet.id,
+                  accountCode: `wallet:${wallet.id}`,
+                  currency: request.currency,
+                  side: "credit",
+                  amountMinor: request.amountMinor,
+                },
+              ]
+            : [
+                {
+                  transactionId: transaction.id,
+                  walletId: wallet.id,
+                  accountCode: `wallet:${wallet.id}`,
+                  currency: request.currency,
+                  side: "debit",
+                  amountMinor: request.amountMinor,
+                },
+                {
+                  transactionId: transaction.id,
+                  accountCode: `internal:withdrawal:${request.currency}`,
+                  currency: request.currency,
+                  side: "credit",
+                  amountMinor: request.amountMinor,
+                },
+              ],
+        );
+      }
+
+      const requestStatus =
+        parsed.data.decision === "approve" ? "approved" : "rejected";
+      const [updatedRequest] = await tx
+        .update(bankSandboxRequestsTable)
+        .set({ status: requestStatus })
+        .where(eq(bankSandboxRequestsTable.id, request.id))
+        .returning();
+      const [updatedTransaction] = await tx
+        .update(bankTransactionsTable)
+        .set({
+          status: parsed.data.decision === "approve" ? "completed" : "failed",
+          fromWalletId:
+            request.type === "withdrawal" ? wallet.id : transaction.fromWalletId,
+          toWalletId:
+            request.type === "deposit" ? wallet.id : transaction.toWalletId,
+        })
+        .where(eq(bankTransactionsTable.id, transaction.id))
+        .returning();
+      await tx.insert(bankAuditLogsTable).values({
+        actorUserId,
+        targetUserId: target.id,
+        action:
+          parsed.data.decision === "approve"
+            ? "approve_ledger_request"
+            : "reject_ledger_request",
+        reason: `${request.type} ${request.reference}: ${parsed.data.decision}. ${reason}`,
+      });
+      return {
+        request: updatedRequest,
+        transaction: updatedTransaction,
+        user: target,
+      };
+    });
+
+    if ("notFound" in result) {
+      res.status(404).json({ error: "Ledger request not found." });
+      return;
+    }
+    if ("error" in result) {
+      res.status(409).json({ error: result.error });
+      return;
+    }
+    res.json(
+      ReviewAdminLedgerRequestResponse.parse({
+        id: result.request.id,
+        transactionId: result.transaction.id,
+        reference: result.request.reference,
+        userId: result.user.id,
+        memberName:
+          [result.user.firstName, result.user.lastName].filter(Boolean).join(" ") ||
+          "Globus member",
+        email: result.user.email,
+        type: result.request.type,
+        currency: result.request.currency,
+        amount: formatMinorAmount(result.request.amountMinor),
+        description: result.transaction.description,
+        status: result.request.status,
+        createdAt: result.request.createdAt.toISOString(),
+      }),
     );
   },
 );
@@ -820,6 +1097,26 @@ router.patch(
       if (!transaction) {
         return { notFound: true as const };
       }
+      if (
+        transaction.type === "deposit_request" ||
+        transaction.type === "withdrawal_request"
+      ) {
+        const [request] = await tx
+          .select()
+          .from(bankSandboxRequestsTable)
+          .where(eq(bankSandboxRequestsTable.transactionId, transaction.id))
+          .for("update");
+        if (
+          request &&
+          (request.status === "pending_review" ||
+            request.status === "pending_provider_setup")
+        ) {
+          return {
+            error:
+              "Pending deposits and withdrawals must be approved or rejected in the ledger request queue.",
+          };
+        }
+      }
       if (transaction.status === parsed.data.status) {
         return { transaction };
       }
@@ -851,6 +1148,10 @@ router.patch(
 
     if ("notFound" in result) {
       res.status(404).json({ error: "Transaction not found." });
+      return;
+    }
+    if ("error" in result) {
+      res.status(409).json({ error: result.error });
       return;
     }
     res.json(
@@ -931,10 +1232,12 @@ router.delete(
         }
       }
       for (const [walletId, amountMinor] of creditsToRemove) {
-        if ((await balanceForWallet(tx, walletId)) < amountMinor) {
+        const balance = await balanceForWallet(tx, walletId);
+        const reserved = await reservedForWallet(tx, walletId);
+        if (balance - amountMinor < reserved) {
           return {
             error:
-              "This transaction has already been spent from an affected wallet. Delete later activity first to avoid a negative simulated balance.",
+              "This transaction has already been spent or is reserved by a pending withdrawal. Resolve later activity or the withdrawal request before deleting it.",
           };
         }
       }

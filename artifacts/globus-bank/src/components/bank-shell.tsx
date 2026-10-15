@@ -29,9 +29,8 @@ const primaryLinks = [
 const moneyLinks = [
   { href: '/send', label: 'Send', icon: ArrowUpRight },
   { href: '/receive', label: 'Receive', icon: ArrowDownLeft },
-  { href: '/add-money', label: 'Add money', icon: CreditCard },
-  { href: '/withdraw', label: 'Withdraw', icon: ArrowDownLeft },
-  { href: '/exchange', label: 'Exchange', icon: ArrowLeftRight },
+  { href: '/add-money', label: 'Deposit request', icon: CreditCard },
+  { href: '/withdraw', label: 'Withdrawal request', icon: ArrowDownLeft },
 ];
 
 export function BankShell({ children }: { children: ReactNode }) {
@@ -59,9 +58,9 @@ export function BankShell({ children }: { children: ReactNode }) {
         <div className="mx-6 mb-5 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2.5">
           <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-[#8ed4dc]">
             <span className="h-1.5 w-1.5 rounded-full bg-[#7fc9d1]" />
-            Simulation workspace
+            Internal ledger
           </div>
-          <p className="mt-1 text-[11px] leading-4 text-slate-400">Simulated activity only · no live funds</p>
+          <p className="mt-1 text-[11px] leading-4 text-slate-400">Globus records only · no outside funds</p>
         </div>
         <nav className="flex-1 space-y-7 overflow-y-auto px-4 pb-5">
           <NavGroup title="Your account" links={primaryLinks} location={location} onNavigate={() => setMobileMenu(false)} />
@@ -112,7 +111,7 @@ export function BankShell({ children }: { children: ReactNode }) {
             <p className="text-[12px] font-medium text-[#738297]">Globus Bank <span className="px-1.5 text-[#c5ced7]">/</span> <span className="text-[#253850]">{pageLabel(location)}</span></p>
           </div>
           <div className="flex items-center gap-3">
-            <span className="hidden rounded-full border border-[#d6e8e9] bg-[#eff8f8] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-[#377d83] sm:inline-flex">Simulation mode</span>
+            <span className="hidden rounded-full border border-[#d6e8e9] bg-[#eff8f8] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-[#377d83] sm:inline-flex">Internal ledger</span>
             <div className="grid h-9 w-9 place-items-center overflow-hidden rounded-full border border-[#dbe3eb] bg-white text-xs font-bold text-[#27445e]">
               {user?.imageUrl ? <img src={user.imageUrl} alt="" className="h-full w-full object-cover" /> : initials}
             </div>
@@ -145,9 +144,8 @@ function pageLabel(path: string) {
     '/transactions': 'Activity',
     '/send': 'Send money',
     '/receive': 'Receive',
-    '/add-money': 'Add money',
-    '/withdraw': 'Withdraw',
-    '/exchange': 'Exchange',
+    '/add-money': 'Deposit request',
+    '/withdraw': 'Withdrawal request',
     '/settings': 'Settings',
     '/admin': 'Operations',
   };

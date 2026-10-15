@@ -5,13 +5,10 @@
  * Simulation-only Globus wallet API
  * OpenAPI spec version: 0.1.0
  */
-import type { AdminSummaryProviderStatus } from './adminSummaryProviderStatus';
 
 export interface AdminSummary {
   registeredUsers: number;
   activeWallets: number;
-  pendingProviderRequests: number;
+  pendingLedgerRequests: number;
   ledgerTransactions: number;
-  simulationMode: true;
-  providerStatus: AdminSummaryProviderStatus;
 }

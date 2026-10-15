@@ -83,7 +83,7 @@ app.use("/api", (req, res, next) => {
 });
 app.use("/api/bank/transfers", financialActionLimiter);
 app.use("/api/bank/external-transfers", financialActionLimiter);
-app.use("/api/bank/simulation-requests", financialActionLimiter);
+app.use("/api/bank/ledger-requests", financialActionLimiter);
 app.use("/api", router);
 
 export default app;

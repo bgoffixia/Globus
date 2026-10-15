@@ -6,14 +6,15 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CurrencyCode } from './currencyCode';
-import type { SimulationRequestInputType } from './simulationRequestInputType';
+import type { LedgerRequestInputType } from './ledgerRequestInputType';
 
-export interface SimulationRequestInput {
-  type: SimulationRequestInputType;
+export interface LedgerRequestInput {
+  type: LedgerRequestInputType;
   currency: CurrencyCode;
-  destinationCurrency?: CurrencyCode | null;
   /** @pattern ^[0-9]{1,12}(\.[0-9]{1,2})?$ */
   amount: string;
+  /** @maxLength 140 */
+  description?: string;
   /**
      * @minLength 16
      * @maxLength 100

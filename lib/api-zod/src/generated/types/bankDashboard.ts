@@ -15,5 +15,5 @@ export interface BankDashboard {
   wallets: Wallet[];
   recentTransactions: BankTransaction[];
   referenceCurrency: CurrencyCode;
-  simulationMode: true;
+  internalLedger: true;
 }

@@ -6,18 +6,16 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CurrencyCode } from './currencyCode';
-import type { SimulationRequestStatus } from './simulationRequestStatus';
-import type { SimulationRequestType } from './simulationRequestType';
+import type { LedgerRequestStatus } from './ledgerRequestStatus';
+import type { LedgerRequestType } from './ledgerRequestType';
 
-export interface SimulationRequest {
+export interface LedgerRequest {
   id: string;
   reference: string;
-  type: SimulationRequestType;
+  type: LedgerRequestType;
   currency: CurrencyCode;
-  /** @nullable */
-  destinationCurrency: string | null;
   amount: string;
-  status: SimulationRequestStatus;
+  status: LedgerRequestStatus;
   message: string;
   createdAt: Date;
 }

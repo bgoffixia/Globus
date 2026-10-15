@@ -23,6 +23,8 @@ import type {
   AdminAccess,
   AdminFundingInput,
   AdminIdentityVerificationInput,
+  AdminLedgerRequest,
+  AdminLedgerRequestReviewInput,
   AdminSummary,
   AdminTransactionDeleteInput,
   AdminTransactionDeleteResult,
@@ -36,6 +38,8 @@ import type {
   BankProfileInput,
   BankTransaction,
   ConflictResponse,
+  CreateExternalTransfer410,
+  CreateIncomingExternalTransfer410,
   ExternalTransferInput,
   ForbiddenResponse,
   HealthStatus,
@@ -44,12 +48,12 @@ import type {
   IdentityDocumentUploadUrl,
   IdentityVerificationSubmissionInput,
   IncomingExternalTransferInput,
+  LedgerRequest,
+  LedgerRequestInput,
   ListAdminLedgerParams,
   ListAdminUsersParams,
   ListBankTransactionsParams,
   NotFoundResponse,
-  SimulationRequest,
-  SimulationRequestInput,
   TransferInput,
   UnauthorizedResponse,
   Wallet
@@ -1061,9 +1065,10 @@ export const getCreateExternalTransferUrl = () => {
 }
 
 /**
- * @summary Simulate a transfer to an external recipient
+ * @deprecated
+ * @summary Disabled legacy external-transfer route
  */
-export const createExternalTransfer = async (externalTransferInput: ExternalTransferInput, options?: Parameters<typeof customFetch>[1]): Promise<BankTransaction> => {
+export const createExternalTransfer = async (externalTransferInput: ExternalTransferInput, options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -1079,7 +1084,7 @@ export const createExternalTransfer = async (externalTransferInput: ExternalTran
     }
     return headers;
   };
-return customFetch<BankTransaction>(getCreateExternalTransferUrl(),
+return customFetch<unknown>(getCreateExternalTransferUrl(),
   {
     ...options,
     method: 'POST',
@@ -1094,7 +1099,7 @@ return customFetch<BankTransaction>(getCreateExternalTransferUrl(),
 
 export const getCreateExternalTransferMutationKey = () => ['createExternalTransfer'] as const;
 
-export const getCreateExternalTransferMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ConflictResponse>,
+export const getCreateExternalTransferMutationOptions = <TError = ErrorType<CreateExternalTransfer410>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createExternalTransfer>>, TError,CreateExternalTransferMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof createExternalTransfer>>, TError,CreateExternalTransferMutationVariables, TContext> => {
 
@@ -1123,13 +1128,14 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type CreateExternalTransferMutationResult = NonNullable<Awaited<ReturnType<typeof createExternalTransfer>>>
     export type CreateExternalTransferMutationBody = BodyType<ExternalTransferInput>
-    export type CreateExternalTransferMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ConflictResponse>
+    export type CreateExternalTransferMutationError = ErrorType<CreateExternalTransfer410>
     export type CreateExternalTransferMutationVariables = {data: BodyType<ExternalTransferInput>}
 
     /**
- * @summary Simulate a transfer to an external recipient
+ * @deprecated
+ * @summary Disabled legacy external-transfer route
  */
-export const useCreateExternalTransfer = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ConflictResponse>,
+export const useCreateExternalTransfer = <TError = ErrorType<CreateExternalTransfer410>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createExternalTransfer>>, TError,CreateExternalTransferMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof createExternalTransfer>>,
@@ -1149,9 +1155,10 @@ export const getCreateIncomingExternalTransferUrl = () => {
 }
 
 /**
- * @summary Simulate an incoming transfer from an external source
+ * @deprecated
+ * @summary Disabled legacy incoming-transfer route
  */
-export const createIncomingExternalTransfer = async (incomingExternalTransferInput: IncomingExternalTransferInput, options?: Parameters<typeof customFetch>[1]): Promise<BankTransaction> => {
+export const createIncomingExternalTransfer = async (incomingExternalTransferInput: IncomingExternalTransferInput, options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -1167,7 +1174,7 @@ export const createIncomingExternalTransfer = async (incomingExternalTransferInp
     }
     return headers;
   };
-return customFetch<BankTransaction>(getCreateIncomingExternalTransferUrl(),
+return customFetch<unknown>(getCreateIncomingExternalTransferUrl(),
   {
     ...options,
     method: 'POST',
@@ -1182,7 +1189,7 @@ return customFetch<BankTransaction>(getCreateIncomingExternalTransferUrl(),
 
 export const getCreateIncomingExternalTransferMutationKey = () => ['createIncomingExternalTransfer'] as const;
 
-export const getCreateIncomingExternalTransferMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ConflictResponse>,
+export const getCreateIncomingExternalTransferMutationOptions = <TError = ErrorType<CreateIncomingExternalTransfer410>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createIncomingExternalTransfer>>, TError,CreateIncomingExternalTransferMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof createIncomingExternalTransfer>>, TError,CreateIncomingExternalTransferMutationVariables, TContext> => {
 
@@ -1211,13 +1218,14 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type CreateIncomingExternalTransferMutationResult = NonNullable<Awaited<ReturnType<typeof createIncomingExternalTransfer>>>
     export type CreateIncomingExternalTransferMutationBody = BodyType<IncomingExternalTransferInput>
-    export type CreateIncomingExternalTransferMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ConflictResponse>
+    export type CreateIncomingExternalTransferMutationError = ErrorType<CreateIncomingExternalTransfer410>
     export type CreateIncomingExternalTransferMutationVariables = {data: BodyType<IncomingExternalTransferInput>}
 
     /**
- * @summary Simulate an incoming transfer from an external source
+ * @deprecated
+ * @summary Disabled legacy incoming-transfer route
  */
-export const useCreateIncomingExternalTransfer = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ConflictResponse>,
+export const useCreateIncomingExternalTransfer = <TError = ErrorType<CreateIncomingExternalTransfer410>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createIncomingExternalTransfer>>, TError,CreateIncomingExternalTransferMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof createIncomingExternalTransfer>>,
@@ -1228,18 +1236,18 @@ export const useCreateIncomingExternalTransfer = <TError = ErrorType<BadRequestR
       return useMutation(getCreateIncomingExternalTransferMutationOptions(options));
     }
 
-export const getCreateSimulationRequestUrl = () => {
+export const getCreateLedgerRequestUrl = () => {
 
 
 
 
-  return `/api/bank/simulation-requests`
+  return `/api/bank/ledger-requests`
 }
 
 /**
- * @summary Record a simulated deposit, withdrawal, or exchange request
+ * @summary Request an internal ledger deposit or withdrawal
  */
-export const createSimulationRequest = async (simulationRequestInput: SimulationRequestInput, options?: Parameters<typeof customFetch>[1]): Promise<SimulationRequest> => {
+export const createLedgerRequest = async (ledgerRequestInput: LedgerRequestInput, options?: Parameters<typeof customFetch>[1]): Promise<LedgerRequest> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -1255,12 +1263,12 @@ export const createSimulationRequest = async (simulationRequestInput: Simulation
     }
     return headers;
   };
-return customFetch<SimulationRequest>(getCreateSimulationRequestUrl(),
+return customFetch<LedgerRequest>(getCreateLedgerRequestUrl(),
   {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(simulationRequestInput)
+    body: JSON.stringify(ledgerRequestInput)
   }
 );}
 
@@ -1268,13 +1276,13 @@ return customFetch<SimulationRequest>(getCreateSimulationRequestUrl(),
 
 
 
-export const getCreateSimulationRequestMutationKey = () => ['createSimulationRequest'] as const;
+export const getCreateLedgerRequestMutationKey = () => ['createLedgerRequest'] as const;
 
-export const getCreateSimulationRequestMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createSimulationRequest>>, TError,CreateSimulationRequestMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof createSimulationRequest>>, TError,CreateSimulationRequestMutationVariables, TContext> => {
+export const getCreateLedgerRequestMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createLedgerRequest>>, TError,CreateLedgerRequestMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createLedgerRequest>>, TError,CreateLedgerRequestMutationVariables, TContext> => {
 
-const mutationKey = getCreateSimulationRequestMutationKey();
+const mutationKey = getCreateLedgerRequestMutationKey();
 const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -1284,10 +1292,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createSimulationRequest>>, CreateSimulationRequestMutationVariables> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createLedgerRequest>>, CreateLedgerRequestMutationVariables> = (props) => {
           const {data} = props ?? {};
 
-          return  createSimulationRequest(data,requestOptions)
+          return  createLedgerRequest(data,requestOptions)
         }
 
 
@@ -1297,23 +1305,23 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type CreateSimulationRequestMutationResult = NonNullable<Awaited<ReturnType<typeof createSimulationRequest>>>
-    export type CreateSimulationRequestMutationBody = BodyType<SimulationRequestInput>
-    export type CreateSimulationRequestMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse>
-    export type CreateSimulationRequestMutationVariables = {data: BodyType<SimulationRequestInput>}
+    export type CreateLedgerRequestMutationResult = NonNullable<Awaited<ReturnType<typeof createLedgerRequest>>>
+    export type CreateLedgerRequestMutationBody = BodyType<LedgerRequestInput>
+    export type CreateLedgerRequestMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ConflictResponse>
+    export type CreateLedgerRequestMutationVariables = {data: BodyType<LedgerRequestInput>}
 
     /**
- * @summary Record a simulated deposit, withdrawal, or exchange request
+ * @summary Request an internal ledger deposit or withdrawal
  */
-export const useCreateSimulationRequest = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createSimulationRequest>>, TError,CreateSimulationRequestMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+export const useCreateLedgerRequest = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createLedgerRequest>>, TError,CreateLedgerRequestMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
-        Awaited<ReturnType<typeof createSimulationRequest>>,
+        Awaited<ReturnType<typeof createLedgerRequest>>,
         TError,
-        CreateSimulationRequestMutationVariables,
+        CreateLedgerRequestMutationVariables,
         TContext
       > => {
-      return useMutation(getCreateSimulationRequestMutationOptions(options));
+      return useMutation(getCreateLedgerRequestMutationOptions(options));
     }
 
 export const getGetAdminAccessUrl = () => {
@@ -1469,6 +1477,172 @@ export function useGetAdminSummary<TData = Awaited<ReturnType<typeof getAdminSum
 
 
 
+
+export const getListAdminLedgerRequestsUrl = () => {
+
+
+
+
+  return `/api/bank/admin/ledger-requests`
+}
+
+/**
+ * @summary List pending internal ledger deposit and withdrawal requests
+ */
+export const listAdminLedgerRequests = async ( options?: Parameters<typeof customFetch>[1]): Promise<AdminLedgerRequest[]> => {
+
+  return customFetch<AdminLedgerRequest[]>(getListAdminLedgerRequestsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminLedgerRequestsQueryKey = () => {
+    return [
+    `/api/bank/admin/ledger-requests`
+    ] as const;
+    }
+
+
+export const getListAdminLedgerRequestsQueryOptions = <TData = Awaited<ReturnType<typeof listAdminLedgerRequests>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminLedgerRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminLedgerRequestsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminLedgerRequests>>> = ({ signal }) => listAdminLedgerRequests({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminLedgerRequests>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminLedgerRequestsQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminLedgerRequests>>>
+export type ListAdminLedgerRequestsQueryError = ErrorType<UnauthorizedResponse | ForbiddenResponse>
+
+
+/**
+ * @summary List pending internal ledger deposit and withdrawal requests
+ */
+
+export function useListAdminLedgerRequests<TData = Awaited<ReturnType<typeof listAdminLedgerRequests>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminLedgerRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminLedgerRequestsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getReviewAdminLedgerRequestUrl = (requestId: string,) => {
+
+
+
+
+  return `/api/bank/admin/ledger-requests/${requestId}`
+}
+
+/**
+ * @summary Approve or reject an internal ledger request
+ */
+export const reviewAdminLedgerRequest = async (requestId: string,
+    adminLedgerRequestReviewInput: AdminLedgerRequestReviewInput, options?: Parameters<typeof customFetch>[1]): Promise<AdminLedgerRequest> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<AdminLedgerRequest>(getReviewAdminLedgerRequestUrl(requestId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(adminLedgerRequestReviewInput)
+  }
+);}
+
+
+
+
+
+export const getReviewAdminLedgerRequestMutationKey = () => ['reviewAdminLedgerRequest'] as const;
+
+export const getReviewAdminLedgerRequestMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewAdminLedgerRequest>>, TError,ReviewAdminLedgerRequestMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reviewAdminLedgerRequest>>, TError,ReviewAdminLedgerRequestMutationVariables, TContext> => {
+
+const mutationKey = getReviewAdminLedgerRequestMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reviewAdminLedgerRequest>>, ReviewAdminLedgerRequestMutationVariables> = (props) => {
+          const {requestId,data} = props ?? {};
+
+          return  reviewAdminLedgerRequest(requestId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReviewAdminLedgerRequestMutationResult = NonNullable<Awaited<ReturnType<typeof reviewAdminLedgerRequest>>>
+    export type ReviewAdminLedgerRequestMutationBody = BodyType<AdminLedgerRequestReviewInput>
+    export type ReviewAdminLedgerRequestMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>
+    export type ReviewAdminLedgerRequestMutationVariables = {requestId: string;data: BodyType<AdminLedgerRequestReviewInput>}
+
+    /**
+ * @summary Approve or reject an internal ledger request
+ */
+export const useReviewAdminLedgerRequest = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewAdminLedgerRequest>>, TError,ReviewAdminLedgerRequestMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reviewAdminLedgerRequest>>,
+        TError,
+        ReviewAdminLedgerRequestMutationVariables,
+        TContext
+      > => {
+      return useMutation(getReviewAdminLedgerRequestMutationOptions(options));
+    }
 
 export const getListAdminUsersUrl = (params?: ListAdminUsersParams,) => {
   const normalizedParams = new URLSearchParams();

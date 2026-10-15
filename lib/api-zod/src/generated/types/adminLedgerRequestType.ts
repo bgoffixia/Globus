@@ -6,11 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type SimulationRequestType = typeof SimulationRequestType[keyof typeof SimulationRequestType];
+export type AdminLedgerRequestType = typeof AdminLedgerRequestType[keyof typeof AdminLedgerRequestType];
 
 
-export const SimulationRequestType = {
+export const AdminLedgerRequestType = {
   deposit: 'deposit',
   withdrawal: 'withdrawal',
-  exchange: 'exchange',
 } as const;
