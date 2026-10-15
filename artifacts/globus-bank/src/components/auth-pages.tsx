@@ -251,7 +251,7 @@ export function EmailRecoverySignInForm() {
           <input id="gb-recovery-email" className="gb-input" type="email" autoComplete="email" maxLength={254} value={email} onChange={event => setEmail(event.target.value)} required />
           {error && <p role="alert" className="gb-auth-error">{error}</p>}
           <button className="gb-primary-button" type="submit" disabled={busy || !email.trim()}>
-            <span>{busy ? 'Requesting code…' : 'Send recovery code'}</span>
+            <span>{busy ? 'Sending reset code…' : 'Send password reset code'}</span>
             <span aria-hidden="true">→</span>
           </button>
         </form>
