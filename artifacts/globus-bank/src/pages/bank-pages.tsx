@@ -491,9 +491,9 @@ export function InternationalTransferPage() {
       <PageHeading
         eyebrow="International transfers"
         title="Create a transfer request"
-        subtitle="Review the destination details and internal currency conversion before submitting your request."
+        subtitle="Review the destination details and estimated conversion before submitting your request."
       />
-      <div className="mt-6 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="mt-6">
         <form onSubmit={submit} className="min-w-0 rounded-[22px] border border-[#e1e8ee] bg-white p-5 sm:p-8">
           <div className="grid gap-5 sm:grid-cols-2">
             <Field label="Destination country">
@@ -531,7 +531,7 @@ export function InternationalTransferPage() {
                   <p className="mt-1 text-[9px] text-[#8996a3]">{configuredRate ? `Rate updated ${formatDate(configuredRate.updatedAt)}` : 'Same-currency rate'}</p>
                 </>
               ) : (
-                <p className="mt-2 text-[10px] leading-5 text-[#9a7140]">No internal rate is configured for {sourceCurrency} → {destinationCurrency}. Contact Globus operations.</p>
+                <p className="mt-2 text-[10px] leading-5 text-[#9a7140]">Rate unavailable for {sourceCurrency} → {destinationCurrency}.</p>
               )}
             </div>
             <Field label="Remark (optional)">
@@ -543,18 +543,12 @@ export function InternationalTransferPage() {
           </div>
           {profile.data?.transactionPinConfigured === false && <p className="mt-4 rounded-lg border border-[#eadfbe] bg-[#fbf7eb] px-4 py-3 text-[10px] leading-5 text-[#806b3d]">Set up your transaction PIN in <Link href="/settings" className="font-bold underline">Settings</Link> before submitting a request.</p>}
           {error && <p data-testid="status-transfer-error" role="alert" className="mt-5 rounded-lg bg-[#fff1ef] px-4 py-3 text-[11px] text-[#a24940]">{error}</p>}
-          {success && <div data-testid="status-transfer-success" role="status" className="mt-5 rounded-xl border border-[#cfe5db] bg-[#f1f8f4] p-4 text-[11px] leading-5 text-[#417461]"><b>Request recorded — no funds were sent.</b><p className="mt-1">Reference {success.reference} · {success.sourceAmount} {success.sourceCurrency} → {success.destinationAmount} {success.destinationCurrency} · {humanize(success.status)}</p></div>}
+          {success && <div data-testid="status-transfer-success" role="status" className="mt-5 rounded-xl border border-[#cfe5db] bg-[#f1f8f4] p-4 text-[11px] leading-5 text-[#417461]"><b>Request recorded.</b><p className="mt-1">Reference {success.reference} · {success.sourceAmount} {success.sourceCurrency} → {success.destinationAmount} {success.destinationCurrency} · {humanize(success.status)}</p></div>}
           <button data-testid="button-submit-international-transfer" disabled={createRequest.isPending || !exchangeRate || transactionPin.length !== 6 || !amount || Number(amount) <= 0 || Number(amount) > available} className="mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#142f51] text-[12px] font-bold text-white transition hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">
             {createRequest.isPending ? 'Recording request…' : 'Submit transfer request'} <ArrowRight size={15} />
           </button>
         </form>
 
-        <aside className="rounded-[22px] bg-[#eaf0f4] p-6">
-          <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[#638092]">How the calculator works</p>
-          <h2 className="bank-display mt-3 text-[23px] font-semibold leading-tight text-[#213a55]">A stored Globus rate calculates the destination amount.</h2>
-          <p className="mt-3 text-[11px] leading-5 text-[#60748a]">The request saves the source amount, converted estimate, rate and timestamp for reference. The wallet balance is unchanged, and the request is not a bank instruction or proof of an outside payment.</p>
-          <Link href="/send" className="mt-5 inline-flex items-center gap-2 rounded-lg border border-white/80 bg-white px-3.5 py-2.5 text-[10px] font-bold text-[#385874] hover:bg-[#f7fafb]"><ArrowLeft size={14} /> Send to a Globus member</Link>
-        </aside>
       </div>
 
       <section className="mt-7 overflow-hidden rounded-[20px] border border-[#e1e8ee] bg-white">
@@ -566,7 +560,7 @@ export function InternationalTransferPage() {
               <span className="rounded-full bg-[#fbf7eb] px-3 py-1.5 text-[9px] font-bold capitalize text-[#806b3d]">{humanize(request.status)}</span>
             </li>)}
           </ul>
-        ) : <EmptyState title="No transfer requests yet" text="Submitted requests will appear here. They do not debit or reserve your wallet." />}
+        ) : <EmptyState title="No transfer requests yet" text="Submitted requests will appear here." />}
       </section>
     </>
   );
