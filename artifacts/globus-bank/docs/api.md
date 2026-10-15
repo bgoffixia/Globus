@@ -35,6 +35,6 @@ A transfer creates balanced debit and credit ledger entries. An external recipie
 | POST | `/bank/admin/users/{userId}/funding` | Add a simulated wallet credit with an audit reason |
 | GET | `/bank/admin/ledger` | Review completed ledger transactions |
 
-Admin APIs check `GLOBUS_ADMIN_CLERK_IDS` on the server. Funding is limited to 1,000,000.00 per entry, requires an active user wallet, and records both a balanced simulated ledger entry and an audit reason. Hiding an admin screen in the browser is not the authorization boundary.
+Admin APIs check `GLOBUS_ADMIN_CLERK_IDS` or `GLOBUS_ADMIN_EMAILS` on the server. Email allowlist entries are matched against the verified primary email returned by Clerk, not a client-supplied value. Funding is limited to 1,000,000.00 per entry, requires an active user wallet, and records both a balanced simulated ledger entry and an audit reason. Hiding an admin screen in the browser is not the authorization boundary.
 
 All supported money values use decimal strings at the API boundary and integer minor units in PostgreSQL. Financial mutations accept an idempotency key. API errors return `{ "error": "..." }`.

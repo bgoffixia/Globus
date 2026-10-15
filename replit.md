@@ -33,7 +33,7 @@ A simulation-only multi-currency wallet experience for exploring ledger-backed a
 - Clerk handles sign-in; the API creates a Globus profile and currency wallets on first account access.
 - Starting simulated value and transfers are fictional in every environment; the product labels them as simulations.
 - Deposits, withdrawals and exchanges create provider-setup requests only; they never change wallet balances.
-- Administrator API access is controlled by the server-side `GLOBUS_ADMIN_CLERK_IDS` allowlist.
+- Administrator API access is controlled by server-side Clerk ID and verified-primary-email allowlists (`GLOBUS_ADMIN_CLERK_IDS`, `GLOBUS_ADMIN_EMAILS`); client-supplied emails never grant access.
 - Money values are stored in integer minor units, and balances are derived from double-entry ledger entries.
 
 ## Product

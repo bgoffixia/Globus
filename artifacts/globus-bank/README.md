@@ -36,7 +36,7 @@ Simulated transfers are available in the published app and only alter fictional 
 
 ### Administrator access
 
-Set `GLOBUS_ADMIN_CLERK_IDS` in the API server environment to a comma-separated list of authorized Clerk user IDs. Leave it unset to keep the operations API unavailable. Do not grant access based on an email address supplied by the browser. The current build has one allowlisted administrator role; privileged MFA and additional roles still need to be configured and verified before production use.
+Set `GLOBUS_ADMIN_CLERK_IDS` and/or `GLOBUS_ADMIN_EMAILS` in the API server environment. Email entries are matched only against the signed-in Clerk user's verified primary email; never trust an email supplied by the browser. Leave both unset to keep the operations API unavailable. The current build has one allowlisted administrator role; privileged MFA and additional roles still need to be configured and verified before production use.
 
 See:
 

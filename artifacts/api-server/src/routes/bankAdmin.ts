@@ -1,6 +1,6 @@
 import { Router, type IRouter, type RequestHandler } from "express";
 import { pipeline } from "node:stream/promises";
-import { getAuth } from "@clerk/express";
+import { clerkClient, getAuth } from "@clerk/express";
 import { and, asc, count, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import {
   CreateAdminFundingBody,
@@ -78,6 +78,32 @@ function configuredAdminIds(): Set<string> {
   );
 }
 
+function configuredAdminEmails(): Set<string> {
+  return new Set(
+    (process.env.GLOBUS_ADMIN_EMAILS ?? "")
+      .split(",")
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean),
+  );
+}
+
+async function isAllowlistedAdmin(userId: string): Promise<boolean> {
+  if (configuredAdminIds().has(userId)) return true;
+
+  const allowedEmails = configuredAdminEmails();
+  if (allowedEmails.size === 0) return false;
+
+  const identity = await clerkClient.users.getUser(userId);
+  const primaryEmail = identity.emailAddresses.find(
+    (email) => email.id === identity.primaryEmailAddressId,
+  );
+
+  return Boolean(
+    primaryEmail?.verification?.status === "verified" &&
+      allowedEmails.has(primaryEmail.emailAddress.trim().toLowerCase()),
+  );
+}
+
 const requireSignedIn: RequestHandler = (req, res, next) => {
   if (!getAuth(req).userId) {
     res.status(401).json({ error: "Sign in to access your Globus account." });
@@ -86,13 +112,22 @@ const requireSignedIn: RequestHandler = (req, res, next) => {
   next();
 };
 
-const requireAdmin: RequestHandler = (req, res, next) => {
+const requireAdmin: RequestHandler = async (req, res, next) => {
   const userId = getAuth(req).userId;
   if (!userId) {
     res.status(401).json({ error: "Sign in to access your Globus account." });
     return;
   }
-  if (!configuredAdminIds().has(userId)) {
+  let allowed: boolean;
+  try {
+    allowed = await isAllowlistedAdmin(userId);
+  } catch {
+    res.status(503).json({
+      error: "Administrator access could not be verified right now.",
+    });
+    return;
+  }
+  if (!allowed) {
     res.status(403).json({ error: "Administrator access is not enabled for this account." });
     return;
   }
@@ -196,9 +231,19 @@ async function runIdentityReview(input: {
   });
 }
 
-router.get("/bank/admin/access", requireSignedIn, (req, res): void => {
+router.get("/bank/admin/access", requireSignedIn, async (req, res): Promise<void> => {
   const userId = getAuth(req).userId;
-  const allowed = userId ? configuredAdminIds().has(userId) : false;
+  let allowed = false;
+  if (userId) {
+    try {
+      allowed = await isAllowlistedAdmin(userId);
+    } catch {
+      res.status(503).json({
+        error: "Administrator access could not be verified right now.",
+      });
+      return;
+    }
+  }
   res.json(
     GetAdminAccessResponse.parse({
       allowed,

@@ -20,7 +20,7 @@
 - Verify webhook signatures, replay protections, idempotency, reconciliation, provider failures, refunds/reversals, limits and settlement states end-to-end in the provider's test environment.
 - Keep live provider credentials in Replit Secrets. Never expose them to browser code or logs.
 - Add verified recipient destinations, KYC document storage with access controls, KYC/AML/sanctions review, transaction monitoring and complaint/record-retention processes applicable to the markets served.
-- Configure and test MFA for privileged users. Limit admin IDs in `GLOBUS_ADMIN_CLERK_IDS`, split least-privilege roles, and review the append-only audit trail.
+- Configure and test MFA for privileged users. Limit administrators to explicit Clerk IDs or verified primary emails in `GLOBUS_ADMIN_CLERK_IDS` and `GLOBUS_ADMIN_EMAILS`, split least-privilege roles, and review the append-only audit trail.
 - Review CSRF/origin handling, rate limits across multiple API instances, session policy, encryption-at-rest posture, monitoring, alerts and incident response.
 - Test concurrency, insufficient funds, duplicate provider events, reversal accounting and per-currency reconciliation against the real provider.
 - Have security, privacy, accounting and regulatory professionals review the system and customer-facing policies.
