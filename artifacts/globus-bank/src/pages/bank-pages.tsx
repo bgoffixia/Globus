@@ -91,9 +91,8 @@ export function HomePage() {
   return (
     <div className="min-h-screen min-h-[100dvh] overflow-x-clip bg-[#f6f8fa] text-[#192e49]">
       <header className="relative z-10 mx-auto flex max-w-[1320px] items-center justify-between gap-2 px-4 pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-5 sm:gap-3 sm:px-6 sm:py-6 lg:px-12">
-        <Link href="/" className="bank-brand flex shrink-0 items-center gap-2 text-[19px] font-extrabold sm:gap-3 sm:text-[22px]">
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[13px] bg-[#132f52] text-[16px] text-[#d1b05f] sm:h-10 sm:w-10">G</span>
-          globus
+        <Link href="/" aria-label="Globus Bank home" className="flex shrink-0 items-center">
+          <img src={`${import.meta.env.BASE_URL}globus-wordmark.png`} alt="Globus Bank — Your world. Our priority." className="h-auto w-[108px] sm:w-[156px]" />
         </Link>
         <nav className="hidden items-center gap-8 text-[13px] font-medium text-[#607187] md:flex">
           <Link href="/about" className="hover:text-[#142d4d]">About</Link>
@@ -1403,7 +1402,7 @@ export function DisclosurePage({ path }: { path: string }) {
   const data = disclosureCopy[path] ?? disclosureCopy['/about'];
   return (
     <div className="min-h-[100dvh] bg-[#f5f8fa]">
-      <header className="mx-auto flex max-w-[1200px] items-center justify-between px-6 py-6"><Link href="/" className="bank-brand flex items-center gap-3 text-[21px] font-extrabold text-[#17304f]"><span className="grid h-9 w-9 place-items-center rounded-xl bg-[#142f51] text-[14px] text-[#d2b562]">G</span>globus</Link><Link href="/" className="text-[12px] font-semibold text-[#456077] hover:text-[#347e83]">Back to home</Link></header>
+      <header className="mx-auto flex max-w-[1200px] items-center justify-between gap-4 px-4 py-6 sm:px-6"><Link href="/" aria-label="Globus Bank home" className="flex shrink-0 items-center"><img src={`${import.meta.env.BASE_URL}globus-wordmark.png`} alt="Globus Bank — Your world. Our priority." className="h-auto w-[128px] sm:w-[156px]" /></Link><Link href="/" className="text-[12px] font-semibold text-[#456077] hover:text-[#347e83]">Back to home</Link></header>
       <main className="mx-auto max-w-[1020px] px-6 pb-20 pt-10 sm:pt-16">
         <p className="text-[10px] font-bold uppercase tracking-[.17em] text-[#4b8b90]">{data.eyebrow}</p>
         <h1 className="bank-display mt-4 max-w-[760px] text-[clamp(2.6rem,7vw,5.2rem)] font-semibold leading-[1.02] text-[#16304f]">{data.title}</h1>
@@ -1419,7 +1418,7 @@ export function DisclosurePage({ path }: { path: string }) {
 }
 
 function PageHeading({ eyebrow, title, subtitle }: { eyebrow: string; title: string; subtitle: string }) {
-  return <div><p className="text-[10px] font-bold uppercase tracking-[.17em] text-[#548d92]">{eyebrow}</p><h1 className="bank-display mt-2 text-[clamp(2rem,4vw,3rem)] font-semibold leading-[1.08] text-[#1a334f]">{title}</h1><p className="mt-2 max-w-[760px] text-[12px] leading-5 text-[#76879a]">{subtitle}</p></div>;
+  return <div className="min-w-0 max-w-full"><p className="text-[10px] font-bold uppercase tracking-[.17em] text-[#548d92]">{eyebrow}</p><h1 className="bank-display mt-2 max-w-full break-words text-[clamp(2rem,4vw,3rem)] font-semibold leading-[1.08] text-[#1a334f]">{title}</h1><p className="mt-2 max-w-[760px] break-words text-[12px] leading-5 text-[#76879a]">{subtitle}</p></div>;
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -1513,14 +1512,16 @@ function TransactionList({
     <div>{transactions.map(transaction => {
       const isIncoming = transaction.type === 'transfer_in' || transaction.type === 'external_transfer_in' || transaction.type === 'simulation_credit' || transaction.type === 'admin_funding';
       const canPrintReceipt = transaction.status === 'completed';
-      return <div key={transaction.id} className="flex items-center gap-3 border-b border-[#edf0f2] px-5 py-4 last:border-0 sm:gap-4 sm:px-7">
+      return <div key={transaction.id} className="flex flex-wrap items-center gap-x-2 gap-y-2 border-b border-[#edf0f2] px-4 py-4 last:border-0 sm:flex-nowrap sm:gap-4 sm:px-7">
         <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${isIncoming ? 'bg-[#edf7f3] text-[#4d8c72]' : 'bg-[#f0f4f7] text-[#658097]'}`}>{isIncoming ? <ArrowDownLeft size={16} /> : <ArrowUpRight size={16} />}</span>
         <div className="min-w-0 flex-1"><p className="truncate text-[11px] font-semibold text-[#334a63]">{transaction.description || transactionDisplayType(transaction)}</p><p className="mt-1 truncate text-[9px] text-[#8996a4]">{transaction.counterparty || 'Internal ledger'} · {formatDate(transaction.createdAt)} · Internal ledger</p></div>
         <div className="shrink-0 text-right"><p className={`text-[11px] font-bold ${isIncoming ? 'text-[#417f69]' : 'text-[#3c5269]'}`}>{isIncoming ? '+' : '−'}{formatMoney(Number(transaction.amount), transaction.currency)}</p><p className={`mt-1 text-[9px] capitalize ${transaction.status === 'completed' ? 'text-[#4f8c75]' : 'text-[#9b8050]'}`}>{humanize(transaction.status)}</p></div>
-        {canPrintReceipt && <button type="button" onClick={() => setReceipt(transaction)} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#dfe7eb] px-2.5 py-2 text-[9px] font-bold text-[#4a667e] hover:bg-[#f5f8f9]" aria-label={`View receipt ${transaction.reference}`}><FileText size={13} /><span className="hidden sm:inline">Receipt</span></button>}
-        {onStatusOverride && <button type="button" onClick={() => setHistoryTarget(transaction)} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#dfe7eb] px-2.5 py-2 text-[9px] font-bold text-[#4a667e] hover:bg-[#f5f8f9]" aria-label={`View status history for ${transaction.reference}`}><History size={13} /><span className="hidden sm:inline">History</span></button>}
-        {onStatusOverride && transaction.type !== 'deposit_request' && transaction.type !== 'withdrawal_request' && <button type="button" disabled={statusPending} onClick={() => onStatusOverride(transaction)} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#dfe7eb] px-2.5 py-2 text-[9px] font-bold text-[#4a667e] hover:bg-[#f5f8f9] disabled:cursor-not-allowed disabled:opacity-50" aria-label={`Override status for ${transaction.reference}`}><RefreshCw size={13} /><span className="hidden sm:inline">Status</span></button>}
-        {onDelete && <button type="button" disabled={deletePending} onClick={() => onDelete(transaction)} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#ead8d5] px-2.5 py-2 text-[9px] font-bold text-[#a24940] hover:bg-[#fff7f5] disabled:cursor-not-allowed disabled:opacity-50" aria-label={`Permanently delete transaction ${transaction.reference}`}><Trash2 size={13} /><span className="hidden sm:inline">Delete</span></button>}
+        {(canPrintReceipt || onStatusOverride || onDelete) && <div className="flex w-full flex-wrap justify-end gap-2 sm:ml-auto sm:w-auto sm:flex-nowrap">
+          {canPrintReceipt && <button type="button" onClick={() => setReceipt(transaction)} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#dfe7eb] px-2.5 py-2 text-[9px] font-bold text-[#4a667e] hover:bg-[#f5f8f9]" aria-label={`View receipt ${transaction.reference}`}><FileText size={13} /><span className="hidden sm:inline">Receipt</span></button>}
+          {onStatusOverride && <button type="button" onClick={() => setHistoryTarget(transaction)} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#dfe7eb] px-2.5 py-2 text-[9px] font-bold text-[#4a667e] hover:bg-[#f5f8f9]" aria-label={`View status history for ${transaction.reference}`}><History size={13} /><span className="hidden sm:inline">History</span></button>}
+          {onStatusOverride && transaction.type !== 'deposit_request' && transaction.type !== 'withdrawal_request' && <button type="button" disabled={statusPending} onClick={() => onStatusOverride(transaction)} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#dfe7eb] px-2.5 py-2 text-[9px] font-bold text-[#4a667e] hover:bg-[#f5f8f9] disabled:cursor-not-allowed disabled:opacity-50" aria-label={`Override status for ${transaction.reference}`}><RefreshCw size={13} /><span className="hidden sm:inline">Status</span></button>}
+          {onDelete && <button type="button" disabled={deletePending} onClick={() => onDelete(transaction)} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#ead8d5] px-2.5 py-2 text-[9px] font-bold text-[#a24940] hover:bg-[#fff7f5] disabled:cursor-not-allowed disabled:opacity-50" aria-label={`Permanently delete transaction ${transaction.reference}`}><Trash2 size={13} /><span className="hidden sm:inline">Delete</span></button>}
+        </div>}
       </div>;
     })}</div>
     {receipt && <ReceiptDialog transaction={receipt} onClose={() => setReceipt(null)} />}

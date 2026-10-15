@@ -46,10 +46,13 @@ export function BankShell({ children }: { children: ReactNode }) {
   return (
     <div className="app-shell">
       <aside className={`bank-sidebar fixed inset-y-0 left-0 z-40 flex w-[min(252px,84vw)] flex-col transition-transform duration-200 lg:translate-x-0 ${mobileMenu ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="flex h-[78px] items-center justify-between px-7">
-          <Link href="/dashboard" className="bank-brand flex items-center gap-3 text-[20px] font-extrabold text-white">
-            <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#c8a75c] text-[15px] font-extrabold text-[#102747]">G</span>
-            globus
+        <div className="flex h-[78px] items-center justify-between gap-2 px-4 sm:px-7">
+          <Link href="/dashboard" aria-label="Globus Bank dashboard" className="bank-brand flex min-w-0 items-center gap-2 text-white sm:gap-3">
+            <img src={`${import.meta.env.BASE_URL}globus-mark.png`} alt="" className="h-9 w-11 shrink-0 rounded-lg bg-white object-contain" />
+            <span className="flex min-w-0 flex-col leading-none">
+              <span className="text-[16px] font-extrabold tracking-tight">GLOBUS</span>
+              <span className="mt-1 text-[8px] font-bold tracking-[0.3em] text-[#d1b05f]">BANK</span>
+            </span>
           </Link>
           <button aria-label="Close navigation" onClick={() => setMobileMenu(false)} className="rounded-lg p-2 text-slate-300 lg:hidden">
             <X size={18} />

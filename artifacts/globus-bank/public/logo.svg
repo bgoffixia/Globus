@@ -1,5 +1,3 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 196 44" role="img" aria-label="Globus">
-  <rect x="0" y="2" width="40" height="40" rx="12" fill="#142f51"/>
-  <path d="M20 10.5a9.5 9.5 0 1 0 8.4 13.9h-8.1v-4.1h13.1v2.1A13.5 13.5 0 1 1 20 6.5c4.3 0 8.1 2 10.6 5.2l-3.2 2.7A9.4 9.4 0 0 0 20 10.5Z" fill="#d2b562"/>
-  <text x="51" y="31" font-family="Manrope, sans-serif" font-size="27" font-weight="800" letter-spacing="-1.7" fill="#17304f">globus</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 446" role="img" aria-label="Globus Bank — Your world. Our priority.">
+  <image href="globus-wordmark.png" width="1000" height="446" preserveAspectRatio="xMidYMid meet"/>
 </svg>

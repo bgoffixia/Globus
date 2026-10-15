@@ -57,7 +57,7 @@ const clerkAppearance = {
   options: {
     logoPlacement: 'inside' as const,
     logoLinkUrl: basePath || '/',
-    logoImageUrl: `${window.location.origin}${basePath}/logo.svg`,
+    logoImageUrl: `${window.location.origin}${basePath}/globus-wordmark.png`,
   },
   variables: {
     colorPrimary: '#173b62',
@@ -87,7 +87,7 @@ const clerkAppearance = {
     formFieldSuccessText: 'text-[#397a62]',
     alertText: 'text-[#a24940]',
     logoBox: 'mb-3',
-    logoImage: 'max-h-10',
+    logoImage: 'h-auto max-h-12 max-w-[180px]',
     socialButtonsBlockButton: 'border-[#dfe6ec] bg-white hover:bg-[#f6f9fa]',
     formButtonPrimary: 'bg-[#173b62] hover:bg-[#214c76] text-white',
     formFieldInput: 'border-[#dfe6ec] bg-[#fbfcfd] text-[#30465f]',
@@ -128,14 +128,10 @@ function ProtectedPage({ children }: { children: ReactNode }) {
 
 function SignInPage() {
   return (
-    <div className="quiet-grid flex min-h-[100dvh] items-center justify-center bg-[#f4f7fa] px-4 py-10">
+    <div className="quiet-grid flex min-h-screen min-h-[100dvh] items-center justify-center bg-[#f4f7fa] px-4 py-10 pt-[calc(env(safe-area-inset-top)+2.5rem)] pb-[calc(env(safe-area-inset-bottom)+2.5rem)]">
       <div className="w-full max-w-[480px]">
         <div className="mb-5 text-center">
-          <Link href="/" className="bank-brand inline-flex items-center gap-3 text-[22px] font-extrabold text-[#17304f]">
-            <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#142f51] text-[14px] text-[#d2b562]">G</span>
-            globus
-          </Link>
-          <p className="mt-3 text-[11px] text-[#748498]">Your multi-currency internal ledger</p>
+          <p className="text-[11px] font-medium text-[#748498]">Your multi-currency internal ledger</p>
         </div>
         <SignIn routing="path" path={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} />
       </div>
@@ -145,13 +141,9 @@ function SignInPage() {
 
 function SignUpPage() {
   return (
-    <div className="quiet-grid flex min-h-[100dvh] items-center justify-center bg-[#f4f7fa] px-4 py-10">
+    <div className="quiet-grid flex min-h-screen min-h-[100dvh] items-center justify-center bg-[#f4f7fa] px-4 py-10 pt-[calc(env(safe-area-inset-top)+2.5rem)] pb-[calc(env(safe-area-inset-bottom)+2.5rem)]">
       <div className="w-full max-w-[480px]">
         <div className="mb-5 text-center">
-          <Link href="/" className="bank-brand inline-flex items-center gap-3 text-[22px] font-extrabold text-[#17304f]">
-            <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#142f51] text-[14px] text-[#d2b562]">G</span>
-            globus
-          </Link>
           <p className="mt-3 text-[11px] text-[#748498]">A clearer place to explore global money tools</p>
         </div>
         <SignUp routing="path" path={`${basePath}/sign-up`} signInUrl={`${basePath}/sign-in`} />
