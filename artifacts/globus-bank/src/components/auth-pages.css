@@ -313,3 +313,56 @@
   .gb-form-heading h1 { font-size: 31px; }
   .gb-form-footer { font-size: 8px; }
 }
+
+/* Compact single-viewport layout */
+.gb-field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
+.gb-field { display: flex; flex-direction: column; min-width: 0; }
+.gb-field-wide { grid-column: 1 / -1; }
+.gb-field .gb-field-label { margin-bottom: 5px; }
+.gb-form-side { padding-top: 28px; padding-bottom: 28px; }
+.gb-step-label { margin-bottom: 6px; }
+.gb-form-heading { margin-bottom: 18px; }
+.gb-form-heading h1 { margin: 4px 0 4px; font-size: clamp(26px, 2.4vw, 32px); }
+.gb-form-heading p { line-height: 1.5; }
+.gb-field-label { margin-bottom: 6px; }
+.gb-input { height: 46px; font-size: 15px; }
+.gb-signup-form .gb-input { height: 42px; }
+.gb-signin-spaced-label { margin-top: 14px; }
+.gb-password-hint { margin-top: 5px; }
+.gb-terms-check { margin-top: 12px; line-height: 1.5; }
+.gb-primary-button { min-height: 48px; margin-top: 16px; }
+.gb-switch-copy { margin-top: 14px; }
+.gb-recovery-link { margin-top: 10px; }
+.gb-form-footer { margin-top: 20px; padding-top: 12px; }
+.gb-signup-content .gb-form-footer { margin-top: 14px; }
+.gb-brand-copy { margin-top: clamp(40px, 8vh, 110px); }
+.gb-brand-copy h2 { margin: 16px 0 14px; }
+@media (max-width: 760px) {
+  .gb-form-side { padding: max(14px, env(safe-area-inset-top)) 20px max(16px, env(safe-area-inset-bottom)); }
+  .gb-mobile-brand { margin: 0 auto 14px; }
+  .gb-mobile-brand img:first-child { width: 32px; height: 32px; }
+  .gb-mobile-brand img:last-child { width: min(112px, 40vw); }
+  .gb-form-heading { margin-bottom: 12px; }
+  .gb-form-heading h1 { font-size: 26px; }
+  .gb-form-heading p { font-size: 13px; }
+  .gb-input, .gb-signup-form .gb-input { height: 44px; font-size: 16px; }
+  .gb-customer-id-input { font-size: 16px; }
+  .gb-field-grid { gap: 8px 10px; }
+  .gb-signup-form .gb-field-label { font-size: 11.5px; margin-bottom: 4px; }
+  .gb-terms-check input { width: 20px; height: 20px; }
+  .gb-form-footer { display: none; }
+  .gb-signup-content { padding-bottom: 0; }
+}
+@media (max-width: 760px) and (max-height: 700px) {
+  .gb-step-label { display: none; }
+  .gb-form-heading p { display: none; }
+  .gb-mobile-brand { margin-bottom: 10px; }
+  .gb-signup-form .gb-input { height: 42px; }
+  .gb-primary-button { margin-top: 12px; }
+}
+@media (max-width: 390px) {
+  .gb-form-side { padding-right: 16px; padding-left: 16px; }
+  .gb-mobile-brand { margin-bottom: 12px; }
+  .gb-form-heading h1 { font-size: 24px; }
+}
+@media (max-width: 330px) { .gb-field-grid { grid-template-columns: 1fr; } }

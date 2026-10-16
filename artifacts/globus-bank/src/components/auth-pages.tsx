@@ -458,23 +458,32 @@ export function ClerkSignUpForm() {
             <p>Set up your secure Globus member access.</p>
           </div>
           <form className="gb-auth-form gb-signup-form" onSubmit={startSignUp}>
-            <label className="gb-field-label" htmlFor="gb-signup-name">Full name</label>
-            <input id="gb-signup-name" className="gb-input" type="text" autoComplete="name" maxLength={160} placeholder="Your full name" value={fullName} onChange={event => setFullName(event.target.value)} required />
-
-            <label className="gb-field-label gb-signup-spaced-label" htmlFor="gb-signup-phone">Phone number</label>
-            <input id="gb-signup-phone" className="gb-input" type="tel" autoComplete="tel" maxLength={32} placeholder="+1 (555) 000-0000" value={phone} onChange={event => setPhone(event.target.value)} required />
-
-            <label className="gb-field-label gb-signup-spaced-label" htmlFor="gb-signup-country">Country</label>
-            <input id="gb-signup-country" className="gb-input" type="text" autoComplete="country-name" maxLength={80} placeholder="Country or region" value={country} onChange={event => setCountry(event.target.value)} required />
-
-            <label className="gb-field-label gb-signup-spaced-label" htmlFor="gb-signup-dob">Date of birth</label>
-            <input id="gb-signup-dob" className="gb-input" type="date" autoComplete="bday" max={new Date().toISOString().slice(0, 10)} value={dateOfBirth} onChange={event => setDateOfBirth(event.target.value)} required />
-
-            <label className="gb-field-label gb-signup-spaced-label" htmlFor="gb-signup-email">Email address</label>
-            <input id="gb-signup-email" className="gb-input" type="email" autoComplete="email" maxLength={254} placeholder="name@example.com" value={email} onChange={event => setEmail(event.target.value)} required />
-
-            <label className="gb-field-label gb-signup-spaced-label" htmlFor="gb-signup-password">Password</label>
-            <input id="gb-signup-password" className="gb-input" type="password" autoComplete="new-password" minLength={8} value={password} onChange={event => setPassword(event.target.value)} required />
+            <div className="gb-field-grid">
+              <div className="gb-field gb-field-wide">
+                <label className="gb-field-label" htmlFor="gb-signup-name">Full name</label>
+                <input id="gb-signup-name" className="gb-input" type="text" autoComplete="name" maxLength={160} placeholder="Your full name" value={fullName} onChange={event => setFullName(event.target.value)} required />
+              </div>
+              <div className="gb-field gb-field-wide">
+                <label className="gb-field-label" htmlFor="gb-signup-phone">Phone number</label>
+                <input id="gb-signup-phone" className="gb-input" type="tel" autoComplete="tel" maxLength={32} placeholder="+1 (555) 000-0000" value={phone} onChange={event => setPhone(event.target.value)} required />
+              </div>
+              <div className="gb-field">
+                <label className="gb-field-label" htmlFor="gb-signup-country">Country</label>
+                <input id="gb-signup-country" className="gb-input" type="text" autoComplete="country-name" maxLength={80} placeholder="Country or region" value={country} onChange={event => setCountry(event.target.value)} required />
+              </div>
+              <div className="gb-field">
+                <label className="gb-field-label" htmlFor="gb-signup-dob">Date of birth</label>
+                <input id="gb-signup-dob" className="gb-input" type="date" autoComplete="bday" max={new Date().toISOString().slice(0, 10)} value={dateOfBirth} onChange={event => setDateOfBirth(event.target.value)} required />
+              </div>
+              <div className="gb-field gb-field-wide">
+                <label className="gb-field-label" htmlFor="gb-signup-email">Email address</label>
+                <input id="gb-signup-email" className="gb-input" type="email" autoComplete="email" maxLength={254} placeholder="name@example.com" value={email} onChange={event => setEmail(event.target.value)} required />
+              </div>
+              <div className="gb-field gb-field-wide">
+                <label className="gb-field-label" htmlFor="gb-signup-password">Password</label>
+                <input id="gb-signup-password" className="gb-input" type="password" autoComplete="new-password" minLength={8} value={password} onChange={event => setPassword(event.target.value)} required />
+              </div>
+            </div>
             <p className="gb-password-hint">Use at least 8 characters. Additional security rules are checked securely by Clerk.</p>
 
             <label className="gb-terms-check">
