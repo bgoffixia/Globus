@@ -129,6 +129,7 @@ export const TransactionStatus = {
   completed: 'completed',
   pending: 'pending',
   failed: 'failed',
+  rejected: 'rejected',
   reversed: 'reversed',
 } as const;
 
@@ -155,6 +156,19 @@ export interface InternationalTransferRequest {
   remark: string;
   createdAt: string;
 }
+
+export type BankRestrictionType = typeof BankRestrictionType[keyof typeof BankRestrictionType];
+
+
+export const BankRestrictionType = {
+  suspend_user: 'suspend_user',
+  restrict_outgoing_transfers: 'restrict_outgoing_transfers',
+  restrict_withdrawals: 'restrict_withdrawals',
+  restrict_deposits: 'restrict_deposits',
+  freeze_wallet: 'freeze_wallet',
+  under_review: 'under_review',
+  read_only: 'read_only',
+} as const;
 
 export type TransactionType = typeof TransactionType[keyof typeof TransactionType];
 
@@ -207,6 +221,7 @@ export type BankProfileAccountStatus = typeof BankProfileAccountStatus[keyof typ
 
 export const BankProfileAccountStatus = {
   active: 'active',
+  restricted: 'restricted',
   suspended: 'suspended',
 } as const;
 
@@ -774,6 +789,87 @@ export interface AdminFundingInput {
   transactionPin: string;
 }
 
+export type AdminRestrictionStatus = typeof AdminRestrictionStatus[keyof typeof AdminRestrictionStatus];
+
+
+export const AdminRestrictionStatus = {
+  active: 'active',
+  scheduled: 'scheduled',
+  expired: 'expired',
+  removed: 'removed',
+} as const;
+
+export interface AdminRestriction {
+  id: string;
+  userId: string;
+  /** @nullable */
+  customerId: string | null;
+  userName: string;
+  email: string;
+  /** @nullable */
+  walletId: string | null;
+  /** @nullable */
+  walletCurrency: CurrencyCode | null;
+  type: BankRestrictionType;
+  status: AdminRestrictionStatus;
+  reason: string;
+  effectiveAt: string;
+  /** @nullable */
+  expiresAt: string | null;
+  /** @nullable */
+  internalNotes: string | null;
+  createdByName: string;
+  createdByEmail: string;
+  createdAt: string;
+  /** @nullable */
+  removedAt: string | null;
+  /** @nullable */
+  removedByName: string | null;
+  /** @nullable */
+  removalReason: string | null;
+}
+
+export interface AdminRestrictionPage {
+  items: AdminRestriction[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface AdminRestrictionInput {
+  userId: string;
+  /** @nullable */
+  walletId?: string | null;
+  type: BankRestrictionType;
+  /**
+     * @minLength 5
+     * @maxLength 500
+     */
+  reason: string;
+  effectiveAt: string;
+  /** @nullable */
+  expiresAt?: string | null;
+  /**
+     * @maxLength 1000
+     * @nullable
+     */
+  internalNotes?: string | null;
+  /** @pattern ^[0-9]{6}$ */
+  transactionPin: string;
+  confirmed: true;
+}
+
+export interface AdminRestrictionRemoveInput {
+  /**
+     * @minLength 5
+     * @maxLength 500
+     */
+  reason: string;
+  /** @pattern ^[0-9]{6}$ */
+  transactionPin: string;
+  confirmed: true;
+}
+
 export interface AdminTransactionStatusUpdateInput {
   status: TransactionStatus;
   /**
@@ -783,6 +879,18 @@ export interface AdminTransactionStatusUpdateInput {
   reason: string;
   /** @pattern ^[0-9]{6}$ */
   transactionPin: string;
+  confirmed: true;
+}
+
+export interface AdminTransactionProcessInput {
+  /**
+     * @minLength 5
+     * @maxLength 500
+     */
+  reason: string;
+  /** @pattern ^[0-9]{6}$ */
+  transactionPin: string;
+  confirmed: true;
 }
 
 export interface AdminTransactionAffectedMember {
@@ -856,6 +964,7 @@ export interface AdminWalletStatusInput {
   notes?: string | null;
   /** @pattern ^[0-9]{6}$ */
   transactionPin: string;
+  confirmed: true;
 }
 
 export interface AdminAuditLogPage {
@@ -1073,6 +1182,34 @@ export type ListAdminAccountsStatus = typeof ListAdminAccountsStatus[keyof typeo
 export const ListAdminAccountsStatus = {
   active: 'active',
   restricted: 'restricted',
+} as const;
+
+export type ListAdminRestrictionsParams = {
+/**
+ * @maxLength 100
+ */
+search?: string;
+type?: BankRestrictionType;
+status?: ListAdminRestrictionsStatus;
+/**
+ * @minimum 1
+ */
+page?: number;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+pageSize?: number;
+};
+
+export type ListAdminRestrictionsStatus = typeof ListAdminRestrictionsStatus[keyof typeof ListAdminRestrictionsStatus];
+
+
+export const ListAdminRestrictionsStatus = {
+  active: 'active',
+  scheduled: 'scheduled',
+  expired: 'expired',
+  removed: 'removed',
 } as const;
 
 export type ListAdminAuditLogsParams = {

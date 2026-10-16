@@ -21,4 +21,5 @@ export interface AdminWalletStatusInput {
   notes?: string | null;
   /** @pattern ^[0-9]{6}$ */
   transactionPin: string;
+  confirmed: true;
 }

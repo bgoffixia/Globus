@@ -534,6 +534,68 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /bank/admin/restrictions:
+    get:
+      operationId: listAdminRestrictions
+      tags: [admin]
+      summary: Search and page through account and wallet restrictions
+      parameters:
+        - { name: search, in: query, required: false, schema: { type: string, maxLength: 100 } }
+        - { name: type, in: query, required: false, schema: { $ref: "#/components/schemas/BankRestrictionType" } }
+        - { name: status, in: query, required: false, schema: { type: string, enum: [active, scheduled, expired, removed] } }
+        - { name: page, in: query, required: false, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: pageSize, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100, default: 25 } }
+      responses:
+        "200":
+          description: Restrictions and their retained decision history
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminRestrictionPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      operationId: createAdminRestriction
+      tags: [admin]
+      summary: Create a confirmed and audited account or wallet restriction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminRestrictionInput" }
+      responses:
+        "201":
+          description: Created restriction
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminRestriction" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /bank/admin/restrictions/{restrictionId}/remove:
+    post:
+      operationId: removeAdminRestriction
+      tags: [admin]
+      summary: Remove one restriction while preserving all other active restrictions
+      parameters:
+        - { name: restrictionId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminRestrictionRemoveInput" }
+      responses:
+        "200":
+          description: Removed restriction with retained history
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminRestriction" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /bank/admin/audit-logs:
     get:
       operationId: listAdminAuditLogs
@@ -1059,6 +1121,29 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /bank/admin/transactions/{transactionId}/process:
+    post:
+      operationId: processAdminInternalTransfer
+      tags: [admin]
+      summary: Approve and post an eligible internal-routed transfer to the ledger
+      parameters:
+        - { name: transactionId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminTransactionProcessInput" }
+      responses:
+        "200":
+          description: Transaction posted to the internal ledger
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankTransaction" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /bank/admin/transactions/{transactionId}/funding-review:
     post:
       operationId: reviewAdminFunding
@@ -1192,7 +1277,10 @@ components:
       required: [id, reference, status, transferType, destinationCountry, recipientBank, routingCode, swiftBic, recipientAccountName, recipientAccountLast4, sourceCurrency, sourceAmount, destinationCurrency, destinationAmount, exchangeRate, rateUpdatedAt, remark, createdAt]
     TransactionStatus:
       type: string
-      enum: [completed, pending, failed, reversed]
+      enum: [completed, pending, failed, rejected, reversed]
+    BankRestrictionType:
+      type: string
+      enum: [suspend_user, restrict_outgoing_transfers, restrict_withdrawals, restrict_deposits, freeze_wallet, under_review, read_only]
     TransactionType:
       type: string
       enum: [simulation_credit, admin_funding, admin_debit, admin_adjustment, reversal, transfer_in, transfer_out, external_transfer, external_transfer_in, deposit_request, withdrawal_request, exchange_request]
@@ -1220,7 +1308,7 @@ components:
         transactionPinConfigured: { type: boolean }
         verificationStatus: { type: string, enum: [not_started, pending, approved, rejected, additional_information_required] }
         verificationNote: { type: ["string", "null"] }
-        accountStatus: { type: string, enum: [active, suspended] }
+        accountStatus: { type: string, enum: [active, restricted, suspended] }
         createdAt: { type: string, format: date-time }
       required: [id, email, customerId, firstName, lastName, phone, country, dateOfBirth, transactionPinConfigured, verificationStatus, verificationNote, accountStatus, createdAt]
     CustomerIdLookupInput:
@@ -1518,13 +1606,72 @@ components:
         idempotencyKey: { type: string, minLength: 16, maxLength: 100 }
         transactionPin: { type: string, pattern: "^[0-9]{6}$" }
       required: [direction, currency, amount, senderName, description, reason, idempotencyKey, transactionPin]
+    AdminRestriction:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        userId: { type: string }
+        customerId: { type: ["string", "null"] }
+        userName: { type: string }
+        email: { type: string, format: email }
+        walletId: { type: ["string", "null"], format: uuid }
+        walletCurrency: { type: ["string", "null"], $ref: "#/components/schemas/CurrencyCode" }
+        type: { $ref: "#/components/schemas/BankRestrictionType" }
+        status: { type: string, enum: [active, scheduled, expired, removed] }
+        reason: { type: string }
+        effectiveAt: { type: string, format: date-time }
+        expiresAt: { type: ["string", "null"], format: date-time }
+        internalNotes: { type: ["string", "null"] }
+        createdByName: { type: string }
+        createdByEmail: { type: string, format: email }
+        createdAt: { type: string, format: date-time }
+        removedAt: { type: ["string", "null"], format: date-time }
+        removedByName: { type: ["string", "null"] }
+        removalReason: { type: ["string", "null"] }
+      required: [id, userId, customerId, userName, email, walletId, walletCurrency, type, status, reason, effectiveAt, expiresAt, internalNotes, createdByName, createdByEmail, createdAt, removedAt, removedByName, removalReason]
+    AdminRestrictionPage:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/AdminRestriction" } }
+        total: { type: integer }
+        page: { type: integer }
+        pageSize: { type: integer }
+      required: [items, total, page, pageSize]
+    AdminRestrictionInput:
+      type: object
+      properties:
+        userId: { type: string }
+        walletId: { type: ["string", "null"], format: uuid }
+        type: { $ref: "#/components/schemas/BankRestrictionType" }
+        reason: { type: string, minLength: 5, maxLength: 500 }
+        effectiveAt: { type: string, format: date-time }
+        expiresAt: { type: ["string", "null"], format: date-time }
+        internalNotes: { type: ["string", "null"], maxLength: 1000 }
+        transactionPin: { type: string, pattern: "^[0-9]{6}$" }
+        confirmed: { type: boolean, const: true }
+      required: [userId, type, reason, effectiveAt, transactionPin, confirmed]
+    AdminRestrictionRemoveInput:
+      type: object
+      properties:
+        reason: { type: string, minLength: 5, maxLength: 500 }
+        transactionPin: { type: string, pattern: "^[0-9]{6}$" }
+        confirmed: { type: boolean, const: true }
+      required: [reason, transactionPin, confirmed]
     AdminTransactionStatusUpdateInput:
       type: object
       properties:
         status: { $ref: "#/components/schemas/TransactionStatus" }
         reason: { type: string, minLength: 5, maxLength: 500 }
         transactionPin: { type: string, pattern: "^[0-9]{6}$" }
-      required: [status, reason, transactionPin]
+        confirmed: { type: boolean, const: true }
+      required: [status, reason, transactionPin, confirmed]
+    AdminTransactionProcessInput:
+      type: object
+      properties:
+        reason: { type: string, minLength: 5, maxLength: 500 }
+        transactionPin: { type: string, pattern: "^[0-9]{6}$" }
+        confirmed: { type: boolean, const: true }
+      required: [reason, transactionPin, confirmed]
     AdminTransactionStatusChange:
       type: object
       properties:
@@ -1575,7 +1722,8 @@ components:
         reason: { type: string, minLength: 5, maxLength: 500 }
         notes: { type: ["string", "null"], maxLength: 500 }
         transactionPin: { type: string, pattern: "^[0-9]{6}$" }
-      required: [status, reason, transactionPin]
+        confirmed: { type: boolean, const: true }
+      required: [status, reason, transactionPin, confirmed]
     AdminAuditLog:
       type: object
       properties:

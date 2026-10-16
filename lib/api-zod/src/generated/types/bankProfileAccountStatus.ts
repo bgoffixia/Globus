@@ -11,5 +11,6 @@ export type BankProfileAccountStatus = typeof BankProfileAccountStatus[keyof typ
 
 export const BankProfileAccountStatus = {
   active: 'active',
+  restricted: 'restricted',
   suspended: 'suspended',
 } as const;

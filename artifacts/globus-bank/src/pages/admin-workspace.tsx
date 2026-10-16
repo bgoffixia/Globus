@@ -14,21 +14,25 @@ import {
   getGetAdminTransactionDetailQueryKey, getGetAdminUserDetailQueryKey,
   getListAdminAccountsQueryKey, getListAdminAuditLogsQueryKey,
   getListAdminIdentityDocumentsQueryKey, getListAdminLedgerRequestsQueryKey,
+  getListAdminRestrictionsQueryKey,
   getListAdminTransactionsQueryKey, getListAdminTransactionStatusHistoryQueryKey,
   getListAdminUsersQueryKey, getListBankExchangeRatesQueryKey,
-  useCreateAdminFunding, useCreateAdminTransactionCorrection, useGetAdminAccess, useGetBankProfile,
+  useCreateAdminFunding, useCreateAdminRestriction, useCreateAdminTransactionCorrection,
+  useGetAdminAccess, useGetBankProfile,
   useGetAdminSettings, useGetAdminSummary, useGetAdminTransactionDetail,
   useGetAdminUserDetail, useListAdminAccounts, useListAdminAuditLogs,
-  useListAdminIdentityDocuments, useListAdminLedgerRequests, useListAdminTransactions,
+  useListAdminIdentityDocuments, useListAdminLedgerRequests, useListAdminRestrictions,
+  useListAdminTransactions,
   useListAdminTransactionStatusHistory, useListAdminUsers, useListBankExchangeRates,
   useResetAdminUserTransactionPin, useReviewAdminFunding, useReviewAdminLedgerRequest,
+  useProcessAdminInternalTransfer, useRemoveAdminRestriction,
   useUpdateAdminSettings, useUpdateAdminTransactionStatus, useUpdateAdminUserProfile,
   useUpdateAdminUserStatus, useUpdateAdminUserVerification, useUpdateAdminWalletStatus,
   useUpsertBankExchangeRate,
 } from '@workspace/api-client-react';
 import type {
   ActiveCurrencyCode, AdminAccount, AdminAuditLog, AdminUser, BankTransaction, CurrencyCode,
-  ListAdminTransactionsParams, ListAdminUsersParams, TransactionType,
+  AdminRestriction, BankRestrictionType, ListAdminTransactionsParams, ListAdminUsersParams, TransactionType,
 } from '@workspace/api-client-react';
 
 const currencies: ActiveCurrencyCode[] = ['USD', 'EUR', 'GBP', 'CAD', 'AUD'];
@@ -54,6 +58,21 @@ function date(value?: string | null) { return value ? new Date(value).toLocaleDa
 function dateTime(value?: string | null) { return value ? new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '—'; }
 function money(value: string | number, currency: string) { try { return new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: 2 }).format(Number(value)); } catch { return `${currency} ${value}`; } }
 function human(value?: string | null) { return (value || 'unknown').replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase()); }
+function ledgerPostingState(entries: Array<{ currency: string; side: 'debit' | 'credit'; amount: string }>) {
+  if (!entries.length) return 'not_posted' as const;
+  const totals = new Map<string, { debit: bigint; credit: bigint }>();
+  for (const entry of entries) {
+    const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(entry.amount);
+    if (!match) return 'inconsistent' as const;
+    const amount = BigInt(match[1]) * 100n + BigInt((match[2] || '').padEnd(2, '0'));
+    const total = totals.get(entry.currency) || { debit: 0n, credit: 0n };
+    total[entry.side] += amount;
+    totals.set(entry.currency, total);
+  }
+  return [...totals.values()].every(total => total.debit > 0n && total.debit === total.credit)
+    ? 'posted' as const
+    : 'inconsistent' as const;
+}
 function nameOf(user: Pick<AdminUser, 'firstName' | 'lastName'> | { firstName?: string | null; lastName?: string | null }) { return [user.firstName, user.lastName].filter(Boolean).join(' ') || 'Globus member'; }
 function Field({ label, children, className = '' }: { label: string; children: ReactNode; className?: string }) { return <label className={`block ${className}`}><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[.11em] text-[#71848b]">{label}</span>{children}</label>; }
 function Panel({ title, eyebrow, note, children, action }: { title: string; eyebrow?: string; note?: string; children: ReactNode; action?: ReactNode }) {
@@ -88,7 +107,7 @@ export function AdminWorkspace() {
     {page === 'member-detail' && <MemberDetail userId={path.split('/')[3] || ''} />}
     {page === 'accounts' && <AccountsPage />}
     {page === 'wallets' && <AccountsPage controlsOnly />}
-    {page === 'restrictions' && <AccountsPage restrictedOnly />}
+    {page === 'restrictions' && <RestrictionsPage />}
     {page === 'transactions' && <TransactionsPage />}
     {page === 'funding' && <FundingPage />}
     {page === 'audit' && <AuditPage />}
@@ -220,13 +239,173 @@ function AccountsPage({ controlsOnly = false, restrictedOnly = false }: { contro
   const update = useUpdateAdminWalletStatus();
   const [target, setTarget] = useState<AdminAccount | null>(null); const [next, setNext] = useState<'active' | 'restricted'>('restricted'); const [reason, setReason] = useState(''); const [notes, setNotes] = useState(''); const [pin, setPin] = useState(''); const [error, setError] = useState('');
   const title = restrictedOnly ? 'Restricted accounts' : controlsOnly ? 'Wallet controls' : 'Currency accounts';
-  const save = async (e: FormEvent) => { e.preventDefault(); if (!target) return; setError(''); try { await update.mutateAsync({ walletId: target.id, data: { status: next, reason: reason.trim(), notes: notes.trim() || null, transactionPin: pin } }); await Promise.all([client.invalidateQueries({ queryKey: getListAdminAccountsQueryKey() }), client.invalidateQueries({ queryKey: getGetAdminSummaryQueryKey() })]); setTarget(null); } catch (err) { setError(err instanceof Error ? err.message : 'Wallet status could not be updated.'); } };
+  const save = async (e: FormEvent) => { e.preventDefault(); if (!target) return; setError(''); try { await update.mutateAsync({ walletId: target.id, data: { status: next, reason: reason.trim(), notes: notes.trim() || null, transactionPin: pin, confirmed: true } }); await Promise.all([client.invalidateQueries({ queryKey: getListAdminAccountsQueryKey() }), client.invalidateQueries({ queryKey: getGetAdminSummaryQueryKey() }), client.invalidateQueries({ queryKey: getListAdminRestrictionsQueryKey() })]); setTarget(null); } catch (err) { setError(err instanceof Error ? err.message : 'Wallet status could not be updated.'); } };
   return <><Heading kicker="Wallets are account records" title={title} subtitle="Each member has one wallet per currency. Wallets remain readable when restricted; incoming credits are permitted while sends and withdrawals are blocked." />
     <Panel title={controlsOnly ? 'Wallet restrictions' : 'Member currency wallets'} eyebrow={`${accounts.data?.total ?? 0} wallet records`}>
       <div className="flex flex-wrap gap-2 border-b border-[#e9efec] bg-[#f8f9f4] p-4"><label className="relative min-w-[210px] flex-1"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8a9a9b]" /><input className={`${input} pl-9`} placeholder="Member, email or Customer ID" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} /></label><select className={`${input} w-auto min-w-[130px]`} value={currency} onChange={e => { setCurrency(e.target.value); setPage(1); }}><option value="">All currencies</option>{currencies.map(c => <option key={c} value={c}>{c}</option>)}</select><select className={`${input} w-auto min-w-[135px]`} value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}><option value="">All wallet states</option><option value="active">Active</option><option value="restricted">Restricted</option></select></div>
       {accounts.isLoading ? <Skeleton /> : accounts.isError ? <InlineError text="Wallet records could not be loaded." retry={() => accounts.refetch()} /> : accounts.data?.items.length ? <><div className="overflow-x-auto"><table className="w-full min-w-[740px] text-left"><thead className="bg-[#f7f8f4] text-[9px] uppercase tracking-[.12em] text-[#829191]"><tr>{['Member', 'Customer ID', 'Currency', 'Ledger balance', 'Status', 'Restriction reason', ''].map(t => <th key={t} className="px-4 py-3">{t}</th>)}</tr></thead><tbody>{accounts.data.items.map(a => <tr key={a.id} className="border-t border-[#edf1ee] text-[10px]"><td className="px-4 py-3"><Link className="font-bold text-[#315b65] hover:underline" href={`/admin/users/${a.userId}`}>{a.memberName}</Link><p className="mt-1 text-[9px] text-[#829292]">{a.email}</p></td><td className="px-4 py-3 font-mono">{a.customerId || '—'}</td><td className="px-4 py-3"><span className="font-mono font-bold">{a.currency}</span><span className="ml-2 text-[9px] text-[#899799]">{currencyLabel[a.currency]}</span></td><td className="px-4 py-3 font-mono font-semibold">{money(a.balance, a.currency)}</td><td className="px-4 py-3"><StatusPill status={a.status} /></td><td className="max-w-[180px] truncate px-4 py-3 text-[#7e8e91]">{a.restrictionReason || '—'}</td><td className="px-4 py-3"><button className={quietButton} onClick={() => { setTarget(a); setNext(a.status === 'active' ? 'restricted' : 'active'); setReason(''); setNotes(''); setPin(''); setError(''); }}>{a.status === 'active' ? 'Restrict' : 'Unfreeze'}</button></td></tr>)}</tbody></table></div><Pager page={page} pages={Math.ceil(accounts.data.total / accounts.data.pageSize)} onChange={setPage} /></> : <Empty title="No wallets found" text="Adjust the filters to search the ledger's currency-wallet records." />}
     </Panel>
     {target && <Modal title={next === 'restricted' ? 'Freeze wallet' : 'Unfreeze wallet'} close={() => setTarget(null)}><p className="mb-4 rounded-lg bg-[#f4f7f2] p-3 text-[10px] leading-5 text-[#708487]">{target.memberName} · {target.currency} · {money(target.balance, target.currency)}. Frozen wallets remain readable and can receive credits, but cannot send or withdraw.</p><form onSubmit={save} className="space-y-3"><Field label="Reason"><textarea required minLength={5} maxLength={500} className={`${input} h-20 py-2`} value={reason} onChange={e => setReason(e.target.value)} /></Field><Field label="Administrative notes"><textarea maxLength={500} className={`${input} h-20 py-2`} value={notes} onChange={e => setNotes(e.target.value)} /></Field><Field label="Six-digit transaction PIN"><input required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} className={input} value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))} /></Field>{error && <p role="alert" className="text-[10px] text-[#a45247]">{error}</p>}<label className="flex items-start gap-2 rounded-lg bg-[#f6f7f1] p-3 text-[10px] text-[#718386]"><input type="checkbox" required className="mt-0.5 accent-[#438481]" />I confirm this wallet status change and understand it is recorded to the audit trail.</label><div className="flex justify-end gap-2"><button type="button" className={quietButton} onClick={() => setTarget(null)}>Cancel</button><button disabled={update.isPending || pin.length !== 6 || reason.trim().length < 5} className={button}>{update.isPending ? 'Saving…' : 'Confirm wallet change'}</button></div></form></Modal>}
+  </>;
+}
+
+const restrictionLabels: Record<BankRestrictionType, string> = {
+  suspend_user: 'Suspend customer',
+  restrict_outgoing_transfers: 'Restrict outgoing transfers',
+  restrict_withdrawals: 'Restrict withdrawals',
+  restrict_deposits: 'Restrict deposits',
+  freeze_wallet: 'Freeze wallet',
+  under_review: 'Account under review',
+  read_only: 'Read-only account',
+};
+
+function localDateTimeValue(dateValue: Date) {
+  return new Date(dateValue.getTime() - dateValue.getTimezoneOffset() * 60_000)
+    .toISOString()
+    .slice(0, 16);
+}
+
+function RestrictionsPage() {
+  const client = useQueryClient();
+  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState('');
+  const [filterType, setFilterType] = useState('');
+  const [page, setPage] = useState(1);
+  const params = useMemo(() => ({
+    ...(search.trim() ? { search: search.trim() } : {}),
+    ...(status ? { status: status as 'active' | 'scheduled' | 'expired' | 'removed' } : {}),
+    ...(filterType ? { type: filterType as BankRestrictionType } : {}),
+    page,
+    pageSize: 25,
+  }), [search, status, filterType, page]);
+  const restrictions = useListAdminRestrictions(params, {
+    query: { queryKey: getListAdminRestrictionsQueryKey(params) },
+  });
+
+  const [memberSearch, setMemberSearch] = useState('');
+  const [userId, setUserId] = useState('');
+  const memberParams: ListAdminUsersParams = useMemo(() => ({
+    ...(memberSearch.trim() ? { search: memberSearch.trim() } : {}),
+    page: 1,
+    limit: 20,
+  }), [memberSearch]);
+  const members = useListAdminUsers(memberParams, {
+    query: { queryKey: getListAdminUsersQueryKey(memberParams) },
+  });
+  const member = members.data?.items.find(user => user.id === userId);
+  const detail = useGetAdminUserDetail(userId, {
+    query: { queryKey: getGetAdminUserDetailQueryKey(userId), enabled: !!userId },
+  });
+
+  const [type, setType] = useState<BankRestrictionType>('suspend_user');
+  const [walletId, setWalletId] = useState('');
+  const [effectiveAt, setEffectiveAt] = useState(() => localDateTimeValue(new Date()));
+  const [expiresAt, setExpiresAt] = useState('');
+  const [reason, setReason] = useState('');
+  const [notes, setNotes] = useState('');
+  const [pin, setPin] = useState('');
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const create = useCreateAdminRestriction();
+  const remove = useRemoveAdminRestriction();
+  const [removeTarget, setRemoveTarget] = useState<AdminRestriction | null>(null);
+  const [removeReason, setRemoveReason] = useState('');
+  const [removePin, setRemovePin] = useState('');
+  const [removeError, setRemoveError] = useState('');
+
+  const refresh = async () => {
+    await Promise.all([
+      client.invalidateQueries({ queryKey: getListAdminRestrictionsQueryKey() }),
+      client.invalidateQueries({ queryKey: getListAdminAccountsQueryKey() }),
+      client.invalidateQueries({ queryKey: getListAdminUsersQueryKey() }),
+      client.invalidateQueries({ queryKey: getGetAdminSummaryQueryKey() }),
+      ...(userId ? [client.invalidateQueries({ queryKey: getGetAdminUserDetailQueryKey(userId) })] : []),
+    ]);
+  };
+  const createRestriction = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!member) return;
+    setError('');
+    setNotice('');
+    try {
+      await create.mutateAsync({
+        data: {
+          userId: member.id,
+          walletId: walletId || null,
+          type,
+          reason: reason.trim(),
+          effectiveAt: new Date(effectiveAt).toISOString(),
+          expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
+          internalNotes: notes.trim() || null,
+          transactionPin: pin,
+          confirmed: true,
+        },
+      });
+      setNotice(`Restriction recorded for ${nameOf(member)}.`);
+      setReason('');
+      setNotes('');
+      setPin('');
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'The restriction could not be recorded.');
+    }
+  };
+  const removeRestriction = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!removeTarget) return;
+    setRemoveError('');
+    try {
+      await remove.mutateAsync({
+        restrictionId: removeTarget.id,
+        data: { reason: removeReason.trim(), transactionPin: removePin, confirmed: true },
+      });
+      setRemoveTarget(null);
+      setRemoveReason('');
+      setRemovePin('');
+      await refresh();
+    } catch (err) {
+      setRemoveError(err instanceof Error ? err.message : 'The restriction could not be removed.');
+    }
+  };
+
+  return <>
+    <Heading kicker="Access and controls" title="Restrictions and suspension" subtitle="Apply time-bound or ongoing controls to a customer or one wallet. Each decision is audited; removing one record leaves every other restriction in place." />
+    {notice && <p role="status" className="mb-4 rounded-lg bg-[#eef7f0] p-3 text-[10px] text-[#47755e]">{notice}</p>}
+    {error && <p role="alert" className="mb-4 rounded-lg bg-[#fff2ed] p-3 text-[10px] text-[#a45247]">{error}</p>}
+    <Panel title="Create a restriction" eyebrow="Administrator confirmation" note="Restrictions are enforced by the server on financial requests and again before ledger posting. Frozen wallets may still receive credits.">
+      <form onSubmit={createRestriction} className="grid gap-3 p-5 sm:grid-cols-2 xl:grid-cols-3">
+        <Field label="Find customer"><input className={input} value={memberSearch} onChange={event => { setMemberSearch(event.target.value); setUserId(''); setWalletId(''); }} placeholder="Name, email or Customer ID" /></Field>
+        <Field label="Customer"><select required className={input} value={userId} onChange={event => { setUserId(event.target.value); setWalletId(''); }}><option value="">Select a customer</option>{members.data?.items.map(user => <option key={user.id} value={user.id}>{nameOf(user)} · {user.customerId || user.email}</option>)}</select></Field>
+        <Field label="Restriction"><select className={input} value={type} onChange={event => setType(event.target.value as BankRestrictionType)}>{Object.entries(restrictionLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field>
+        <Field label="Account or wallet"><select className={input} value={walletId} onChange={event => setWalletId(event.target.value)} disabled={!member || detail.isLoading}><option value="">{type === 'freeze_wallet' ? 'Select a wallet' : 'All wallets / account-wide'}</option>{detail.data?.wallets.map(wallet => <option key={wallet.id} value={wallet.id}>{wallet.currency} · {money(wallet.available, wallet.currency)} · {human(wallet.status)}</option>)}</select></Field>
+        <Field label="Effective date and time"><input required type="datetime-local" className={input} value={effectiveAt} onChange={event => setEffectiveAt(event.target.value)} /></Field>
+        <Field label="Expiry date and time (optional)"><input type="datetime-local" className={input} value={expiresAt} onChange={event => setExpiresAt(event.target.value)} /></Field>
+        <Field label="Reason" className="sm:col-span-2 xl:col-span-3"><textarea required minLength={5} maxLength={500} className={`${input} h-20 py-2`} value={reason} onChange={event => setReason(event.target.value)} /></Field>
+        <Field label="Internal notes (optional)" className="sm:col-span-2"><textarea maxLength={1000} className={`${input} h-16 py-2`} value={notes} onChange={event => setNotes(event.target.value)} /></Field>
+        <Field label="Administrator six-digit PIN"><input required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} className={input} value={pin} onChange={event => setPin(event.target.value.replace(/\D/g, '').slice(0, 6))} /></Field>
+        <label className="flex items-start gap-2 rounded-lg bg-[#f6f7f1] p-3 text-[10px] leading-5 text-[#718386] sm:col-span-2 xl:col-span-3"><input type="checkbox" required className="mt-1 accent-[#438481]" />I confirm this restriction and understand it will be enforced and permanently recorded in the administrative history.</label>
+        <button disabled={create.isPending || !member || pin.length !== 6 || reason.trim().length < 5 || (type === 'freeze_wallet' && !walletId)} className={`${button} sm:col-span-2 xl:col-span-3`}>{create.isPending ? 'Recording…' : 'Confirm restriction'}</button>
+      </form>
+    </Panel>
+    <Panel title="Restriction history" eyebrow={`${restrictions.data?.total ?? 0} records`}>
+      <div className="grid gap-2 border-b border-[#e9efec] bg-[#f8f9f4] p-4 sm:grid-cols-3">
+        <Field label="Search customer, reason or wallet"><input className={input} value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} placeholder="Name, email, ID or wallet" /></Field>
+        <Field label="Restriction type"><select className={input} value={filterType} onChange={event => { setFilterType(event.target.value); setPage(1); }}><option value="">All types</option>{Object.entries(restrictionLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field>
+        <Field label="Record state"><select className={input} value={status} onChange={event => { setStatus(event.target.value); setPage(1); }}><option value="">All states</option>{['active', 'scheduled', 'expired', 'removed'].map(value => <option key={value} value={value}>{human(value)}</option>)}</select></Field>
+      </div>
+      {restrictions.isLoading ? <Skeleton /> : restrictions.isError ? <InlineError text="Restriction records could not be loaded." retry={() => restrictions.refetch()} /> : restrictions.data?.items.length ? <>
+        <div className="overflow-x-auto"><table className="w-full min-w-[980px] text-left"><thead className="bg-[#f7f8f4] text-[9px] uppercase tracking-[.12em] text-[#829191]"><tr>{['Customer', 'Restriction / scope', 'Effective window', 'State', 'Reason / history', ''].map(label => <th key={label} className="px-4 py-3">{label}</th>)}</tr></thead><tbody>{restrictions.data.items.map(record => <tr key={record.id} className="border-t border-[#edf1ee] text-[10px] align-top"><td className="px-4 py-3"><Link href={`/admin/users/${record.userId}`} className="font-bold text-[#315c66] hover:underline">{record.userName}</Link><p className="mt-1 text-[9px] text-[#829292]">{record.email} · {record.customerId || 'No Customer ID'}</p></td><td className="px-4 py-3"><b>{restrictionLabels[record.type]}</b><p className="mt-1 font-mono text-[9px] text-[#829292]">{record.walletCurrency ? `${record.walletCurrency} wallet` : 'Account-wide'}</p></td><td className="px-4 py-3 whitespace-nowrap">{dateTime(record.effectiveAt)}<p className="mt-1 text-[#829292]">{record.expiresAt ? `Until ${dateTime(record.expiresAt)}` : 'No expiry'}</p></td><td className="px-4 py-3"><StatusPill status={record.status} /><p className="mt-1 text-[9px] text-[#829292]">By {record.createdByName}</p></td><td className="max-w-[300px] whitespace-pre-wrap px-4 py-3 text-[#61777c]">{record.reason}{record.internalNotes && <p className="mt-1 text-[9px] text-[#849394]">Notes: {record.internalNotes}</p>}{record.removalReason && <p className="mt-1 text-[9px] text-[#849394]">Removal: {record.removalReason}</p>}</td><td className="px-4 py-3">{record.status !== 'removed' && <button className={quietButton} onClick={() => { setRemoveTarget(record); setRemoveError(''); setRemoveReason(''); setRemovePin(''); }}>Remove</button>}</td></tr>)}</tbody></table></div>
+        <Pager page={page} pages={Math.ceil(restrictions.data.total / restrictions.data.pageSize)} onChange={setPage} />
+      </> : <Empty title="No restrictions found" text="No restriction records match the selected filters." />}
+    </Panel>
+    {removeTarget && <Modal title="Remove one restriction" close={() => setRemoveTarget(null)}><form onSubmit={removeRestriction} className="space-y-3">
+      <p className="rounded-lg bg-[#f5f7f1] p-3 text-[10px] leading-5 text-[#718386]">This removes only “{restrictionLabels[removeTarget.type]}” for {removeTarget.userName}. Other active restrictions remain enforced.</p>
+      <Field label="Removal reason"><textarea required minLength={5} maxLength={500} className={`${input} h-20 py-2`} value={removeReason} onChange={event => setRemoveReason(event.target.value)} /></Field>
+      <Field label="Administrator six-digit PIN"><input required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} className={input} value={removePin} onChange={event => setRemovePin(event.target.value.replace(/\D/g, '').slice(0, 6))} /></Field>
+      {removeError && <p role="alert" className="text-[10px] text-[#a45247]">{removeError}</p>}
+      <label className="flex items-start gap-2 rounded-lg bg-[#f6f7f1] p-3 text-[10px] leading-5 text-[#718386]"><input type="checkbox" required className="mt-1 accent-[#438481]" />I confirm removal of this restriction only.</label>
+      <div className="flex justify-end gap-2"><button type="button" className={quietButton} onClick={() => setRemoveTarget(null)}>Cancel</button><button disabled={remove.isPending || removePin.length !== 6 || removeReason.trim().length < 5} className={button}>{remove.isPending ? 'Saving…' : 'Confirm removal'}</button></div>
+    </form></Modal>}
   </>;
 }
 
@@ -293,13 +472,25 @@ function TransactionsPage() {
   const [search, setSearch] = useState(''); const [customer, setCustomer] = useState(''); const [currency, setCurrency] = useState(''); const [type, setType] = useState(''); const [status, setStatus] = useState(''); const [fromDate, setFromDate] = useState(''); const [toDate, setToDate] = useState(''); const [min, setMin] = useState(''); const [max, setMax] = useState(''); const [page, setPage] = useState(1);
   const params: ListAdminTransactionsParams = useMemo(() => ({ ...(search.trim() ? { search: search.trim() } : {}), ...(customer.trim() ? { customer: customer.trim() } : {}), ...(currency ? { currency: currency as CurrencyCode } : {}), ...(type ? { type: type as TransactionType } : {}), ...(status ? { status: status as ListAdminTransactionsParams['status'] } : {}), ...(fromDate ? { fromDate } : {}), ...(toDate ? { toDate } : {}), ...(min ? { minimumAmount: min } : {}), ...(max ? { maximumAmount: max } : {}), page, pageSize: 25 }), [search, customer, currency, type, status, fromDate, toDate, min, max, page]);
   const list = useListAdminTransactions(params, { query: { queryKey: getListAdminTransactionsQueryKey(params) } });
-  const [detailId, setDetailId] = useState(''); const [correction, setCorrection] = useState<'reversal' | 'adjustment' | null>(null); const [direction, setDirection] = useState<'credit' | 'debit'>('credit'); const [walletId, setWalletId] = useState(''); const [amount, setAmount] = useState(''); const [reason, setReason] = useState(''); const [pin, setPin] = useState(''); const [statusModal, setStatusModal] = useState(false); const [newStatus, setNewStatus] = useState(''); const [error, setError] = useState('');
+  const [detailId, setDetailId] = useState(''); const [correction, setCorrection] = useState<'reversal' | 'adjustment' | null>(null); const [direction, setDirection] = useState<'credit' | 'debit'>('credit'); const [walletId, setWalletId] = useState(''); const [amount, setAmount] = useState(''); const [reason, setReason] = useState(''); const [pin, setPin] = useState(''); const [statusModal, setStatusModal] = useState(false); const [newStatus, setNewStatus] = useState(''); const [processModal, setProcessModal] = useState(false); const [processReason, setProcessReason] = useState(''); const [processPin, setProcessPin] = useState(''); const [processError, setProcessError] = useState(''); const [error, setError] = useState('');
   const detail = useGetAdminTransactionDetail(detailId, { query: { queryKey: getGetAdminTransactionDetailQueryKey(detailId), enabled: !!detailId } });
   const history = useListAdminTransactionStatusHistory(detailId, { query: { queryKey: getListAdminTransactionStatusHistoryQueryKey(detailId), enabled: !!detailId } });
-  const makeCorrection = useCreateAdminTransactionCorrection(); const changeStatus = useUpdateAdminTransactionStatus();
-  const refresh = async () => { await Promise.all([client.invalidateQueries({ queryKey: getListAdminTransactionsQueryKey() }), client.invalidateQueries({ queryKey: getGetAdminSummaryQueryKey() }), client.invalidateQueries({ queryKey: getGetAdminTransactionDetailQueryKey(detailId) }), client.invalidateQueries({ queryKey: getListAdminAccountsQueryKey() })]); };
+  const makeCorrection = useCreateAdminTransactionCorrection(); const changeStatus = useUpdateAdminTransactionStatus(); const processInternal = useProcessAdminInternalTransfer();
+  const postingState = detail.data ? ledgerPostingState(detail.data.ledgerEntries) : 'not_posted';
+  const statusChoices: BankTransaction['status'][] = (() => {
+    const transaction = detail.data?.transaction;
+    if (!transaction || transaction.status === 'completed' || transaction.status === 'reversed') return [];
+    if (['deposit_request', 'withdrawal_request'].includes(transaction.type) && transaction.status === 'pending') return [];
+    if (postingState === 'posted') return ['completed'];
+    if (postingState === 'inconsistent') return [];
+    if (transaction.status === 'pending') return ['failed', 'rejected'];
+    if (transaction.status === 'failed') return ['pending'];
+    return [];
+  })();
+  const refresh = async () => { await Promise.all([client.invalidateQueries({ queryKey: getListAdminTransactionsQueryKey() }), client.invalidateQueries({ queryKey: getGetAdminSummaryQueryKey() }), client.invalidateQueries({ queryKey: getGetAdminTransactionDetailQueryKey(detailId) }), client.invalidateQueries({ queryKey: getListAdminAccountsQueryKey() }), client.invalidateQueries({ queryKey: getListAdminTransactionStatusHistoryQueryKey(detailId) })]); };
   const submitCorrection = async (e: FormEvent) => { e.preventDefault(); if (!detail.data || !correction) return; setError(''); try { await makeCorrection.mutateAsync({ transactionId: detailId, data: { kind: correction, ...(correction === 'adjustment' ? { walletId: walletId || null, direction, amount } : {}), reason: reason.trim(), idempotencyKey: crypto.randomUUID(), transactionPin: pin } }); await refresh(); setCorrection(null); setAmount(''); setReason(''); setPin(''); } catch (err) { setError(err instanceof Error ? err.message : 'The compensating entry could not be recorded.'); } };
-  const submitStatus = async (e: FormEvent) => { e.preventDefault(); if (!detail.data) return; setError(''); try { await changeStatus.mutateAsync({ transactionId: detailId, data: { status: newStatus as BankTransaction['status'], reason: reason.trim(), transactionPin: pin } }); await refresh(); setStatusModal(false); setReason(''); setPin(''); } catch (err) { setError(err instanceof Error ? err.message : 'Status change could not be recorded.'); } };
+  const submitStatus = async (e: FormEvent) => { e.preventDefault(); if (!detail.data) return; setError(''); try { await changeStatus.mutateAsync({ transactionId: detailId, data: { status: newStatus as BankTransaction['status'], reason: reason.trim(), transactionPin: pin, confirmed: true } }); await refresh(); setStatusModal(false); setReason(''); setPin(''); } catch (err) { setError(err instanceof Error ? err.message : 'Status change could not be recorded.'); } };
+  const submitProcess = async (e: FormEvent) => { e.preventDefault(); if (!detail.data) return; setProcessError(''); try { await processInternal.mutateAsync({ transactionId: detailId, data: { reason: processReason.trim(), transactionPin: processPin, confirmed: true } }); await refresh(); setProcessModal(false); setProcessReason(''); setProcessPin(''); } catch (err) { setProcessError(err instanceof Error ? err.message : 'The internal transfer could not be posted.'); } };
   const exportReport = () => {
     const rows = list.data?.items || [];
     const quote = (value: unknown) => `"${String(value ?? '').replaceAll('"', '""')}"`;
@@ -312,18 +503,19 @@ function TransactionsPage() {
       <div className="grid gap-3 border-b border-[#e9efec] bg-[#f8f9f4] p-4 sm:grid-cols-2 xl:grid-cols-4">
         <Field label="Search"><input className={input} value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} placeholder="Reference or description" /></Field><Field label="Customer"><input className={input} value={customer} onChange={e => { setCustomer(e.target.value); setPage(1); }} placeholder="Name, email or ID" /></Field>
         <Field label="Currency"><select className={input} value={currency} onChange={e => { setCurrency(e.target.value); setPage(1); }}><option value="">All currencies</option>{currencies.map(c => <option key={c} value={c}>{c}</option>)}</select></Field><Field label="Transaction type"><select className={input} value={type} onChange={e => { setType(e.target.value); setPage(1); }}><option value="">All types</option>{txTypes.map(t => <option key={t} value={t}>{human(t)}</option>)}</select></Field>
-        <Field label="Status"><select className={input} value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}><option value="">All statuses</option>{['pending', 'completed', 'failed', 'reversed'].map(s => <option key={s} value={s}>{human(s)}</option>)}</select></Field><Field label="From date"><input type="date" className={input} value={fromDate} onChange={e => { setFromDate(e.target.value); setPage(1); }} /></Field><Field label="To date"><input type="date" className={input} value={toDate} onChange={e => { setToDate(e.target.value); setPage(1); }} /></Field><div className="grid grid-cols-2 gap-2"><Field label="Minimum amount"><input className={input} inputMode="decimal" value={min} onChange={e => { setMin(e.target.value); setPage(1); }} placeholder="0.00" /></Field><Field label="Maximum amount"><input className={input} inputMode="decimal" value={max} onChange={e => { setMax(e.target.value); setPage(1); }} placeholder="0.00" /></Field></div>
+        <Field label="Status"><select className={input} value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}><option value="">All statuses</option>{['pending', 'completed', 'failed', 'rejected', 'reversed'].map(s => <option key={s} value={s}>{human(s)}</option>)}</select></Field><Field label="From date"><input type="date" className={input} value={fromDate} onChange={e => { setFromDate(e.target.value); setPage(1); }} /></Field><Field label="To date"><input type="date" className={input} value={toDate} onChange={e => { setToDate(e.target.value); setPage(1); }} /></Field><div className="grid grid-cols-2 gap-2"><Field label="Minimum amount"><input className={input} inputMode="decimal" value={min} onChange={e => { setMin(e.target.value); setPage(1); }} placeholder="0.00" /></Field><Field label="Maximum amount"><input className={input} inputMode="decimal" value={max} onChange={e => { setMax(e.target.value); setPage(1); }} placeholder="0.00" /></Field></div>
       </div>
       {list.isLoading ? <Skeleton /> : list.isError ? <InlineError text="Transactions could not be loaded." retry={() => list.refetch()} /> : list.data?.items.length ? <><div className="overflow-x-auto"><table className="w-full min-w-[780px] text-left"><thead className="bg-[#f7f8f4] text-[9px] uppercase tracking-[.12em] text-[#829191]"><tr>{['Reference / description', 'Customer', 'Type', 'Currency & amount', 'Status', 'Recorded', ''].map(x => <th key={x} className="px-4 py-3">{x}</th>)}</tr></thead><tbody>{list.data.items.map(t => <tr key={t.id} className="border-t border-[#edf1ee] text-[10px] hover:bg-[#f8faf7]"><td className="px-4 py-3"><button onClick={() => { setDetailId(t.id); setError(''); }} className="font-mono font-bold text-[#396e73] hover:underline">{t.reference}</button><p className="mt-1 max-w-[220px] truncate text-[9px] text-[#829292]">{t.description}</p></td><td className="px-4 py-3 text-[#536d74]">{t.counterparty || 'Internal ledger'}</td><td className="px-4 py-3">{human(t.type)}</td><td className="px-4 py-3 font-mono font-semibold">{money(t.amount, t.currency)}</td><td className="px-4 py-3"><StatusPill status={t.status} /></td><td className="px-4 py-3 whitespace-nowrap text-[#788c8d]">{dateTime(t.createdAt)}</td><td className="px-4 py-3"><button className={quietButton} onClick={() => { setDetailId(t.id); setError(''); }}>Inspect</button></td></tr>)}</tbody></table></div><Pager page={page} pages={Math.ceil(list.data.total / list.data.pageSize)} onChange={setPage} /></> : <Empty title="No transactions found" text="The selected criteria do not match any ledger records." />}
     </Panel>
     {detailId && <Modal title="Transaction record" close={() => { setDetailId(''); setCorrection(null); setStatusModal(false); }}><div className="space-y-4">{detail.isLoading ? <Skeleton rows={3} /> : detail.isError || !detail.data ? <InlineError text="Transaction details unavailable." retry={() => detail.refetch()} /> : <>
-      <div className="rounded-xl bg-[#f3f7f1] p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-mono text-[10px] text-[#718588]">{detail.data.transaction.reference}</p><p className="mt-1 text-[14px] font-bold">{detail.data.transaction.description || human(detail.data.transaction.type)}</p><p className="mt-1 text-[10px] text-[#768a8c]">{detail.data.customerName} · {detail.data.customerEmail}</p></div><div className="text-right"><b className="font-mono text-[16px]">{money(detail.data.transaction.amount, detail.data.transaction.currency)}</b><div className="mt-1"><StatusPill status={detail.data.transaction.status} /></div></div></div><p className="mt-3 text-[9px] text-[#7d8f90]">Initiated by {detail.data.initiatorName} · {detail.data.initiatorEmail} · {dateTime(detail.data.transaction.createdAt)}</p></div>
+      <div className="rounded-xl bg-[#f3f7f1] p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-mono text-[10px] text-[#718588]">{detail.data.transaction.reference}</p><p className="mt-1 text-[14px] font-bold">{detail.data.transaction.description || human(detail.data.transaction.type)}</p><p className="mt-1 text-[10px] text-[#768a8c]">{detail.data.customerName} · {detail.data.customerEmail}</p></div><div className="text-right"><b className="font-mono text-[16px]">{money(detail.data.transaction.amount, detail.data.transaction.currency)}</b></div></div><div className="mt-4 grid gap-2 sm:grid-cols-2"><div className="rounded-lg border border-[#e1e9e3] bg-white/70 p-3"><p className="text-[8px] font-bold uppercase tracking-[.12em] text-[#849394]">Internal processing status</p><div className="mt-1"><StatusPill status={detail.data.transaction.status} /></div></div><div className="rounded-lg border border-[#e1e9e3] bg-white/70 p-3"><p className="text-[8px] font-bold uppercase tracking-[.12em] text-[#849394]">Ledger posting status</p><div className="mt-1"><StatusPill status={postingState} /></div></div></div><p className="mt-3 text-[9px] text-[#7d8f90]">Initiated by {detail.data.initiatorName} · {detail.data.initiatorEmail} · {dateTime(detail.data.transaction.createdAt)}</p></div>
       <div><h3 className="mb-2 text-[10px] font-bold uppercase tracking-[.12em] text-[#718588]">Immutable ledger entries</h3>{detail.data.ledgerEntries.length ? <div className="overflow-x-auto rounded-xl border border-[#e4ebe7]"><table className="w-full min-w-[450px] text-left text-[9px]"><thead className="bg-[#f7f9f5] text-[#849394]"><tr>{['Entry', 'Account code', 'Wallet', 'Side', 'Amount', 'Time'].map(x => <th key={x} className="px-3 py-2">{x}</th>)}</tr></thead><tbody>{detail.data.ledgerEntries.map(entry => <tr key={entry.id} className="border-t border-[#edf0ed]"><td className="px-3 py-2 font-mono">{entry.id.slice(0, 9)}</td><td className="px-3 py-2">{entry.accountCode}</td><td className="px-3 py-2 font-mono">{entry.walletId?.slice(0, 9) || '—'}</td><td className="px-3 py-2">{human(entry.side)}</td><td className="px-3 py-2 font-mono">{money(entry.amount, entry.currency)}</td><td className="px-3 py-2">{dateTime(entry.createdAt)}</td></tr>)}</tbody></table></div> : <p className="text-[10px] text-[#809092]">No ledger entry details were returned.</p>}</div>
       {(detail.data.correctionOfTransactionId || detail.data.reversalOfTransactionId) && <p className="rounded-lg border border-[#dde8e2] p-3 text-[9px] leading-5 text-[#718588]">Correction relationship: {detail.data.reversalOfTransactionId ? `reversal of ${detail.data.reversalOfTransactionId}` : `adjustment of ${detail.data.correctionOfTransactionId}`} {detail.data.correctionReason ? `· ${detail.data.correctionReason}` : ''}</p>}
       <div><h3 className="mb-2 text-[10px] font-bold uppercase tracking-[.12em] text-[#718588]">Status history</h3>{history.isLoading ? <Skeleton rows={2} /> : history.isError ? <InlineError text="Status history unavailable." retry={() => history.refetch()} /> : history.data?.length ? <div className="max-h-32 space-y-2 overflow-auto">{history.data.map((h, i) => <div key={`${h.timestamp}-${i}`} className="rounded-lg border border-[#e6ece8] p-3"><p className="text-[10px] font-bold">{human(h.previousStatus)} <ArrowRight className="mx-1 inline" size={11} /> {human(h.newStatus)}</p><p className="mt-1 text-[9px] text-[#7d8e90]">{h.actorName} · {dateTime(h.timestamp)} · {h.reason}</p></div>)}</div> : <p className="text-[9px] text-[#849394]">No administrative status overrides recorded.</p>}</div>
-      {!correction && !statusModal && <div className="flex flex-wrap justify-end gap-2 border-t border-[#e9efec] pt-3"><button className={quietButton} onClick={() => { setCorrection('reversal'); setReason(''); setPin(''); }}>Create reversal</button><button className={quietButton} onClick={() => { setCorrection('adjustment'); setReason(''); setPin(''); }}>Record adjustment</button><button className={button} onClick={() => { setStatusModal(true); setNewStatus(detail.data!.transaction.status); setReason(''); setPin(''); }}>Override status</button></div>}
+       {!correction && !statusModal && !processModal && <div className="flex flex-wrap justify-end gap-2 border-t border-[#e9efec] pt-3"><button className={quietButton} onClick={() => { setCorrection('reversal'); setReason(''); setPin(''); }}>Create reversal</button><button className={quietButton} onClick={() => { setCorrection('adjustment'); setReason(''); setPin(''); }}>Record adjustment</button>{detail.data.transaction.type === 'external_transfer' && detail.data.transaction.status === 'pending' && postingState === 'not_posted' && <button className={quietButton} onClick={() => { setProcessModal(true); setProcessReason(''); setProcessPin(''); setProcessError(''); }}>Process internal transfer</button>}{statusChoices.length > 0 && <button className={button} onClick={() => { setStatusModal(true); setNewStatus(statusChoices[0]); setReason(''); setPin(''); }}>Correct status</button>}</div>}
       {correction && <form onSubmit={submitCorrection} className="space-y-3 rounded-xl border border-[#dde7e2] p-4"><h3 className="text-[11px] font-bold">{correction === 'reversal' ? 'Create compensating reversal' : 'Record compensating adjustment'}</h3><p className="text-[9px] leading-4 text-[#788b8d]">Original transaction and ledger entries remain unchanged. A new compensating entry will be created.</p>{correction === 'adjustment' && <><Field label="Wallet"><select required className={input} value={walletId} onChange={e => setWalletId(e.target.value)}><option value="">Select a wallet from original entries</option>{detail.data.ledgerEntries.filter(x => x.walletId).map(x => <option key={x.id} value={x.walletId!}>{x.currency} · {x.accountCode} · {x.walletId?.slice(0, 10)}</option>)}</select></Field><div className="grid grid-cols-2 gap-2"><Field label="Direction"><select className={input} value={direction} onChange={e => setDirection(e.target.value as 'credit' | 'debit')}><option value="credit">Credit</option><option value="debit">Debit</option></select></Field><Field label="Amount"><input required className={input} inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} /></Field></div></>}<Field label="Reason"><textarea required minLength={5} maxLength={500} className={`${input} h-20 py-2`} value={reason} onChange={e => setReason(e.target.value)} /></Field><Field label="Six-digit transaction PIN"><input required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} className={input} value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))} /></Field>{error && <p className="text-[10px] text-[#a45247]">{error}</p>}<div className="flex justify-end gap-2"><button type="button" className={quietButton} onClick={() => setCorrection(null)}>Cancel</button><button disabled={makeCorrection.isPending || pin.length !== 6 || reason.trim().length < 5 || (correction === 'adjustment' && (!walletId || !amount))} className={button}>Confirm compensating entry</button></div></form>}
-      {statusModal && <form onSubmit={submitStatus} className="space-y-3 rounded-xl border border-[#dde7e2] p-4"><h3 className="text-[11px] font-bold">Override recorded status</h3><p className="text-[9px] text-[#788b8d]">{detail.data.transaction.type === 'external_transfer' && newStatus === 'completed' ? 'Completing a pending routed transfer debits its source wallet and posts a matching internal clearing entry. No outside payment is represented.' : 'This changes the recorded status only; it does not alter balances or ledger entries.'}</p><Field label="New status"><select className={input} value={newStatus} onChange={e => setNewStatus(e.target.value)}>{['pending', 'completed', 'failed', 'reversed'].map(s => <option key={s} value={s}>{human(s)}</option>)}</select></Field><Field label="Audit reason"><textarea required minLength={5} className={`${input} h-20 py-2`} value={reason} onChange={e => setReason(e.target.value)} /></Field><Field label="Six-digit transaction PIN"><input required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} className={input} value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))} /></Field>{error && <p className="text-[10px] text-[#a45247]">{error}</p>}<div className="flex justify-end gap-2"><button type="button" className={quietButton} onClick={() => setStatusModal(false)}>Cancel</button><button disabled={changeStatus.isPending || pin.length !== 6 || reason.trim().length < 5 || newStatus === detail.data.transaction.status} className={button}>Save status</button></div></form>}
+       {statusModal && <form onSubmit={submitStatus} className="space-y-3 rounded-xl border border-[#dde7e2] p-4"><h3 className="text-[11px] font-bold">Correct internal processing status</h3><p className="text-[9px] leading-4 text-[#788b8d]">This changes the recorded status only. It never adds, removes, or edits ledger entries or wallet balances. A completed state requires balanced ledger entries already to exist; posted transactions must use a compensating reversal.</p><Field label="New status"><select className={input} value={newStatus} onChange={e => setNewStatus(e.target.value)}>{statusChoices.map(value => <option key={value} value={value}>{human(value)}</option>)}</select></Field><Field label="Audit reason"><textarea required minLength={5} maxLength={500} className={`${input} h-20 py-2`} value={reason} onChange={e => setReason(e.target.value)} /></Field><Field label="Six-digit transaction PIN"><input required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} className={input} value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))} /></Field><label className="flex items-start gap-2 rounded-lg bg-[#f6f7f1] p-3 text-[10px] leading-5 text-[#718386]"><input required type="checkbox" className="mt-1 accent-[#438481]" />I reviewed the ledger posting state and confirm this status correction.</label>{error && <p className="text-[10px] text-[#a45247]">{error}</p>}<div className="flex justify-end gap-2"><button type="button" className={quietButton} onClick={() => setStatusModal(false)}>Cancel</button><button disabled={changeStatus.isPending || pin.length !== 6 || reason.trim().length < 5 || newStatus === detail.data.transaction.status} className={button}>Confirm status correction</button></div></form>}
+       {processModal && <form onSubmit={submitProcess} className="space-y-3 rounded-xl border border-[#dde7e2] p-4"><h3 className="text-[11px] font-bold">Process pending transfer</h3><p className="text-[9px] leading-4 text-[#788b8d]">This action checks current restrictions and available balance, then posts a balanced debit and internal clearing credit. It records only an internal ledger movement.</p><Field label="Processing reason"><textarea required minLength={5} maxLength={500} className={`${input} h-20 py-2`} value={processReason} onChange={e => setProcessReason(e.target.value)} /></Field><Field label="Six-digit transaction PIN"><input required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} className={input} value={processPin} onChange={e => setProcessPin(e.target.value.replace(/\D/g, '').slice(0, 6))} /></Field><label className="flex items-start gap-2 rounded-lg bg-[#f6f7f1] p-3 text-[10px] leading-5 text-[#718386]"><input required type="checkbox" className="mt-1 accent-[#438481]" />I confirm processing this pending ledger transfer.</label>{processError && <p role="alert" className="text-[10px] text-[#a45247]">{processError}</p>}<div className="flex justify-end gap-2"><button type="button" className={quietButton} onClick={() => setProcessModal(false)}>Cancel</button><button disabled={processInternal.isPending || processPin.length !== 6 || processReason.trim().length < 5} className={button}>{processInternal.isPending ? 'Processing…' : 'Confirm & post ledger entries'}</button></div></form>}
     </>}</div></Modal>}
   </>;
 }

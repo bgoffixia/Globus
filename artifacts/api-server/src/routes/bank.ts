@@ -48,10 +48,12 @@ import {
 } from "@workspace/db";
 import {
   balanceForWallet,
+  bankOperationRestrictionError,
   convertMinorAmount,
   createReference,
   ensureBankUser,
   formatMinorAmount,
+  getEffectiveBankAccountStatus,
   getRecentTransactions,
   getWalletsForUser,
   listUserTransactions,
@@ -249,6 +251,10 @@ router.get("/bank/me", async (req, res): Promise<void> => {
   }
 
   const user = await getOrCreateBankUser(userId);
+  const accountStatus = await getEffectiveBankAccountStatus(
+    user.id,
+    user.accountStatus as "active" | "restricted" | "suspended",
+  );
   res.json(
     GetBankProfileResponse.parse({
       id: user.id,
@@ -262,7 +268,7 @@ router.get("/bank/me", async (req, res): Promise<void> => {
       transactionPinConfigured: !!user.transactionPinHash,
       verificationStatus: user.verificationStatus,
       verificationNote: user.verificationNote,
-      accountStatus: user.accountStatus,
+      accountStatus,
       createdAt: user.createdAt.toISOString(),
     }),
   );
@@ -276,9 +282,13 @@ router.get("/bank/dashboard", async (req, res): Promise<void> => {
   }
 
   const profile = await getOrCreateBankUser(authUserId);
-  const [wallets, recentTransactions] = await Promise.all([
+  const [wallets, recentTransactions, accountStatus] = await Promise.all([
     getWalletsForUser(profile.id),
     getRecentTransactions(profile.id),
+    getEffectiveBankAccountStatus(
+      profile.id,
+      profile.accountStatus as "active" | "restricted" | "suspended",
+    ),
   ]);
 
   res.json(
@@ -295,7 +305,7 @@ router.get("/bank/dashboard", async (req, res): Promise<void> => {
         transactionPinConfigured: !!profile.transactionPinHash,
         verificationStatus: profile.verificationStatus,
         verificationNote: profile.verificationNote,
-        accountStatus: profile.accountStatus,
+        accountStatus,
         createdAt: profile.createdAt.toISOString(),
       },
       wallets,
@@ -984,6 +994,12 @@ router.post("/bank/international-transfer-requests", async (req, res): Promise<v
     if (!wallet || wallet.status !== "active") {
       return { error: "An active wallet for the selected source currency is unavailable." };
     }
+    const restrictionError = await bankOperationRestrictionError(tx, {
+      userId: sender.id,
+      walletId: wallet.id,
+      operation: "outgoing_transfer",
+    });
+    if (restrictionError) return { error: restrictionError };
     await tx
       .select({ id: bankWalletsTable.id })
       .from(bankWalletsTable)
@@ -1449,6 +1465,12 @@ router.post("/bank/ledger-requests", async (req, res): Promise<void> => {
             : "A wallet for the selected currency is unavailable.",
       };
     }
+    const restrictionError = await bankOperationRestrictionError(tx, {
+      userId,
+      walletId: wallet.id,
+      operation: parsed.data.type,
+    });
+    if (restrictionError) return { error: restrictionError };
     await tx
       .select({ id: bankWalletsTable.id })
       .from(bankWalletsTable)

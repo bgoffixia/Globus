@@ -16,4 +16,5 @@ export interface AdminTransactionStatusUpdateInput {
   reason: string;
   /** @pattern ^[0-9]{6}$ */
   transactionPin: string;
+  confirmed: true;
 }

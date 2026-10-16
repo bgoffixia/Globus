@@ -1,15 +1,109 @@
 import { randomInt, randomUUID } from "node:crypto";
 import { clerkClient } from "@clerk/express";
-import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import {
   bankCurrencyEnum,
   bankLedgerEntriesTable,
+  bankRestrictionsTable,
   bankSandboxRequestsTable,
   bankTransactionsTable,
   bankUsersTable,
   bankWalletsTable,
   db,
 } from "@workspace/db";
+
+type RestrictionExecutor = Pick<typeof db, "select">;
+
+export type RestrictedBankOperation =
+  | "deposit"
+  | "withdrawal"
+  | "outgoing_transfer"
+  | "admin_credit"
+  | "admin_debit";
+
+/**
+ * Locks the member row before checking restrictions. Restriction creation and
+ * removal take the same lock, so the rule cannot change between validation
+ * and a ledger mutation in the surrounding transaction.
+ */
+export async function bankOperationRestrictionError(
+  executor: RestrictionExecutor,
+  input: {
+    userId: string;
+    walletId?: string | null;
+    operation: RestrictedBankOperation;
+  },
+): Promise<string | null> {
+  const [user] = await executor
+    .select({ accountStatus: bankUsersTable.accountStatus })
+    .from(bankUsersTable)
+    .where(eq(bankUsersTable.id, input.userId))
+    .for("update");
+  if (!user) return "The customer account is unavailable.";
+  if (user.accountStatus !== "active") {
+    return "This account is currently restricted from financial operations.";
+  }
+
+  const now = new Date();
+  const walletScope = input.walletId
+    ? or(
+        isNull(bankRestrictionsTable.walletId),
+        eq(bankRestrictionsTable.walletId, input.walletId),
+      )
+    : isNull(bankRestrictionsTable.walletId);
+  const restrictions = await executor
+    .select({ type: bankRestrictionsTable.type })
+    .from(bankRestrictionsTable)
+    .where(
+      and(
+        eq(bankRestrictionsTable.userId, input.userId),
+        eq(bankRestrictionsTable.status, "active"),
+        lte(bankRestrictionsTable.effectiveAt, now),
+        or(
+          isNull(bankRestrictionsTable.expiresAt),
+          gt(bankRestrictionsTable.expiresAt, now),
+        ),
+        walletScope,
+      ),
+    )
+    .for("update");
+
+  const types = new Set(restrictions.map((restriction) => restriction.type));
+  if (
+    types.has("suspend_user") ||
+    types.has("under_review") ||
+    types.has("read_only")
+  ) {
+    return "This account is restricted from financial operations.";
+  }
+  if (
+    types.has("restrict_outgoing_transfers") &&
+    input.operation === "outgoing_transfer"
+  ) {
+    return "Outgoing transfers are restricted for this account.";
+  }
+  if (
+    types.has("restrict_withdrawals") &&
+    (input.operation === "withdrawal" || input.operation === "admin_debit")
+  ) {
+    return "Withdrawals are restricted for this account.";
+  }
+  if (
+    types.has("restrict_deposits") &&
+    (input.operation === "deposit" || input.operation === "admin_credit")
+  ) {
+    return "Deposits are restricted for this account.";
+  }
+  if (
+    types.has("freeze_wallet") &&
+    (input.operation === "withdrawal" ||
+      input.operation === "outgoing_transfer" ||
+      input.operation === "admin_debit")
+  ) {
+    return "This wallet is frozen and cannot send funds.";
+  }
+  return null;
+}
 
 export const currencies = ["USD", "EUR", "GBP", "CAD", "AUD"] as const;
 export type BankCurrency = (typeof bankCurrencyEnum.enumValues)[number];
@@ -206,6 +300,30 @@ export async function getWalletsForUser(userId: string) {
     .orderBy(bankWalletsTable.currency);
 
   const walletIds = wallets.map((wallet) => wallet.id);
+  const now = new Date();
+  const activeFreezeRestrictions =
+    walletIds.length === 0
+      ? []
+      : await db
+          .select({ walletId: bankRestrictionsTable.walletId })
+          .from(bankRestrictionsTable)
+          .where(
+            and(
+              eq(bankRestrictionsTable.userId, userId),
+              eq(bankRestrictionsTable.type, "freeze_wallet"),
+              eq(bankRestrictionsTable.status, "active"),
+              lte(bankRestrictionsTable.effectiveAt, now),
+              or(
+                isNull(bankRestrictionsTable.expiresAt),
+                gt(bankRestrictionsTable.expiresAt, now),
+              ),
+            ),
+          );
+  const frozenWalletIds = new Set(
+    activeFreezeRestrictions.flatMap((restriction) =>
+      restriction.walletId ? [restriction.walletId] : [],
+    ),
+  );
   const balances =
     walletIds.length === 0
       ? []
@@ -296,8 +414,42 @@ export async function getWalletsForUser(userId: string) {
     ),
     pending: formatMinorAmount(pendingByWallet.get(wallet.id) ?? 0n),
     reserved: formatMinorAmount(reservedByWallet.get(wallet.id) ?? 0n),
-    status: wallet.status as "active" | "restricted",
+    status:
+      wallet.status === "restricted" || frozenWalletIds.has(wallet.id)
+        ? "restricted"
+        : "active",
     }));
+}
+
+export async function getEffectiveBankAccountStatus(
+  userId: string,
+  storedStatus: "active" | "restricted" | "suspended",
+) {
+  const now = new Date();
+  const restrictions = await db
+    .select({ type: bankRestrictionsTable.type })
+    .from(bankRestrictionsTable)
+    .where(
+      and(
+        eq(bankRestrictionsTable.userId, userId),
+        eq(bankRestrictionsTable.status, "active"),
+        lte(bankRestrictionsTable.effectiveAt, now),
+        or(
+          isNull(bankRestrictionsTable.expiresAt),
+          gt(bankRestrictionsTable.expiresAt, now),
+        ),
+      ),
+    );
+  if (
+    storedStatus === "suspended" ||
+    restrictions.some((restriction) => restriction.type === "suspend_user")
+  ) {
+    return "suspended" as const;
+  }
+  if (storedStatus === "restricted" || restrictions.length > 0) {
+    return "restricted" as const;
+  }
+  return "active" as const;
 }
 
 export function toBankTransaction(
@@ -475,7 +627,7 @@ export async function listUserTransactions(
   userId: string,
   filters: {
     currency?: BankCurrency;
-    status?: "completed" | "pending" | "failed" | "reversed";
+    status?: "completed" | "pending" | "failed" | "rejected" | "reversed";
     search?: string;
     limit: number;
   },

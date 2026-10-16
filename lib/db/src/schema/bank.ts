@@ -39,7 +39,23 @@ export const bankTransactionStatusEnum = pgEnum("bank_transaction_status", [
   "completed",
   "pending",
   "failed",
+  "rejected",
   "reversed",
+]);
+
+export const bankRestrictionTypeEnum = pgEnum("bank_restriction_type", [
+  "suspend_user",
+  "restrict_outgoing_transfers",
+  "restrict_withdrawals",
+  "restrict_deposits",
+  "freeze_wallet",
+  "under_review",
+  "read_only",
+]);
+
+export const bankRestrictionStatusEnum = pgEnum("bank_restriction_status", [
+  "active",
+  "removed",
 ]);
 
 export const bankRequestTypeEnum = pgEnum("bank_request_type", [
@@ -220,6 +236,43 @@ export const bankAuditLogsTable = pgTable(
   (table) => [
     index("bank_audit_actor_idx").on(table.actorUserId, table.createdAt),
     index("bank_audit_target_idx").on(table.targetUserId, table.createdAt),
+  ],
+);
+
+export const bankRestrictionsTable = pgTable(
+  "bank_restrictions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => bankUsersTable.id, { onDelete: "cascade" }),
+    walletId: uuid("wallet_id").references(() => bankWalletsTable.id, {
+      onDelete: "set null",
+    }),
+    type: bankRestrictionTypeEnum("restriction_type").notNull(),
+    status: bankRestrictionStatusEnum("status").notNull().default("active"),
+    reason: text("reason").notNull(),
+    effectiveAt: timestamp("effective_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    internalNotes: text("internal_notes"),
+    createdByUserId: text("created_by_user_id")
+      .notNull()
+      .references(() => bankUsersTable.id),
+    removedByUserId: text("removed_by_user_id").references(
+      () => bankUsersTable.id,
+    ),
+    removedAt: timestamp("removed_at", { withTimezone: true }),
+    removalReason: text("removal_reason"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("bank_restriction_user_idx").on(table.userId, table.effectiveAt),
+    index("bank_restriction_wallet_idx").on(table.walletId, table.effectiveAt),
+    index("bank_restriction_status_type_idx").on(table.status, table.type),
   ],
 );
 

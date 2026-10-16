@@ -303,6 +303,9 @@ export function DashboardPage() {
               <WalletAmount label="Reserved" amount={selectedWallet.reserved} currency={selectedWallet.currency} />
             </div>
           )}
+          {dash?.profile.accountStatus === 'suspended' && <p role="status" className="relative mt-3 rounded-lg border border-white/15 bg-white/[.08] px-3 py-2 text-[9px] leading-4 text-[#f2d8d1]">Your account is suspended. You can review account information and activity, but financial actions are currently unavailable.</p>}
+          {dash?.profile.accountStatus === 'restricted' && <p role="status" className="relative mt-3 rounded-lg border border-white/15 bg-white/[.08] px-3 py-2 text-[9px] leading-4 text-[#f2e7c9]">Some account operations are restricted. Your balances and transaction history remain available.</p>}
+          {selectedWallet?.status === 'restricted' && dash?.profile.accountStatus === 'active' && <p role="status" className="relative mt-3 rounded-lg border border-white/15 bg-white/[.08] px-3 py-2 text-[9px] leading-4 text-[#f2e7c9]">This wallet is frozen. Outgoing transfers and withdrawals are unavailable; incoming credits may still be received.</p>}
           <Link href="/wallets" className="relative mt-2 inline-flex items-center gap-1 text-[9px] font-bold text-[#d9e7eb] hover:text-white">Manage wallets <ChevronRight size={12} /></Link>
         </section>
 
@@ -1339,7 +1342,7 @@ export function AdminPage() {
     if (!statusTarget) return;
     await updateTransactionStatus.mutateAsync({
       transactionId: statusTarget.id,
-      data: { status, reason, transactionPin },
+      data: { status, reason, transactionPin, confirmed: true },
     });
     setStatusTarget(null);
     await Promise.all([
@@ -1674,7 +1677,7 @@ export function AdminUserManagementPage() {
     if (!statusTarget) return;
     await updateTransactionStatus.mutateAsync({
       transactionId: statusTarget.id,
-      data: { status, reason, transactionPin },
+      data: { status, reason, transactionPin, confirmed: true },
     });
     setStatusTarget(null);
     await refreshUserData();
@@ -2040,6 +2043,14 @@ function TransactionStatusDialog({
   const [reason, setReason] = useState('');
   const [transactionPin, setTransactionPin] = useState('');
   const [error, setError] = useState('');
+  const allowedStatuses: BankTransaction['status'][] =
+    transaction.type === 'deposit_request' || transaction.type === 'withdrawal_request'
+      ? []
+      : transaction.status === 'pending'
+      ? ['failed', 'rejected']
+      : transaction.status === 'failed'
+        ? ['pending']
+        : [];
 
   useEffect(() => {
     setStatus(transaction.status);
@@ -2062,17 +2073,15 @@ function TransactionStatusDialog({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#14263e]/55 p-4">
       <section role="dialog" aria-modal="true" aria-labelledby="transaction-status-title" className="w-full max-w-lg rounded-[22px] border border-[#dfe7ec] bg-white p-5 shadow-2xl sm:p-7">
         <div className="flex items-start justify-between gap-4">
-          <div><p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#55868b]">Admin transaction control</p><h2 id="transaction-status-title" className="mt-1 text-[16px] font-bold text-[#29425c]">Override recorded status</h2><p className="mt-1 break-all text-[10px] text-[#7e8d9c]">{transaction.reference}</p></div>
+          <div><p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#55868b]">Admin transaction control</p><h2 id="transaction-status-title" className="mt-1 text-[16px] font-bold text-[#29425c]">Correct internal processing status</h2><p className="mt-1 break-all text-[10px] text-[#7e8d9c]">{transaction.reference}</p></div>
           <button type="button" aria-label="Close status override" onClick={onClose} className="rounded-lg p-2 text-[#6d8092] hover:bg-[#f1f5f7]"><X size={16} /></button>
         </div>
-        <p className="mt-4 rounded-lg border border-[#e5e9ed] bg-[#f7f9fa] px-4 py-3 text-[10px] leading-4 text-[#64798e]">{transaction.type === 'external_transfer' && status === 'completed' ? 'Completing a pending routed transfer posts a source-wallet debit and a matching internal clearing entry. It does not represent payment by an outside bank.' : 'This changes the recorded transaction status. It does not otherwise change wallet balances or ledger entries.'}</p>
+        <p className="mt-4 rounded-lg border border-[#e5e9ed] bg-[#f7f9fa] px-4 py-3 text-[10px] leading-4 text-[#64798e]">This status-only correction never posts or removes ledger entries. The server checks the authoritative record and postings; completing or reversing transactions uses separate ledger workflows. Pending deposits and withdrawals must be handled in their review queue.</p>
         <form onSubmit={submit} className="mt-5 space-y-4">
           <Field label="New status">
             <select value={status} onChange={event => setStatus(event.target.value as BankTransaction['status'])} className={inputClass}>
-              <option value="pending">Pending</option>
-              <option value="completed">Completed</option>
-              <option value="failed">Failed</option>
-              <option value="reversed">Reversed</option>
+              <option value={transaction.status} disabled>{transaction.status.replaceAll('_', ' ')} (current)</option>
+              {allowedStatuses.map(value => <option key={value} value={value}>{value.replaceAll('_', ' ')}</option>)}
             </select>
           </Field>
           <Field label="Audit reason">
@@ -2081,10 +2090,11 @@ function TransactionStatusDialog({
           <Field label="Your 6-digit transaction PIN">
             <input required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="current-password" value={transactionPin} onChange={event => setTransactionPin(event.target.value.replace(/\D/g, '').slice(0, 6))} className={inputClass} />
           </Field>
+          <label className="flex items-start gap-2 rounded-lg bg-[#f5f7f8] p-3 text-[10px] leading-4 text-[#64798e]"><input required type="checkbox" className="mt-0.5 accent-[#315f73]" />I reviewed the internal status and confirm this correction.</label>
           {error && <p role="alert" className="rounded-lg bg-[#fff1ef] px-4 py-3 text-[11px] text-[#a24940]">{error}</p>}
           <div className="flex flex-wrap justify-end gap-2">
             <button type="button" onClick={onClose} className="rounded-xl border border-[#dfe6eb] px-4 py-3 text-[10px] font-bold text-[#546b80] hover:bg-[#f5f8f9]">Cancel</button>
-            <button disabled={pending || status === transaction.status || reason.trim().length < 5 || transactionPin.length !== 6} className="rounded-xl bg-[#142f51] px-4 py-3 text-[10px] font-bold text-white hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">{pending ? 'Saving status…' : 'Save status'}</button>
+            <button disabled={pending || !allowedStatuses.includes(status) || reason.trim().length < 5 || transactionPin.length !== 6} className="rounded-xl bg-[#142f51] px-4 py-3 text-[10px] font-bold text-white hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">{pending ? 'Saving status…' : 'Confirm status correction'}</button>
           </div>
         </form>
       </section>

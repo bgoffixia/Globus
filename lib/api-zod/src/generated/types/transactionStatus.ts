@@ -13,5 +13,6 @@ export const TransactionStatus = {
   completed: 'completed',
   pending: 'pending',
   failed: 'failed',
+  rejected: 'rejected',
   reversed: 'reversed',
 } as const;
