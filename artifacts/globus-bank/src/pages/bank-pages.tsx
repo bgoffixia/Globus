@@ -495,7 +495,6 @@ export function InternationalTransferPage() {
   const [recipientAccountName, setRecipientAccountName] = useState('');
   const [recipientAccountNumber, setRecipientAccountNumber] = useState('');
   const [sourceCurrency, setSourceCurrency] = useState<Currency>(() => preferredCurrencyFromQuery());
-  const [destinationCurrency, setDestinationCurrency] = useState<Currency | ''>('EUR');
   const [amount, setAmount] = useState('');
   const [remark, setRemark] = useState('');
   const [transactionPin, setTransactionPin] = useState('');
@@ -506,6 +505,7 @@ export function InternationalTransferPage() {
   const detectedDestinationCurrency = destinationCountryCode
     ? destinationCurrencyForCountry(destinationCountryCode) as Currency | undefined
     : undefined;
+  const destinationCurrency = detectedDestinationCurrency;
   const available = Number(
     wallets.data?.find(wallet => wallet.currency === sourceCurrency)?.available ?? 0,
   );
@@ -524,15 +524,16 @@ export function InternationalTransferPage() {
   const selectDestinationCountry = (countryName: string) => {
     setDestinationCountry(countryName);
     setRecipientBank('');
-    const countryCode = countries.find(country => country.name === countryName)?.code;
-    const detectedCurrency = countryCode ? destinationCurrencyForCountry(countryCode) : undefined;
-    setDestinationCurrency(detectedCurrency as Currency | '');
   };
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError('');
     setSuccess(null);
+    if (!destinationCurrency) {
+      setError('A destination currency is not available for the selected country.');
+      return;
+    }
     createRequest.mutate({
       data: {
         transferType,
@@ -542,7 +543,7 @@ export function InternationalTransferPage() {
         recipientAccountName: recipientAccountName.trim(),
         recipientAccountNumber,
         sourceCurrency,
-        destinationCurrency: destinationCurrency as Currency,
+        destinationCurrency,
         amount,
         ...(remark.trim() ? { remark: remark.trim() } : {}),
         transactionPin,
@@ -615,17 +616,27 @@ export function InternationalTransferPage() {
               </select>
             </Field>
             <Field label="Destination currency">
-              <select data-testid="select-destination-currency" value={destinationCurrency} onChange={event => setDestinationCurrency(event.target.value as Currency)} className={inputClass}>
-                <option value="" disabled>Select destination currency</option>
-                {currencies.map(item => <option key={item} value={item}>{item} · {currencyNames[item]}</option>)}
+              <select
+                data-testid="select-destination-currency"
+                aria-label="Destination currency, detected from destination country"
+                value={destinationCurrency ?? ''}
+                disabled
+                className={`${inputClass} cursor-not-allowed bg-[#f5f7f8] disabled:opacity-100`}
+              >
+                <option value="">
+                  {destinationCountry ? 'Currency not supported' : 'Select a destination country'}
+                </option>
+                {destinationCurrency && (
+                  <option value={destinationCurrency}>{destinationCurrency} · {currencyNames[destinationCurrency]}</option>
+                )}
               </select>
-              {destinationCountry && (
-                <span className="mt-1.5 block text-[10px] text-[#8391a0]">
-                  {detectedDestinationCurrency
-                    ? `Detected from ${destinationCountry}; you can change it.`
-                    : `Choose a supported currency manually for ${destinationCountry}.`}
-                </span>
-              )}
+              <span className="mt-1.5 block text-[10px] text-[#8391a0]">
+                {destinationCurrency
+                  ? `Detected from ${destinationCountry}; source wallet currency does not change the destination currency.`
+                  : destinationCountry
+                    ? `Transfers to ${destinationCountry} are unavailable because its currency is not currently supported.`
+                    : 'Choose a destination country to detect its currency.'}
+              </span>
             </Field>
             <Field label={`Amount in ${sourceCurrency}`}>
               <input data-testid="input-international-amount" required inputMode="decimal" pattern="[0-9]+(\\.[0-9]{1,2})?" min="0.01" value={amount} onChange={event => setAmount(event.target.value)} placeholder="0.00" className={inputClass} />
@@ -633,7 +644,7 @@ export function InternationalTransferPage() {
             </Field>
             <div className="rounded-xl border border-[#e4eaee] bg-[#f8fafb] p-4" aria-live="polite" data-testid="conversion-quote">
               <p className="text-[9px] font-bold uppercase tracking-[.14em] text-[#71869a]">Estimated conversion</p>
-              {exchangeRate ? (
+              {exchangeRate && destinationCurrency ? (
                 <>
                   <p className="mt-2 text-[18px] font-bold text-[#203851]">{convertedAmount === null ? '—' : formatMoney(Number(convertedAmount), destinationCurrency)}</p>
                   <p className="mt-1 text-[10px] text-[#6f8193]">1 {sourceCurrency} = {formatExchangeRate(exchangeRate)} {destinationCurrency}</p>
