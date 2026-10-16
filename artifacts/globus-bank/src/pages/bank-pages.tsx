@@ -492,7 +492,7 @@ export function InternationalTransferPage() {
   const [recipientAccountName, setRecipientAccountName] = useState('');
   const [recipientAccountNumber, setRecipientAccountNumber] = useState('');
   const [sourceCurrency, setSourceCurrency] = useState<Currency>(() => preferredCurrencyFromQuery());
-  const [destinationCurrency, setDestinationCurrency] = useState<Currency>('EUR');
+  const [destinationCurrency, setDestinationCurrency] = useState<Currency | ''>('EUR');
   const [amount, setAmount] = useState('');
   const [remark, setRemark] = useState('');
   const [transactionPin, setTransactionPin] = useState('');
@@ -506,12 +506,12 @@ export function InternationalTransferPage() {
   const available = Number(
     wallets.data?.find(wallet => wallet.currency === sourceCurrency)?.available ?? 0,
   );
-  const configuredRate = rates.data?.find(
+  const configuredRate = destinationCurrency ? rates.data?.find(
     rate =>
       rate.sourceCurrency === sourceCurrency &&
       rate.destinationCurrency === destinationCurrency,
-  );
-  const exchangeRate = sourceCurrency === destinationCurrency
+  ) : undefined;
+  const exchangeRate = destinationCurrency && sourceCurrency === destinationCurrency
     ? '1.0000000000'
     : configuredRate?.rate;
   const convertedAmount = exchangeRate
@@ -523,7 +523,7 @@ export function InternationalTransferPage() {
     setRecipientBank('');
     const countryCode = countries.find(country => country.name === countryName)?.code;
     const detectedCurrency = countryCode ? destinationCurrencyForCountry(countryCode) : undefined;
-    if (detectedCurrency) setDestinationCurrency(detectedCurrency as Currency);
+    setDestinationCurrency(detectedCurrency as Currency | '');
   };
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
@@ -539,7 +539,7 @@ export function InternationalTransferPage() {
         recipientAccountName: recipientAccountName.trim(),
         recipientAccountNumber,
         sourceCurrency,
-        destinationCurrency,
+        destinationCurrency: destinationCurrency as Currency,
         amount,
         ...(remark.trim() ? { remark: remark.trim() } : {}),
         transactionPin,
@@ -613,6 +613,7 @@ export function InternationalTransferPage() {
             </Field>
             <Field label="Destination currency">
               <select data-testid="select-destination-currency" value={destinationCurrency} onChange={event => setDestinationCurrency(event.target.value as Currency)} className={inputClass}>
+                <option value="" disabled>Select destination currency</option>
                 {currencies.map(item => <option key={item} value={item}>{item} · {currencyNames[item]}</option>)}
               </select>
               {destinationCountry && (
@@ -636,7 +637,7 @@ export function InternationalTransferPage() {
                   <p className="mt-1 text-[9px] text-[#8996a3]">{configuredRate ? `Rate updated ${formatDate(configuredRate.updatedAt)}` : 'Same-currency rate'}</p>
                 </>
               ) : (
-                <p className="mt-2 text-[10px] leading-5 text-[#9a7140]">Rate unavailable for {sourceCurrency} → {destinationCurrency}.</p>
+                <p className="mt-2 text-[10px] leading-5 text-[#9a7140]">{destinationCurrency ? `Rate unavailable for ${sourceCurrency} → ${destinationCurrency}.` : 'Select a destination currency to review the conversion.'}</p>
               )}
             </div>
             <Field label="Remark (optional)">
@@ -649,7 +650,7 @@ export function InternationalTransferPage() {
           {profile.data?.transactionPinConfigured === false && <p className="mt-4 rounded-lg border border-[#eadfbe] bg-[#fbf7eb] px-4 py-3 text-[10px] leading-5 text-[#806b3d]">Set up your transaction PIN in <Link href="/settings" className="font-bold underline">Settings</Link> before submitting a request.</p>}
           {error && <p data-testid="status-transfer-error" role="alert" className="mt-5 rounded-lg bg-[#fff1ef] px-4 py-3 text-[11px] text-[#a24940]">{error}</p>}
           {success && <div data-testid="status-transfer-success" role="status" className="mt-5 rounded-xl border border-[#cfe5db] bg-[#f1f8f4] p-4 text-[11px] leading-5 text-[#417461]"><b>{success.status === 'completed' ? 'Transfer recorded.' : 'Request submitted for review.'}</b><p className="mt-1">Reference {success.reference} · {success.sourceAmount} {success.sourceCurrency} → {success.destinationAmount} {success.destinationCurrency} · {humanize(success.status)}</p>{success.status === 'completed' && <button type="button" onClick={() => setReceipt({ id: success.id, reference: success.reference, type: 'external_transfer', status: success.status, currency: success.sourceCurrency, amount: success.sourceAmount, fee: '0.00', counterparty: `${success.recipientBank} · ****${success.recipientAccountLast4} · ${success.destinationCountry}`, description: `${success.transferType === 'local_routing' ? 'Local routing' : 'International wire'} transfer · ${success.sourceAmount} ${success.sourceCurrency} converted to ${success.destinationAmount} ${success.destinationCurrency} at ${success.exchangeRate}`, mode: 'internal_ledger', createdAt: success.createdAt })} className="mt-3 inline-flex items-center gap-2 rounded-lg border border-[#bfd8cc] bg-white px-3 py-2 text-[10px] font-bold text-[#3d725d]"><FileText size={14} /> View receipt</button>}</div>}
-          <button data-testid="button-submit-international-transfer" disabled={createRequest.isPending || !exchangeRate || transactionPin.length !== 6 || !destinationCountry || (transferType === 'local_routing' ? !routingCode.trim() : !/^[A-Za-z0-9]{8}([A-Za-z0-9]{3})?$/.test(swiftBic)) || !amount || Number(amount) <= 0 || Number(amount) > available} className="mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#142f51] text-[12px] font-bold text-white transition hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">
+          <button data-testid="button-submit-international-transfer" disabled={createRequest.isPending || !destinationCurrency || !exchangeRate || transactionPin.length !== 6 || !destinationCountry || (transferType === 'local_routing' ? !routingCode.trim() : !/^[A-Za-z0-9]{8}([A-Za-z0-9]{3})?$/.test(swiftBic)) || !amount || Number(amount) <= 0 || Number(amount) > available} className="mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#142f51] text-[12px] font-bold text-white transition hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">
             {createRequest.isPending ? 'Processing…' : profile.data?.verificationStatus === 'approved' ? 'Complete transfer' : 'Submit for review'} <ArrowRight size={15} />
           </button>
         </form>
