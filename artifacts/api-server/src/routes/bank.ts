@@ -1012,6 +1012,7 @@ router.post("/bank/international-transfer-requests", async (req, res): Promise<v
     }
 
     const reference = createReference();
+    const conversionSummary = `${formatMinorAmount(amountMinor)} ${parsed.data.sourceCurrency} converted to ${formatMinorAmount(destinationAmountMinor)} ${parsed.data.destinationCurrency} at ${rate}`;
     const [transaction] = await tx
       .insert(bankTransactionsTable)
       .values({
@@ -1026,11 +1027,7 @@ router.post("/bank/international-transfer-requests", async (req, res): Promise<v
         amountMinor,
         feeMinor: 0n,
         counterparty: `${parsed.data.recipientAccountName.trim()} · ${parsed.data.recipientBank.trim()} · ****${accountNumber.slice(-4)} · ${parsed.data.destinationCountry.trim()}${routingCode ? ` · Routing ${routingCode}` : ""}${swiftBic ? ` · SWIFT/BIC ${swiftBic}` : ""}`,
-        description: parsed.data.remark?.trim()
-          ? `${parsed.data.transferType === "local_routing" ? "Local routing" : "International wire"} · ${parsed.data.remark.trim()}`
-          : parsed.data.transferType === "local_routing"
-            ? "Local routing transfer"
-            : "International wire transfer",
+        description: `${parsed.data.transferType === "local_routing" ? "Local routing" : "International wire"} transfer${parsed.data.remark?.trim() ? ` · ${parsed.data.remark.trim()}` : ""} · ${conversionSummary}`,
         mode: "internal_ledger",
       })
       .returning();

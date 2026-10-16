@@ -7,6 +7,9 @@ export interface TransactionReceiptPdfData {
   counterparty: string;
   activity: string;
   disclaimer: string;
+  sourceAmount?: string;
+  exchangeRate?: string;
+  convertedAmount?: string;
 }
 
 const PAGE_WIDTH = 1240;
@@ -150,6 +153,9 @@ function drawReceipt(context: CanvasRenderingContext2D, logo: HTMLImageElement, 
 
   const fields = [
     ['Reference', receipt.reference],
+    ['Source amount', receipt.sourceAmount ?? ''],
+    ['Exchange rate', receipt.exchangeRate ?? ''],
+    ['Total converted amount', receipt.convertedAmount ?? ''],
     ['Description', receipt.description],
     ['Date', receipt.date],
     ['Counterparty label', receipt.counterparty],

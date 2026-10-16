@@ -20,10 +20,10 @@ export function AuthFrame({ mode, children }: AuthFrameProps) {
       <aside className="gb-brand-panel">
         <div className="gb-brand-lockup">
           <span className="gb-mark-wrap">
-            <img src={asset('globus-mark.png')} alt="" className="gb-mark" />
+            <img src={asset('globus-mark-transparent.png')} alt="" className="gb-mark" />
           </span>
           <span className="gb-wordmark-wrap">
-            <img src={asset('globus-wordmark.png')} alt="Globus Bank" className="gb-wordmark" />
+            <img src={asset('globus-wordmark-transparent.png')} alt="Globus Bank" className="gb-wordmark" />
           </span>
         </div>
         <div className="gb-brand-copy">
@@ -49,8 +49,8 @@ export function AuthFrame({ mode, children }: AuthFrameProps) {
 
       <section className="gb-form-side">
         <div className="gb-mobile-brand">
-          <img src={asset('globus-mark.png')} alt="" />
-          <img src={asset('globus-wordmark.png')} alt="Globus Bank" />
+          <img src={asset('globus-mark-transparent.png')} alt="" />
+          <img src={asset('globus-wordmark-transparent.png')} alt="Globus Bank" />
         </div>
         <div className={`gb-auth-content ${isSignUp ? 'gb-signup-content' : ''}`}>
           {children}

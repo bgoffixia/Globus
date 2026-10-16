@@ -74,14 +74,18 @@
   flex: 0 0 auto;
   place-items: center;
   overflow: hidden;
-  border: 1px solid rgba(234, 222, 193, .72);
+  border: 0;
   border-radius: 50%;
-  background: #f8f6ee;
+  background: transparent;
   box-shadow: 0 8px 28px rgba(4, 19, 38, .2);
 }
 .gb-mark { display: block; width: 100%; height: 100%; object-fit: cover; }
-.gb-wordmark-wrap { display: block; width: 152px; overflow: hidden; border-radius: 3px; background: #fff; }
+.gb-wordmark-wrap { display: block; width: 152px; overflow: hidden; background: transparent; }
 .gb-wordmark { display: block; width: 100%; height: auto; }
+.gb-brand-panel .gb-wordmark {
+  filter: grayscale(1) brightness(0) invert(1);
+  opacity: .94;
+}
 
 .gb-brand-copy { max-width: 430px; margin-top: clamp(72px, 12vh, 148px); }
 .gb-eyebrow,
@@ -296,7 +300,7 @@
   .gb-brand-panel { display: none; }
   .gb-form-side { display: block; min-height: 100vh; min-height: 100dvh; padding: max(22px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom)); }
   .gb-mobile-brand { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 6px auto 34px; }
-  .gb-mobile-brand img:first-child { width: 42px; height: 42px; flex: 0 0 auto; border: 1px solid #eadfc2; border-radius: 50%; object-fit: cover; }
+  .gb-mobile-brand img:first-child { width: 42px; height: 42px; flex: 0 0 auto; border: 0; border-radius: 50%; object-fit: cover; }
   .gb-mobile-brand img:last-child { width: min(140px, 48vw); height: auto; }
   .gb-auth-content { max-width: 460px; margin: 0 auto; }
   .gb-form-heading h1 { font-size: 34px; }

@@ -88,6 +88,14 @@ import { destinationCurrencyForCountry } from '@/lib/destination-currency';
 import { downloadTransactionReceiptPdf } from '@/lib/transaction-receipt-pdf';
 const currencies = ['USD', 'EUR', 'GBP', 'CAD', 'AUD'] as const;
 type Currency = typeof currencies[number];
+type ReceiptConversion = {
+  sourceAmount: string;
+  sourceCurrency: string;
+  exchangeRate: string;
+  destinationAmount: string;
+  destinationCurrency: string;
+};
+type ReceiptTransaction = BankTransaction & { conversion?: ReceiptConversion };
 const currencyNames: Record<string, string> = {
   USD: 'US dollar',
   EUR: 'Euro',
@@ -479,7 +487,11 @@ export function InternationalTransferPage() {
     query: { queryKey: getListBankWalletsQueryKey() },
   });
   const rates = useListBankExchangeRates({
-    query: { queryKey: getListBankExchangeRatesQueryKey() },
+    query: {
+      queryKey: getListBankExchangeRatesQueryKey(),
+      refetchInterval: 30_000,
+      refetchOnWindowFocus: true,
+    },
   });
   const requests = useListInternationalTransferRequests({
     query: { queryKey: getListInternationalTransferRequestsQueryKey() },
@@ -500,7 +512,7 @@ export function InternationalTransferPage() {
   const [transactionPin, setTransactionPin] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState<InternationalTransferRequest | null>(null);
-  const [receipt, setReceipt] = useState<BankTransaction | null>(null);
+  const [receipt, setReceipt] = useState<ReceiptTransaction | null>(null);
   const destinationCountryCode = countries.find(country => country.name === destinationCountry)?.code ?? '';
   const detectedDestinationCurrency = destinationCountryCode
     ? destinationCurrencyForCountry(destinationCountryCode) as Currency | undefined
@@ -642,13 +654,16 @@ export function InternationalTransferPage() {
               <input data-testid="input-international-amount" required inputMode="decimal" pattern="[0-9]+(\\.[0-9]{1,2})?" min="0.01" value={amount} onChange={event => setAmount(event.target.value)} placeholder="0.00" className={inputClass} />
               <span className="mt-1.5 block text-[10px] text-[#8391a0]">Available: {formatMoney(available, sourceCurrency)}</span>
             </Field>
-            <div className="rounded-xl border border-[#e4eaee] bg-[#f8fafb] p-4" aria-live="polite" data-testid="conversion-quote">
-              <p className="text-[9px] font-bold uppercase tracking-[.14em] text-[#71869a]">Estimated conversion</p>
+            <div className="rounded-xl border border-[#dce7ea] bg-[#f5f9fa] p-4" aria-live="polite" data-testid="conversion-quote">
+              <p className="text-[9px] font-bold uppercase tracking-[.14em] text-[#51868b]">Live conversion total</p>
               {exchangeRate && destinationCurrency ? (
                 <>
-                  <p className="mt-2 text-[18px] font-bold text-[#203851]">{convertedAmount === null ? '—' : formatMoney(Number(convertedAmount), destinationCurrency)}</p>
-                  <p className="mt-1 text-[10px] text-[#6f8193]">1 {sourceCurrency} = {formatExchangeRate(exchangeRate)} {destinationCurrency}</p>
-                  <p className="mt-1 text-[9px] text-[#8996a3]">{configuredRate ? `Rate updated ${formatDate(configuredRate.updatedAt)}` : 'Same-currency rate'}</p>
+                  <p data-testid="text-converted-total" className="mt-2 text-[20px] font-bold text-[#203851]">{convertedAmount === null ? 'Enter an amount' : formatMoney(Number(convertedAmount), destinationCurrency)}</p>
+                  <div className="mt-2 space-y-1 text-[10px] text-[#6f8193]">
+                    <p data-testid="text-conversion-source">Source: {amount && previewConversionAmount(amount, '1.0000000000') ? formatMoney(Number(amount), sourceCurrency) : '—'}</p>
+                    <p data-testid="text-conversion-rate">Rate: 1 {sourceCurrency} = {formatExchangeRate(exchangeRate)} {destinationCurrency}</p>
+                  </div>
+                  <p className="mt-1 text-[9px] text-[#8996a3]">{configuredRate ? `Globus rate updated ${formatDate(configuredRate.updatedAt)}` : 'Same-currency rate'} · refreshes automatically</p>
                 </>
               ) : (
                 <p className="mt-2 text-[10px] leading-5 text-[#9a7140]">{destinationCurrency ? `Rate unavailable for ${sourceCurrency} → ${destinationCurrency}.` : 'Select a destination currency to review the conversion.'}</p>
@@ -663,7 +678,7 @@ export function InternationalTransferPage() {
           </div>
           {profile.data?.transactionPinConfigured === false && <p className="mt-4 rounded-lg border border-[#eadfbe] bg-[#fbf7eb] px-4 py-3 text-[10px] leading-5 text-[#806b3d]">Set up your transaction PIN in <Link href="/settings" className="font-bold underline">Settings</Link> before submitting a request.</p>}
           {error && <p data-testid="status-transfer-error" role="alert" className="mt-5 rounded-lg bg-[#fff1ef] px-4 py-3 text-[11px] text-[#a24940]">{error}</p>}
-          {success && <div data-testid="status-transfer-success" role="status" className="mt-5 rounded-xl border border-[#cfe5db] bg-[#f1f8f4] p-4 text-[11px] leading-5 text-[#417461]"><b>{success.status === 'completed' ? 'Transfer recorded.' : 'Request submitted for review.'}</b><p className="mt-1">Reference {success.reference} · {success.sourceAmount} {success.sourceCurrency} → {success.destinationAmount} {success.destinationCurrency} · {humanize(success.status)}</p>{success.status === 'completed' && <button type="button" onClick={() => setReceipt({ id: success.id, reference: success.reference, type: 'external_transfer', status: success.status, currency: success.sourceCurrency, amount: success.sourceAmount, fee: '0.00', counterparty: `${success.recipientBank} · ****${success.recipientAccountLast4} · ${success.destinationCountry}`, description: `${success.transferType === 'local_routing' ? 'Local routing' : 'International wire'} transfer · ${success.sourceAmount} ${success.sourceCurrency} converted to ${success.destinationAmount} ${success.destinationCurrency} at ${success.exchangeRate}`, mode: 'internal_ledger', createdAt: success.createdAt })} className="mt-3 inline-flex items-center gap-2 rounded-lg border border-[#bfd8cc] bg-white px-3 py-2 text-[10px] font-bold text-[#3d725d]"><FileText size={14} /> View receipt</button>}</div>}
+          {success && <div data-testid="status-transfer-success" role="status" className="mt-5 rounded-xl border border-[#cfe5db] bg-[#f1f8f4] p-4 text-[11px] leading-5 text-[#417461]"><b>{success.status === 'completed' ? 'Transfer recorded.' : 'Request submitted for review.'}</b><p className="mt-1">Reference {success.reference} · {success.sourceAmount} {success.sourceCurrency} → {success.destinationAmount} {success.destinationCurrency} · {humanize(success.status)}</p>{success.status === 'completed' && <button type="button" onClick={() => setReceipt({ id: success.id, reference: success.reference, type: 'external_transfer', status: success.status, currency: success.sourceCurrency, amount: success.sourceAmount, fee: '0.00', counterparty: `${success.recipientBank} · ****${success.recipientAccountLast4} · ${success.destinationCountry}`, description: `${success.transferType === 'local_routing' ? 'Local routing' : 'International wire'} transfer · ${success.sourceAmount} ${success.sourceCurrency} converted to ${success.destinationAmount} ${success.destinationCurrency} at ${success.exchangeRate}`, mode: 'internal_ledger', createdAt: success.createdAt, conversion: { sourceAmount: success.sourceAmount, sourceCurrency: success.sourceCurrency, exchangeRate: success.exchangeRate, destinationAmount: success.destinationAmount, destinationCurrency: success.destinationCurrency } })} className="mt-3 inline-flex items-center gap-2 rounded-lg border border-[#bfd8cc] bg-white px-3 py-2 text-[10px] font-bold text-[#3d725d]"><FileText size={14} /> View receipt</button>}</div>}
           <button data-testid="button-submit-international-transfer" disabled={createRequest.isPending || !destinationCurrency || !exchangeRate || transactionPin.length !== 6 || !destinationCountry || (transferType === 'local_routing' ? !routingCode.trim() : !/^[A-Za-z0-9]{8}([A-Za-z0-9]{3})?$/.test(swiftBic)) || !amount || Number(amount) <= 0 || Number(amount) > available} className="mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#142f51] text-[12px] font-bold text-white transition hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">
             {createRequest.isPending ? 'Processing…' : profile.data?.verificationStatus === 'approved' ? 'Complete transfer' : 'Submit for review'} <ArrowRight size={15} />
           </button>
@@ -2113,9 +2128,10 @@ function TransactionStatusDialog({
   );
 }
 
-function ReceiptDialog({ transaction, onClose }: { transaction: BankTransaction; onClose: () => void }) {
+function ReceiptDialog({ transaction, onClose }: { transaction: ReceiptTransaction; onClose: () => void }) {
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState('');
+  const conversion = getReceiptConversion(transaction);
 
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -2140,6 +2156,9 @@ function ReceiptDialog({ transaction, onClose }: { transaction: BankTransaction;
         description: transaction.description || transactionDisplayType(transaction),
         counterparty: transaction.counterparty || 'Internal ledger',
         activity: transactionDisplayType(transaction),
+        sourceAmount: conversion ? formatMoney(Number(conversion.sourceAmount), conversion.sourceCurrency) : undefined,
+        exchangeRate: conversion ? `1 ${conversion.sourceCurrency} = ${formatExchangeRate(conversion.exchangeRate)} ${conversion.destinationCurrency}` : undefined,
+        convertedAmount: conversion ? formatMoney(Number(conversion.destinationAmount), conversion.destinationCurrency) : undefined,
         disclaimer: transaction.type === 'external_transfer'
           ? 'This receipt records an internal Globus ledger transfer only. It is not confirmation that an outside bank received or paid funds. The recipient details and converted amount are recorded in Globus; no outside settlement is represented.'
           : 'This receipt records an entry in the Globus internal ledger. It is not proof of funds received or sent by an outside account. Globus does not connect to a bank, payment gateway, or real-money transfer service.',
@@ -2175,6 +2194,11 @@ function ReceiptDialog({ transaction, onClose }: { transaction: BankTransaction;
           <p className="mt-5 border-b border-dashed border-[#dfe6eb] pb-5 text-[28px] font-semibold tracking-[-.04em] text-[#203851]">{formatMoney(Number(transaction.amount), transaction.currency)}</p>
           <dl className="mt-5 space-y-4 text-[11px]">
             <div className="flex justify-between gap-4"><dt className="text-[#8492a1]">Reference</dt><dd className="break-all text-right font-mono font-semibold text-[#40566e]">{transaction.reference}</dd></div>
+            {conversion && <>
+              <div className="flex justify-between gap-4"><dt className="text-[#8492a1]">Source amount</dt><dd data-testid="text-receipt-source-amount" className="text-right font-semibold text-[#40566e]">{formatMoney(Number(conversion.sourceAmount), conversion.sourceCurrency)}</dd></div>
+              <div className="flex justify-between gap-4"><dt className="text-[#8492a1]">Exchange rate</dt><dd data-testid="text-receipt-exchange-rate" className="text-right font-semibold text-[#40566e]">1 {conversion.sourceCurrency} = {formatExchangeRate(conversion.exchangeRate)} {conversion.destinationCurrency}</dd></div>
+              <div className="flex justify-between gap-4"><dt className="text-[#8492a1]">Total converted</dt><dd data-testid="text-receipt-converted-total" className="text-right text-[13px] font-bold text-[#285d63]">{formatMoney(Number(conversion.destinationAmount), conversion.destinationCurrency)}</dd></div>
+            </>}
             <div className="flex justify-between gap-4"><dt className="text-[#8492a1]">Description</dt><dd className="text-right font-semibold text-[#40566e]">{transaction.description || transactionDisplayType(transaction)}</dd></div>
             <div className="flex justify-between gap-4"><dt className="text-[#8492a1]">Counterparty label</dt><dd className="text-right font-semibold text-[#40566e]">{transaction.counterparty || 'Internal ledger'}</dd></div>
             <div className="flex justify-between gap-4"><dt className="text-[#8492a1]">Recorded</dt><dd className="text-right font-semibold text-[#40566e]">{formatDate(transaction.createdAt)}</dd></div>
@@ -2244,6 +2268,20 @@ function previewConversionAmount(amount: string, rate: string): string | null {
   const rateScaled = BigInt(rateMatch[1]) * scale + BigInt((rateMatch[2] ?? '').padEnd(10, '0'));
   const converted = (minor * rateScaled + scale / 2n) / scale;
   return `${converted / 100n}.${(converted % 100n).toString().padStart(2, '0')}`;
+}
+
+function getReceiptConversion(transaction: ReceiptTransaction): ReceiptConversion | null {
+  if (transaction.conversion) return transaction.conversion;
+  if (transaction.type !== 'external_transfer' || !transaction.description) return null;
+  const match = /(?:^| · )(\d+(?:\.\d{1,2})?) ([A-Z]{3}) converted to (\d+(?:\.\d{1,2})?) ([A-Z]{3}) at (\d+(?:\.\d{1,10})?)(?:$| · )/.exec(transaction.description);
+  if (!match) return null;
+  return {
+    sourceAmount: match[1],
+    sourceCurrency: match[2],
+    destinationAmount: match[3],
+    destinationCurrency: match[4],
+    exchangeRate: match[5],
+  };
 }
 
 function formatExchangeRate(rate: string): string {
