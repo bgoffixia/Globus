@@ -10,7 +10,7 @@ function BrandPanel() {
       <div className="gb-brand-copy">
         <span className="gb-eyebrow">A clearer view of your money</span>
         <h2>Begin with<br />a better view.</h2>
-        <p>Bring your accounts into focus and get started with your Globus member account.</p>
+          <p>Create your member account and bring your Globus activity into focus.</p>
       </div>
       <div className="gb-world-art" aria-hidden="true">
         <span className="gb-orbit gb-orbit-one" />
@@ -36,7 +36,7 @@ export function BankGradeSignUp() {
           <div className="gb-form-heading">
             <span className="gb-step-label">GET STARTED <i /></span>
             <h1>Create your account</h1>
-            <p>Set up your Globus member access.</p>
+            <p>Set up your secure Globus member access.</p>
           </div>
           <form className="gb-auth-form gb-signup-form">
             <label className="gb-field-label" htmlFor="gb-signup-name">Full name</label>
@@ -50,7 +50,12 @@ export function BankGradeSignUp() {
             <label className="gb-field-label gb-signup-spaced-label" htmlFor="gb-signup-email">Email address</label>
             <input className="gb-input" id="gb-signup-email" type="email" autoComplete="email" placeholder="name@example.com" />
             <label className="gb-field-label gb-signup-spaced-label" htmlFor="gb-signup-password">Password</label>
-            <input className="gb-input" id="gb-signup-password" type="password" autoComplete="new-password" placeholder="Create a password" />
+            <input className="gb-input" id="gb-signup-password" type="password" autoComplete="new-password" minLength={8} placeholder="Create a password" />
+            <p className="gb-password-hint">Use at least 8 characters. Additional security rules are checked securely by Clerk.</p>
+            <label className="gb-terms-check">
+              <input type="checkbox" required />
+              <span>I confirm my profile details are accurate and accept the Globus <a href="/__mockup/preview/globus-auth/BankGradeSignUp">account terms</a> and <a href="/__mockup/preview/globus-auth/BankGradeSignUp">privacy notice</a>.</span>
+            </label>
             <button className="gb-primary-button" type="button">Create account <span aria-hidden="true">→</span></button>
           </form>
           <p className="gb-switch-copy gb-signup-switch">Already have an account? <a href="/__mockup/preview/globus-auth/BankGradeSignIn">Sign in <span aria-hidden="true">→</span></a></p>
