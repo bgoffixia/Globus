@@ -81,7 +81,10 @@ import {
 } from '@workspace/api-client-react';
 import type { AdminLedgerRequest, AdminUser, BankTransaction, IdentityDocument, InternationalTransferRequest, Wallet } from '@workspace/api-client-react';
 import { GlobusLoader } from '@/components/globus-loader';
+import { BankSelect } from '@/components/bank-select';
 import { CountrySelect } from '@/components/country-select';
+import { countries } from '@/lib/countries';
+import { destinationCurrencyForCountry } from '@/lib/destination-currency';
 import { downloadTransactionReceiptPdf } from '@/lib/transaction-receipt-pdf';
 const currencies = ['USD', 'EUR', 'GBP', 'CAD', 'AUD'] as const;
 type Currency = typeof currencies[number];
@@ -258,22 +261,22 @@ export function DashboardPage() {
     <>
       <PageHeading eyebrow="Your dashboard" title={`Good to see you${dash?.profile.firstName ? `, ${dash.profile.firstName}` : ''}.`} subtitle="Your currency wallets, quick actions, and recent activity in one place." />
 
-      <div className="mt-5 grid gap-5 xl:grid-cols-[1.32fr_.68fr]">
-        <section className="balance-panel relative min-w-0 overflow-hidden rounded-[22px] p-5 text-white sm:p-7">
-          <div className="absolute -right-12 -top-16 h-64 w-64 rounded-full border border-white/[.08]" />
-          <div className="absolute -right-3 -top-7 h-44 w-44 rounded-full border border-white/[.08]" />
+      <div className="mt-4 grid min-w-0 gap-3.5 xl:grid-cols-[1.32fr_.68fr]">
+        <section className="balance-panel relative min-w-0 overflow-hidden rounded-[20px] p-4 text-white sm:p-5 xl:col-start-1 xl:row-start-1">
+          <div className="absolute -right-10 -top-12 h-48 w-48 rounded-full border border-white/[.08]" />
+          <div className="absolute -right-2 -top-5 h-32 w-32 rounded-full border border-white/[.08]" />
           <div className="relative flex items-start justify-between gap-4">
             <div className="min-w-0">
               <p className="text-[10px] font-medium text-[#cad9e4]">{selectedWallet ? `${currencyNames[selectedWallet.currency]} · available` : 'Available balance'}</p>
-              <div data-testid="dashboard-active-wallet-balance" className="bank-display mt-2 break-words text-[clamp(2rem,8vw,3.4rem)] font-semibold tracking-[-.06em]">{selectedWallet ? formatMoney(Number(selectedWallet.available), selectedWallet.currency) : '—'}</div>
-              {selectedWallet && <p className="mt-1 text-[11px] text-[#b5c7d4]">{selectedWallet.currency} wallet</p>}
+              <div data-testid="dashboard-active-wallet-balance" className="bank-display mt-1.5 break-words text-[clamp(1.8rem,7vw,2.8rem)] font-semibold tracking-[-.06em]">{selectedWallet ? formatMoney(Number(selectedWallet.available), selectedWallet.currency) : '—'}</div>
+              {selectedWallet && <p className="mt-0.5 text-[10px] text-[#b5c7d4]">{selectedWallet.currency} wallet</p>}
             </div>
-            {selectedWallet && <span className="inline-flex shrink-0 items-center gap-2 rounded-full border border-white/15 bg-white/[.08] px-3 py-2 text-[9px] font-bold uppercase tracking-[.13em] text-[#d9e7eb]"><span className="h-1.5 w-1.5 rounded-full bg-[#8fd2cf]" /> {selectedWallet.currency}</span>}
+            {selectedWallet && <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/15 bg-white/[.08] px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[.13em] text-[#d9e7eb]"><span className="h-1.5 w-1.5 rounded-full bg-[#8fd2cf]" /> {selectedWallet.currency}</span>}
           </div>
-          <div className="relative mt-6 border-t border-white/10 pt-4">
-            <p className="mb-2 text-[9px] font-bold uppercase tracking-[.14em] text-[#b5c7d4]">Switch wallet</p>
+          <div className="relative mt-3.5 border-t border-white/10 pt-3">
+            <p className="mb-1.5 text-[9px] font-bold uppercase tracking-[.14em] text-[#b5c7d4]">Switch wallet</p>
             {dash?.wallets.length ? (
-              <div role="group" aria-label="Switch dashboard wallet" className="flex min-w-0 gap-2 overflow-x-auto pb-2">
+              <div role="group" aria-label="Switch dashboard wallet" className="flex min-w-0 gap-2 overflow-x-auto pb-1">
                 {dash.wallets.map(wallet => {
                   const isSelected = wallet.id === selectedWallet?.id;
                   return (
@@ -284,10 +287,10 @@ export function DashboardPage() {
                       aria-label={`${wallet.currency} wallet, available ${formatMoney(Number(wallet.available), wallet.currency)}`}
                       aria-pressed={isSelected}
                       onClick={() => setSelectedCurrency(wallet.currency as Currency)}
-                      className={`min-w-[126px] shrink-0 rounded-xl border px-3 py-2.5 text-left transition ${isSelected ? 'border-white/35 bg-white/15 text-white' : 'border-white/10 bg-white/[.06] text-[#d4e1eb] hover:bg-white/[.12]'}`}
+                      className={`min-w-[108px] shrink-0 rounded-lg border px-2.5 py-1.5 text-left transition ${isSelected ? 'border-white/35 bg-white/15 text-white' : 'border-white/10 bg-white/[.06] text-[#d4e1eb] hover:bg-white/[.12]'}`}
                     >
-                      <span className="block text-[10px] font-bold">{wallet.currency}</span>
-                      <span className="mt-1 block text-[10px] text-[#c2d2dd]">{formatMoney(Number(wallet.available), wallet.currency)}</span>
+                      <span className="block text-[9px] font-bold">{wallet.currency}</span>
+                      <span className="mt-0.5 block text-[9px] text-[#c2d2dd]">{formatMoney(Number(wallet.available), wallet.currency)}</span>
                     </button>
                   );
                 })}
@@ -295,16 +298,35 @@ export function DashboardPage() {
             ) : <p className="text-[11px] text-[#c2d2dd]">No wallets are available.</p>}
           </div>
           {selectedWallet && (
-            <div className="relative mt-3 grid gap-x-8 border-t border-white/10 pt-3 sm:grid-cols-2">
+            <div className="relative mt-2 grid gap-x-8 border-t border-white/10 pt-2 sm:grid-cols-2">
               <WalletAmount label="Pending" amount={selectedWallet.pending} currency={selectedWallet.currency} />
               <WalletAmount label="Reserved" amount={selectedWallet.reserved} currency={selectedWallet.currency} />
             </div>
           )}
-          <div className="relative mt-3">
-            <Link href="/wallets" className="inline-flex items-center gap-1 text-[10px] font-bold text-[#d9e7eb] hover:text-white">Manage wallets <ChevronRight size={13} /></Link>
-          </div>
+          <Link href="/wallets" className="relative mt-2 inline-flex items-center gap-1 text-[9px] font-bold text-[#d9e7eb] hover:text-white">Manage wallets <ChevronRight size={12} /></Link>
         </section>
-        <section className="rounded-[22px] border border-[#e2e9ef] bg-white p-6 sm:p-7">
+
+        <section data-testid="dashboard-action-toolbar" aria-label="Dashboard quick actions" className="min-w-0 rounded-[18px] border border-[#e2e9ef] bg-white p-3.5 sm:p-4 xl:col-start-1 xl:row-start-2">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#589198]">Quick actions</p>
+              <p className="mt-0.5 text-[10px] text-[#8190a0]">Using {actionCurrency}</p>
+            </div>
+            {selectedWallet && <span className="shrink-0 rounded-full bg-[#eff5f6] px-2.5 py-1 text-[9px] font-bold text-[#456c73]">{selectedWallet.currency} wallet</span>}
+          </div>
+          <nav role="toolbar" aria-label="Dashboard actions" className="-mx-1 flex min-w-0 gap-2 overflow-x-auto px-1 pb-1 sm:flex-wrap sm:overflow-visible">
+            <ActionTile href="/receive" icon={<ArrowDownLeft size={16} />} label="Receive" testId="dashboard-quick-receive" />
+            <ActionTile href={currencyActionHref('/add-money', actionCurrency)} icon={<WalletCards size={16} />} label="Deposit" testId="dashboard-quick-deposit" />
+            <ActionTile href={currencyActionHref('/withdraw', actionCurrency)} icon={<ArrowUpRight size={16} />} label="Withdraw" testId="dashboard-quick-withdraw" />
+            <ActionTile href="/international-transfer?type=local_routing" icon={<ArrowLeftRight size={16} />} label="Local routing" testId="dashboard-quick-local-routing" />
+            <ActionTile href="/international-transfer?type=international_wire" icon={<Globe2 size={16} />} label="International" testId="dashboard-quick-international" />
+            <ActionTile href="/wallets" icon={<WalletCards size={16} />} label="Wallets" testId="dashboard-quick-wallets" />
+            <ActionTile href="/transactions" icon={<History size={16} />} label="Activity" testId="dashboard-quick-activity" />
+            {adminAccess.data?.allowed && <ActionTile href="/admin" icon={<ShieldCheck size={16} />} label="Admin" testId="dashboard-quick-admin" />}
+          </nav>
+        </section>
+
+        <section className="rounded-[20px] border border-[#e2e9ef] bg-white p-5 sm:p-6 xl:col-start-2 xl:row-span-2 xl:row-start-1">
           <div className="flex items-start justify-between">
             <div><p className="text-[11px] font-medium text-[#78889a]">Account standing</p><h2 className="mt-2 text-[21px] font-semibold text-[#203851]">Your details, in order</h2></div>
             <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#eef5f6] text-[#43888e]"><ShieldCheck size={19} /></span>
@@ -316,25 +338,6 @@ export function DashboardPage() {
           <Link href="/settings" className="mt-6 inline-flex items-center gap-1.5 text-[11px] font-bold text-[#377b82]">Review profile <ChevronRight size={14} /></Link>
         </section>
       </div>
-      <section className="mt-5 rounded-[22px] border border-[#e2e9ef] bg-white p-4 sm:p-5">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[#589198]">Quick actions</p>
-            <p className="mt-1 text-[11px] text-[#8190a0]">Shortcuts use {actionCurrency} where a wallet currency applies.</p>
-          </div>
-          {selectedWallet && <span className="rounded-full bg-[#eff5f6] px-3 py-1.5 text-[10px] font-bold text-[#456c73]">Active wallet · {selectedWallet.currency}</span>}
-        </div>
-        <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-4">
-          <ActionTile href="/receive" icon={<ArrowDownLeft size={17} />} label="Receive" testId="dashboard-quick-receive" />
-          <ActionTile href={currencyActionHref('/add-money', actionCurrency)} icon={<WalletCards size={17} />} label="Deposit request" testId="dashboard-quick-deposit" />
-          <ActionTile href={currencyActionHref('/withdraw', actionCurrency)} icon={<ArrowDownLeft size={17} />} label="Withdrawal request" testId="dashboard-quick-withdraw" />
-          <ActionTile href="/international-transfer?type=local_routing" icon={<ArrowUpRight size={17} />} label="Local routing" testId="dashboard-quick-local-routing" />
-          <ActionTile href="/international-transfer?type=international_wire" icon={<Globe2 size={17} />} label="International wire" testId="dashboard-quick-international" />
-          <ActionTile href="/wallets" icon={<WalletCards size={17} />} label="All wallets" testId="dashboard-quick-wallets" />
-          <ActionTile href="/transactions" icon={<History size={17} />} label="Activity" testId="dashboard-quick-activity" />
-          {adminAccess.data?.allowed && <ActionTile href="/admin" icon={<ShieldCheck size={17} />} label="Admin panel" testId="dashboard-quick-admin" />}
-        </div>
-      </section>
       <section className="mt-5 overflow-hidden rounded-[22px] border border-[#e2e9ef] bg-white">
         <div className="flex items-center justify-between border-b border-[#edf0f3] px-5 py-5 sm:px-7">
           <div><h2 className="text-[16px] font-bold text-[#203851]">Recent activity{selectedWallet ? ` · ${selectedWallet.currency}` : ''}</h2><p className="mt-1 text-[11px] text-[#8592a1]">Latest entries for this wallet</p></div>
@@ -496,6 +499,10 @@ export function InternationalTransferPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState<InternationalTransferRequest | null>(null);
   const [receipt, setReceipt] = useState<BankTransaction | null>(null);
+  const destinationCountryCode = countries.find(country => country.name === destinationCountry)?.code ?? '';
+  const detectedDestinationCurrency = destinationCountryCode
+    ? destinationCurrencyForCountry(destinationCountryCode) as Currency | undefined
+    : undefined;
   const available = Number(
     wallets.data?.find(wallet => wallet.currency === sourceCurrency)?.available ?? 0,
   );
@@ -510,6 +517,14 @@ export function InternationalTransferPage() {
   const convertedAmount = exchangeRate
     ? previewConversionAmount(amount, exchangeRate)
     : null;
+
+  const selectDestinationCountry = (countryName: string) => {
+    setDestinationCountry(countryName);
+    setRecipientBank('');
+    const countryCode = countries.find(country => country.name === countryName)?.code;
+    const detectedCurrency = countryCode ? destinationCurrencyForCountry(countryCode) : undefined;
+    if (detectedCurrency) setDestinationCurrency(detectedCurrency as Currency);
+  };
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -571,10 +586,10 @@ export function InternationalTransferPage() {
           </div>
           <div className="grid gap-5 sm:grid-cols-2">
             <Field label="Destination country">
-              <CountrySelect value={destinationCountry} onChange={setDestinationCountry} />
+              <CountrySelect value={destinationCountry} onChange={selectDestinationCountry} />
             </Field>
             <Field label="Recipient bank">
-              <input data-testid="input-recipient-bank" required maxLength={120} value={recipientBank} onChange={event => setRecipientBank(event.target.value)} placeholder="Bank name" className={inputClass} />
+              <BankSelect key={destinationCountryCode || 'no-country'} countryCode={destinationCountryCode} value={recipientBank} onChange={setRecipientBank} />
             </Field>
             {transferType === 'local_routing' ? (
               <Field label="Local bank routing code">
@@ -600,6 +615,13 @@ export function InternationalTransferPage() {
               <select data-testid="select-destination-currency" value={destinationCurrency} onChange={event => setDestinationCurrency(event.target.value as Currency)} className={inputClass}>
                 {currencies.map(item => <option key={item} value={item}>{item} · {currencyNames[item]}</option>)}
               </select>
+              {destinationCountry && (
+                <span className="mt-1.5 block text-[10px] text-[#8391a0]">
+                  {detectedDestinationCurrency
+                    ? `Detected from ${destinationCountry}; you can change it.`
+                    : `Choose a supported currency manually for ${destinationCountry}.`}
+                </span>
+              )}
             </Field>
             <Field label={`Amount in ${sourceCurrency}`}>
               <input data-testid="input-international-amount" required inputMode="decimal" pattern="[0-9]+(\\.[0-9]{1,2})?" min="0.01" value={amount} onChange={event => setAmount(event.target.value)} placeholder="0.00" className={inputClass} />
@@ -2156,7 +2178,7 @@ function StatusLine({ label, value, positive }: { label: string; value: string; 
 }
 
 function ActionTile({ href, icon, label, testId }: { href: string; icon: ReactNode; label: string; testId?: string }) {
-  return <Link href={href} data-testid={testId} className="flex min-h-12 items-center gap-2.5 rounded-xl border border-[#e5ebef] bg-[#fbfcfd] px-3 py-3 text-[11px] font-bold text-[#3d556d] transition hover:border-[#bbd7d8] hover:bg-[#f3f9f9]"><span className="text-[#478b90]">{icon}</span>{label}</Link>;
+  return <Link href={href} data-testid={testId} className="inline-flex min-h-10 min-w-[112px] shrink-0 items-center gap-2 rounded-lg border border-[#e5ebef] bg-[#fbfcfd] px-2.5 py-2 text-[10px] font-bold text-[#3d556d] transition hover:border-[#bbd7d8] hover:bg-[#f3f9f9] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#43888e]"><span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-[#edf5f6] text-[#478b90]">{icon}</span><span className="whitespace-nowrap">{label}</span></Link>;
 }
 
 function TrustNote({ icon, title, copy }: { icon: ReactNode; title: string; copy: string }) {
