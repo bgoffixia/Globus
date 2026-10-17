@@ -36,9 +36,15 @@ export const ActiveCurrencyCode = {
   AUD: 'AUD',
 } as const;
 
+/**
+ * ISO 4217 destination currency, independent of supported source wallets.
+ * @pattern ^[A-Z]{3}$
+ */
+export type DestinationCurrencyCode = string;
+
 export interface BankExchangeRate {
   sourceCurrency: CurrencyCode;
-  destinationCurrency: CurrencyCode;
+  destinationCurrency: DestinationCurrencyCode;
   /** @pattern ^[0-9]+(\.[0-9]{1,10})?$ */
   rate: string;
   updatedAt: string;
@@ -46,7 +52,7 @@ export interface BankExchangeRate {
 
 export interface BankExchangeRateInput {
   sourceCurrency: ActiveCurrencyCode;
-  destinationCurrency: ActiveCurrencyCode;
+  destinationCurrency: DestinationCurrencyCode;
   /** @pattern ^[0-9]{1,12}(\.[0-9]{1,10})?$ */
   rate: string;
   /**
@@ -100,7 +106,12 @@ export interface InternationalTransferRequestInput {
      */
   recipientAccountNumber: string;
   sourceCurrency: ActiveCurrencyCode;
-  destinationCurrency: ActiveCurrencyCode;
+  destinationCurrency: DestinationCurrencyCode;
+  /**
+     * Rate reviewed by the customer; reject if it no longer matches the authoritative rate.
+     * @pattern ^[0-9]{1,12}(\.[0-9]{1,10})?$
+     */
+  expectedExchangeRate?: string;
   /** @pattern ^[0-9]{1,12}(\.[0-9]{1,2})?$ */
   amount: string;
   /** @maxLength 140 */
@@ -149,7 +160,7 @@ export interface InternationalTransferRequest {
   recipientAccountLast4: string;
   sourceCurrency: CurrencyCode;
   sourceAmount: string;
-  destinationCurrency: CurrencyCode;
+  destinationCurrency: DestinationCurrencyCode;
   destinationAmount: string;
   exchangeRate: string;
   rateUpdatedAt: string;

@@ -85,7 +85,7 @@ import { BankSelect } from '@/components/bank-select';
 import { CountrySelect } from '@/components/country-select';
 import { countries } from '@/lib/countries';
 import { destinationCurrencyForCountry } from '@/lib/destination-currency';
-import { downloadTransactionReceiptPdf } from '@/lib/transaction-receipt-pdf';
+import { TransferReceiptModal } from '@/components/transfer/transfer-receipt';
 const currencies = ['USD', 'EUR', 'GBP', 'CAD', 'AUD'] as const;
 type Currency = typeof currencies[number];
 type ReceiptConversion = {
@@ -329,8 +329,7 @@ export function DashboardPage() {
             <ActionTile href="/receive" icon={<ArrowDownLeft size={16} />} label="Receive" testId="dashboard-quick-receive" />
             <ActionTile href={currencyActionHref('/add-money', actionCurrency)} icon={<WalletCards size={16} />} label="Deposit" testId="dashboard-quick-deposit" />
             <ActionTile href={currencyActionHref('/withdraw', actionCurrency)} icon={<ArrowUpRight size={16} />} label="Withdraw" testId="dashboard-quick-withdraw" />
-            <ActionTile href="/international-transfer?type=local_routing" icon={<ArrowLeftRight size={16} />} label="Local routing" testId="dashboard-quick-local-routing" />
-            <ActionTile href="/international-transfer?type=international_wire" icon={<Globe2 size={16} />} label="International" testId="dashboard-quick-international" />
+            <ActionTile href={currencyActionHref('/transfer', actionCurrency)} icon={<ArrowLeftRight size={16} />} label="Transfer" testId="dashboard-quick-transfer" />
             <ActionTile href="/wallets" icon={<WalletCards size={16} />} label="Wallets" testId="dashboard-quick-wallets" />
             <ActionTile href="/transactions" icon={<History size={16} />} label="Activity" testId="dashboard-quick-activity" />
             {adminAccess.data?.allowed && <ActionTile href="/admin" icon={<ShieldCheck size={16} />} label="Admin" testId="dashboard-quick-admin" />}
@@ -448,7 +447,7 @@ export function SendPage() {
     <>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <PageHeading eyebrow="Internal ledger" title="Send to a Globus member" subtitle="Transfers update both members’ Globus ledger wallets. No outside account is contacted." />
-        <Link href="/international-transfer" className="mb-1 inline-flex items-center gap-2 rounded-xl border border-[#d8e4e9] bg-white px-4 py-2.5 text-[10px] font-bold text-[#365771] hover:bg-[#f4f8f9]"><ArrowLeftRight size={14} /> International transfer request</Link>
+        <Link href="/transfer" className="mb-1 inline-flex items-center gap-2 rounded-xl border border-[#d8e4e9] bg-white px-4 py-2.5 text-[10px] font-bold text-[#365771] hover:bg-[#f4f8f9]"><ArrowLeftRight size={14} /> International transfer request</Link>
       </div>
       <div className="mt-7 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <form onSubmit={submit} className="rounded-[22px] border border-[#e1e8ee] bg-white p-5 sm:p-8">
@@ -478,229 +477,7 @@ export function SendPage() {
   );
 }
 
-export function InternationalTransferPage() {
-  const queryClient = useQueryClient();
-  const profile = useGetBankProfile({
-    query: { queryKey: getGetBankProfileQueryKey() },
-  });
-  const wallets = useListBankWallets({
-    query: { queryKey: getListBankWalletsQueryKey() },
-  });
-  const rates = useListBankExchangeRates({
-    query: {
-      queryKey: getListBankExchangeRatesQueryKey(),
-      refetchInterval: 30_000,
-      refetchOnWindowFocus: true,
-    },
-  });
-  const requests = useListInternationalTransferRequests({
-    query: { queryKey: getListInternationalTransferRequestsQueryKey() },
-  });
-  const createRequest = useCreateInternationalTransferRequest();
-  const [transferType, setTransferType] = useState<'local_routing' | 'international_wire'>(() =>
-    new URLSearchParams(window.location.search).get('type') === 'local_routing' ? 'local_routing' : 'international_wire',
-  );
-  const [destinationCountry, setDestinationCountry] = useState('');
-  const [recipientBank, setRecipientBank] = useState('');
-  const [routingCode, setRoutingCode] = useState('');
-  const [swiftBic, setSwiftBic] = useState('');
-  const [recipientAccountName, setRecipientAccountName] = useState('');
-  const [recipientAccountNumber, setRecipientAccountNumber] = useState('');
-  const [sourceCurrency, setSourceCurrency] = useState<Currency>(() => preferredCurrencyFromQuery());
-  const [amount, setAmount] = useState('');
-  const [remark, setRemark] = useState('');
-  const [transactionPin, setTransactionPin] = useState('');
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState<InternationalTransferRequest | null>(null);
-  const [receipt, setReceipt] = useState<ReceiptTransaction | null>(null);
-  const destinationCountryCode = countries.find(country => country.name === destinationCountry)?.code ?? '';
-  const detectedDestinationCurrency = destinationCountryCode
-    ? destinationCurrencyForCountry(destinationCountryCode) as Currency | undefined
-    : undefined;
-  const destinationCurrency = detectedDestinationCurrency;
-  const available = Number(
-    wallets.data?.find(wallet => wallet.currency === sourceCurrency)?.available ?? 0,
-  );
-  const configuredRate = destinationCurrency ? rates.data?.find(
-    rate =>
-      rate.sourceCurrency === sourceCurrency &&
-      rate.destinationCurrency === destinationCurrency,
-  ) : undefined;
-  const exchangeRate = destinationCurrency && sourceCurrency === destinationCurrency
-    ? '1.0000000000'
-    : configuredRate?.rate;
-  const convertedAmount = exchangeRate
-    ? previewConversionAmount(amount, exchangeRate)
-    : null;
-
-  const selectDestinationCountry = (countryName: string) => {
-    setDestinationCountry(countryName);
-    setRecipientBank('');
-  };
-
-  const submit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setError('');
-    setSuccess(null);
-    if (!destinationCurrency) {
-      setError('A destination currency is not available for the selected country.');
-      return;
-    }
-    createRequest.mutate({
-      data: {
-        transferType,
-        destinationCountry: destinationCountry.trim(),
-        recipientBank: recipientBank.trim(),
-        ...(transferType === 'local_routing' ? { routingCode: routingCode.trim() } : { swiftBic: swiftBic.trim() }),
-        recipientAccountName: recipientAccountName.trim(),
-        recipientAccountNumber,
-        sourceCurrency,
-        destinationCurrency,
-        amount,
-        ...(remark.trim() ? { remark: remark.trim() } : {}),
-        transactionPin,
-        idempotencyKey: crypto.randomUUID(),
-      },
-    }, {
-      onSuccess: request => {
-        setSuccess(request);
-        setDestinationCountry('');
-        setRecipientBank('');
-        setRoutingCode('');
-        setSwiftBic('');
-        setRecipientAccountName('');
-        setRecipientAccountNumber('');
-        setAmount('');
-        setRemark('');
-        setTransactionPin('');
-        void Promise.all([
-          queryClient.invalidateQueries({ queryKey: getListInternationalTransferRequestsQueryKey() }),
-          queryClient.invalidateQueries({ queryKey: getListBankTransactionsQueryKey() }),
-          queryClient.invalidateQueries({ queryKey: getGetBankDashboardQueryKey() }),
-        ]);
-      },
-      onError: mutationError => {
-        setError(mutationError instanceof Error
-          ? mutationError.message
-          : 'The transfer request could not be recorded. Please try again.');
-      },
-    });
-  };
-
-  return (
-    <>
-        <PageHeading
-        eyebrow="Transfers"
-          title="Route a transfer"
-          subtitle="Choose a routing method, enter recipient details, and review the currency conversion."
-      />
-      <div className="mt-6">
-        <form onSubmit={submit} className="min-w-0 rounded-[22px] border border-[#e1e8ee] bg-white p-5 sm:p-8">
-          <div role="group" aria-label="Transfer routing type" className="mb-6 grid grid-cols-2 gap-2 rounded-xl bg-[#f2f5f7] p-1.5">
-            <button type="button" aria-pressed={transferType === 'local_routing'} onClick={() => { setTransferType('local_routing'); setSuccess(null); setError(''); }} className={`min-h-11 rounded-lg px-3 text-[11px] font-bold transition ${transferType === 'local_routing' ? 'bg-white text-[#203851] shadow-sm' : 'text-[#718196] hover:text-[#344e67]'}`}>Local routing</button>
-            <button type="button" aria-pressed={transferType === 'international_wire'} onClick={() => { setTransferType('international_wire'); setSuccess(null); setError(''); }} className={`min-h-11 rounded-lg px-3 text-[11px] font-bold transition ${transferType === 'international_wire' ? 'bg-white text-[#203851] shadow-sm' : 'text-[#718196] hover:text-[#344e67]'}`}>International wire</button>
-          </div>
-          <div className="grid gap-5 sm:grid-cols-2">
-            <Field label="Destination country">
-              <CountrySelect value={destinationCountry} onChange={selectDestinationCountry} />
-            </Field>
-            <Field label="Recipient bank">
-              <BankSelect key={destinationCountryCode || 'no-country'} countryCode={destinationCountryCode} value={recipientBank} onChange={setRecipientBank} />
-            </Field>
-            {transferType === 'local_routing' ? (
-              <Field label="Local bank routing code">
-                <input data-testid="input-local-routing-code" required maxLength={24} pattern="[A-Za-z0-9 -]+" value={routingCode} onChange={event => setRoutingCode(event.target.value)} placeholder="Routing or clearing code" className={inputClass} />
-              </Field>
-            ) : (
-              <Field label="SWIFT / BIC">
-                <input data-testid="input-swift-bic" required minLength={8} maxLength={11} pattern="[A-Za-z0-9]{8}([A-Za-z0-9]{3})?" value={swiftBic} onChange={event => setSwiftBic(event.target.value.toUpperCase())} placeholder="8 or 11 characters" className={inputClass} />
-              </Field>
-            )}
-            <Field label="Recipient account name">
-              <input data-testid="input-recipient-account-name" required maxLength={120} value={recipientAccountName} onChange={event => setRecipientAccountName(event.target.value)} placeholder="Name on the account" className={inputClass} />
-            </Field>
-            <Field label="Recipient account number / IBAN">
-              <input data-testid="input-recipient-account-number" required minLength={4} maxLength={34} pattern="[A-Za-z0-9 ]+" autoComplete="off" value={recipientAccountNumber} onChange={event => setRecipientAccountNumber(event.target.value)} placeholder="Enter account number or IBAN" className={inputClass} />
-            </Field>
-            <Field label="Source wallet currency">
-              <select data-testid="select-source-currency" value={sourceCurrency} onChange={event => setSourceCurrency(event.target.value as Currency)} className={inputClass}>
-                {currencies.map(item => <option key={item} value={item}>{item} · {currencyNames[item]}</option>)}
-              </select>
-            </Field>
-            <Field label="Destination currency">
-              <select
-                data-testid="select-destination-currency"
-                aria-label="Destination currency, detected from destination country"
-                value={destinationCurrency ?? ''}
-                disabled
-                className={`${inputClass} cursor-not-allowed bg-[#f5f7f8] disabled:opacity-100`}
-              >
-                <option value="">
-                  {destinationCountry ? 'Currency not supported' : 'Select a destination country'}
-                </option>
-                {destinationCurrency && (
-                  <option value={destinationCurrency}>{destinationCurrency} · {currencyNames[destinationCurrency]}</option>
-                )}
-              </select>
-              <span className="mt-1.5 block text-[10px] text-[#8391a0]">
-                {destinationCurrency
-                  ? `Detected from ${destinationCountry}; source wallet currency does not change the destination currency.`
-                  : destinationCountry
-                    ? `Transfers to ${destinationCountry} are unavailable because its currency is not currently supported.`
-                    : 'Choose a destination country to detect its currency.'}
-              </span>
-            </Field>
-            <Field label={`Amount in ${sourceCurrency}`}>
-              <input data-testid="input-international-amount" required inputMode="decimal" pattern="[0-9]+(\\.[0-9]{1,2})?" min="0.01" value={amount} onChange={event => setAmount(event.target.value)} placeholder="0.00" className={inputClass} />
-              <span className="mt-1.5 block text-[10px] text-[#8391a0]">Available: {formatMoney(available, sourceCurrency)}</span>
-            </Field>
-            <div className="rounded-xl border border-[#dce7ea] bg-[#f5f9fa] p-4" aria-live="polite" data-testid="conversion-quote">
-              <p className="text-[9px] font-bold uppercase tracking-[.14em] text-[#51868b]">Live conversion total</p>
-              {exchangeRate && destinationCurrency ? (
-                <>
-                  <p data-testid="text-converted-total" className="mt-2 text-[20px] font-bold text-[#203851]">{convertedAmount === null ? 'Enter an amount' : formatMoney(Number(convertedAmount), destinationCurrency)}</p>
-                  <div className="mt-2 space-y-1 text-[10px] text-[#6f8193]">
-                    <p data-testid="text-conversion-source">Source: {amount && previewConversionAmount(amount, '1.0000000000') ? formatMoney(Number(amount), sourceCurrency) : '—'}</p>
-                    <p data-testid="text-conversion-rate">Rate: 1 {sourceCurrency} = {formatExchangeRate(exchangeRate)} {destinationCurrency}</p>
-                  </div>
-                  <p className="mt-1 text-[9px] text-[#8996a3]">{configuredRate ? `Globus rate updated ${formatDate(configuredRate.updatedAt)}` : 'Same-currency rate'} · refreshes automatically</p>
-                </>
-              ) : (
-                <p className="mt-2 text-[10px] leading-5 text-[#9a7140]">{destinationCurrency ? `Rate unavailable for ${sourceCurrency} → ${destinationCurrency}.` : 'Select a destination currency to review the conversion.'}</p>
-              )}
-            </div>
-            <Field label="Remark (optional)">
-              <input data-testid="input-transfer-remark" maxLength={140} value={remark} onChange={event => setRemark(event.target.value)} placeholder="Reason or note for this request" className={inputClass} />
-            </Field>
-            <Field label="6-digit transaction PIN">
-              <input data-testid="input-transfer-pin" required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="off" value={transactionPin} onChange={event => setTransactionPin(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="Enter your PIN" className={inputClass} />
-            </Field>
-          </div>
-          {profile.data?.transactionPinConfigured === false && <p className="mt-4 rounded-lg border border-[#eadfbe] bg-[#fbf7eb] px-4 py-3 text-[10px] leading-5 text-[#806b3d]">Set up your transaction PIN in <Link href="/settings" className="font-bold underline">Settings</Link> before submitting a request.</p>}
-          {error && <p data-testid="status-transfer-error" role="alert" className="mt-5 rounded-lg bg-[#fff1ef] px-4 py-3 text-[11px] text-[#a24940]">{error}</p>}
-          {success && <div data-testid="status-transfer-success" role="status" className="mt-5 rounded-xl border border-[#cfe5db] bg-[#f1f8f4] p-4 text-[11px] leading-5 text-[#417461]"><b>{success.status === 'completed' ? 'Transfer recorded.' : 'Request submitted for review.'}</b><p className="mt-1">Reference {success.reference} · {success.sourceAmount} {success.sourceCurrency} → {success.destinationAmount} {success.destinationCurrency} · {humanize(success.status)}</p>{success.status === 'completed' && <button type="button" onClick={() => setReceipt({ id: success.id, reference: success.reference, type: 'external_transfer', status: success.status, currency: success.sourceCurrency, amount: success.sourceAmount, fee: '0.00', counterparty: `${success.recipientBank} · ****${success.recipientAccountLast4} · ${success.destinationCountry}`, description: `${success.transferType === 'local_routing' ? 'Local routing' : 'International wire'} transfer · ${success.sourceAmount} ${success.sourceCurrency} converted to ${success.destinationAmount} ${success.destinationCurrency} at ${success.exchangeRate}`, mode: 'internal_ledger', createdAt: success.createdAt, conversion: { sourceAmount: success.sourceAmount, sourceCurrency: success.sourceCurrency, exchangeRate: success.exchangeRate, destinationAmount: success.destinationAmount, destinationCurrency: success.destinationCurrency } })} className="mt-3 inline-flex items-center gap-2 rounded-lg border border-[#bfd8cc] bg-white px-3 py-2 text-[10px] font-bold text-[#3d725d]"><FileText size={14} /> View receipt</button>}</div>}
-          <button data-testid="button-submit-international-transfer" disabled={createRequest.isPending || !destinationCurrency || !exchangeRate || transactionPin.length !== 6 || !destinationCountry || (transferType === 'local_routing' ? !routingCode.trim() : !/^[A-Za-z0-9]{8}([A-Za-z0-9]{3})?$/.test(swiftBic)) || !amount || Number(amount) <= 0 || Number(amount) > available} className="mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#142f51] text-[12px] font-bold text-white transition hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">
-            {createRequest.isPending ? 'Processing…' : profile.data?.verificationStatus === 'approved' ? 'Complete transfer' : 'Submit for review'} <ArrowRight size={15} />
-          </button>
-        </form>
-
-      </div>
-
-      <section className="mt-7 overflow-hidden rounded-[20px] border border-[#e1e8ee] bg-white">
-        <div className="flex items-center justify-between border-b border-[#edf0f3] px-5 py-4 sm:px-7"><p className="text-[13px] font-bold text-[#28405c]">Transfer activity</p><span className="text-[10px] font-semibold text-[#8291a1]">{requests.data?.length ?? 0} transfers</span></div>
-        {requests.isLoading ? <ListSkeleton /> : requests.isError ? <InlineError text="Transfer requests are unavailable." retry={() => requests.refetch()} /> : requests.data?.length ? (
-          <ul className="divide-y divide-[#edf0f3]">
-            {requests.data.map(request => <li key={request.id} data-testid={`request-international-${request.id}`} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 sm:px-7">
-              <div className="min-w-0"><p className="truncate text-[11px] font-bold text-[#304962]">{request.recipientAccountName} · {request.destinationCountry}</p><p className="mt-1 text-[10px] text-[#7d8b99]">{humanize(request.transferType)} · {request.reference} · {request.recipientBank} · ****{request.recipientAccountLast4}</p><p className="mt-1 text-[10px] text-[#60748a]">{formatMoney(Number(request.sourceAmount), request.sourceCurrency)} → {formatMoney(Number(request.destinationAmount), request.destinationCurrency)} at {request.exchangeRate}</p></div>
-              <span className="rounded-full bg-[#fbf7eb] px-3 py-1.5 text-[9px] font-bold capitalize text-[#806b3d]">{humanize(request.status)}</span>
-            </li>)}
-          </ul>
-        ) : <EmptyState title="No transfer requests yet" text="Submitted requests will appear here." />}
-      </section>
-      {receipt && <ReceiptDialog transaction={receipt} onClose={() => setReceipt(null)} />}
-    </>
-  );
-}
+export { InternationalTransferPage } from '@/components/transfer/transfer-wizard';
 
 export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }) {
   const queryClient = useQueryClient();
@@ -2129,94 +1906,7 @@ function TransactionStatusDialog({
 }
 
 function ReceiptDialog({ transaction, onClose }: { transaction: ReceiptTransaction; onClose: () => void }) {
-  const [downloading, setDownloading] = useState(false);
-  const [downloadError, setDownloadError] = useState('');
-  const conversion = getReceiptConversion(transaction);
-
-  useEffect(() => {
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', closeOnEscape);
-    return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [onClose]);
-
-  const downloadPdf = async () => {
-    setDownloadError('');
-    setDownloading(true);
-    try {
-      if (transaction.status !== 'completed') {
-        throw new Error('PDF receipts are available for completed transactions only.');
-      }
-      await downloadTransactionReceiptPdf({
-        reference: transaction.reference,
-        amount: formatMoney(Number(transaction.amount), transaction.currency),
-        status: humanize(transaction.status),
-        date: formatDate(transaction.createdAt),
-        description: transaction.description || transactionDisplayType(transaction),
-        counterparty: transaction.counterparty || 'Internal ledger',
-        activity: transactionDisplayType(transaction),
-        sourceAmount: conversion ? formatMoney(Number(conversion.sourceAmount), conversion.sourceCurrency) : undefined,
-        exchangeRate: conversion ? `1 ${conversion.sourceCurrency} = ${formatExchangeRate(conversion.exchangeRate)} ${conversion.destinationCurrency}` : undefined,
-        convertedAmount: conversion ? formatMoney(Number(conversion.destinationAmount), conversion.destinationCurrency) : undefined,
-        disclaimer: transaction.type === 'external_transfer'
-          ? 'This receipt records an internal Globus ledger transfer only. It is not confirmation that an outside bank received or paid funds. The recipient details and converted amount are recorded in Globus; no outside settlement is represented.'
-          : 'This receipt records an entry in the Globus internal ledger. It is not proof of funds received or sent by an outside account. Globus does not connect to a bank, payment gateway, or real-money transfer service.',
-      }, `${import.meta.env.BASE_URL}globus-wordmark.png`);
-    } catch (error) {
-      setDownloadError(error instanceof Error ? error.message : 'The PDF receipt could not be downloaded.');
-    } finally {
-      setDownloading(false);
-    }
-  };
-
-  return (
-    <div
-      className="receipt-backdrop fixed inset-0 z-50 grid place-items-center bg-[#10243c]/55 p-4 backdrop-blur-sm"
-      onMouseDown={event => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-    >
-      <section
-        aria-labelledby="receipt-title"
-        aria-modal="true"
-        className="receipt-dialog w-full max-w-md rounded-[22px] bg-white p-6 shadow-2xl sm:p-8"
-        role="dialog"
-      >
-        <article className="receipt-print">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[#518c91]">Internal ledger receipt</p>
-              <h2 id="receipt-title" className="bank-display mt-2 text-[24px] font-semibold text-[#203851]">{transactionDisplayType(transaction)}</h2>
-            </div>
-            <button type="button" aria-label="Close receipt" onClick={onClose} className="receipt-screen-only grid h-9 w-9 shrink-0 place-items-center rounded-lg text-[#718196] hover:bg-[#f1f4f6]"><X size={17} /></button>
-          </div>
-          <p className="mt-5 border-b border-dashed border-[#dfe6eb] pb-5 text-[28px] font-semibold tracking-[-.04em] text-[#203851]">{formatMoney(Number(transaction.amount), transaction.currency)}</p>
-          <dl className="mt-5 space-y-4 text-[11px]">
-            <div className="flex justify-between gap-4"><dt className="text-[#8492a1]">Reference</dt><dd className="break-all text-right font-mono font-semibold text-[#40566e]">{transaction.reference}</dd></div>
-            {conversion && <>
-              <div className="flex justify-between gap-4"><dt className="text-[#8492a1]">Source amount</dt><dd data-testid="text-receipt-source-amount" className="text-right font-semibold text-[#40566e]">{formatMoney(Number(conversion.sourceAmount), conversion.sourceCurrency)}</dd></div>
-              <div className="flex justify-between gap-4"><dt className="text-[#8492a1]">Exchange rate</dt><dd data-testid="text-receipt-exchange-rate" className="text-right font-semibold text-[#40566e]">1 {conversion.sourceCurrency} = {formatExchangeRate(conversion.exchangeRate)} {conversion.destinationCurrency}</dd></div>
-              <div className="flex justify-between gap-4"><dt className="text-[#8492a1]">Total converted</dt><dd data-testid="text-receipt-converted-total" className="text-right text-[13px] font-bold text-[#285d63]">{formatMoney(Number(conversion.destinationAmount), conversion.destinationCurrency)}</dd></div>
-            </>}
-            <div className="flex justify-between gap-4"><dt className="text-[#8492a1]">Description</dt><dd className="text-right font-semibold text-[#40566e]">{transaction.description || transactionDisplayType(transaction)}</dd></div>
-            <div className="flex justify-between gap-4"><dt className="text-[#8492a1]">Counterparty label</dt><dd className="text-right font-semibold text-[#40566e]">{transaction.counterparty || 'Internal ledger'}</dd></div>
-            <div className="flex justify-between gap-4"><dt className="text-[#8492a1]">Recorded</dt><dd className="text-right font-semibold text-[#40566e]">{formatDate(transaction.createdAt)}</dd></div>
-            <div className="flex justify-between gap-4"><dt className="text-[#8492a1]">Status</dt><dd className="text-right font-semibold capitalize text-[#40566e]">{humanize(transaction.status)}</dd></div>
-          </dl>
-          <p className="mt-5 rounded-lg border border-[#e5ecef] bg-[#f7f9fa] p-3 text-[9px] leading-4 text-[#718294]">This receipt records an entry in the Globus internal ledger. It is not proof of funds received or sent by an outside account.</p>
-        </article>
-        <div className="receipt-actions mt-6 flex items-center justify-between border-t border-[#edf0f2] pt-5">
-          <span className="text-[9px] font-bold uppercase tracking-[.13em] text-[#56837f]">Internal record</span>
-          <div className="flex gap-2">
-            <button type="button" data-testid="button-download-receipt-pdf" disabled={downloading || transaction.status !== 'completed'} onClick={downloadPdf} className="inline-flex items-center gap-2 rounded-lg border border-[#dfe7eb] px-3 py-2.5 text-[10px] font-bold text-[#4a667e] hover:bg-[#f5f8f9] disabled:cursor-not-allowed disabled:opacity-50"><Download size={14} /> {downloading ? 'Preparing PDF…' : 'Download PDF'}</button>
-            <button type="button" onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-lg bg-[#142f51] px-4 py-2.5 text-[10px] font-bold text-white hover:bg-[#1b4269]"><Printer size={14} /> Print / Save PDF</button>
-          </div>
-        </div>
-        {downloadError && <p role="alert" data-testid="status-receipt-download-error" className="mt-3 text-right text-[10px] text-[#a24940]">{downloadError}</p>}
-      </section>
-    </div>
-  );
+  return <TransferReceiptModal transaction={transaction} onClose={onClose} title={transactionDisplayType(transaction)} />;
 }
 
 function StatusLine({ label, value, positive }: { label: string; value: string; positive: boolean }) {

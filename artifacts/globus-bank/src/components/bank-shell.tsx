@@ -26,8 +26,7 @@ const primaryLinks = [
 ];
 
 const moneyLinks = [
-  { href: '/international-transfer?type=local_routing', label: 'Local routing', icon: ArrowLeftRight },
-  { href: '/international-transfer?type=international_wire', label: 'International wire', icon: ArrowLeftRight },
+  { href: '/transfer', label: 'Transfer', icon: ArrowLeftRight },
   { href: '/receive', label: 'Receive', icon: ArrowDownLeft },
   { href: '/add-money', label: 'Deposit request', icon: CreditCard },
   { href: '/withdraw', label: 'Withdrawal request', icon: ArrowDownLeft },
@@ -131,7 +130,7 @@ function NavGroup({ title, links, location, onNavigate }: { title: string; links
     <div>
       <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">{title}</p>
       {links.map(({ href, label, icon: Icon }) => (
-        <Link key={href} href={href} onClick={onNavigate} className={`mb-1 flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] transition ${location === href ? 'bg-white/10 font-semibold text-white' : 'text-slate-300 hover:bg-white/[0.07] hover:text-white'}`}>
+        <Link key={href} href={href} onClick={onNavigate} className={`mb-1 flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] transition ${(location === href || (href === '/transfer' && location === '/international-transfer')) ? 'bg-white/10 font-semibold text-white' : 'text-slate-300 hover:bg-white/[0.07] hover:text-white'}`}>
           <Icon size={17} strokeWidth={1.8} />
           {label}
         </Link>
@@ -145,7 +144,8 @@ function pageLabel(path: string) {
     '/dashboard': 'Overview',
     '/wallets': 'Wallets',
     '/transactions': 'Activity',
-    '/international-transfer': 'International transfer',
+    '/international-transfer': 'Transfer',
+    '/transfer': 'Transfer',
     '/receive': 'Receive',
     '/add-money': 'Deposit request',
     '/withdraw': 'Withdrawal request',

@@ -6,10 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ActiveCurrencyCode } from './activeCurrencyCode';
+import type { DestinationCurrencyCode } from './destinationCurrencyCode';
 
 export interface BankExchangeRateInput {
   sourceCurrency: ActiveCurrencyCode;
-  destinationCurrency: ActiveCurrencyCode;
+  destinationCurrency: DestinationCurrencyCode;
   /** @pattern ^[0-9]{1,12}(\.[0-9]{1,10})?$ */
   rate: string;
   /**

@@ -53,6 +53,7 @@ import {
   createReference,
   ensureBankUser,
   formatMinorAmount,
+  conversionRatesMatch,
   getEffectiveBankAccountStatus,
   getRecentTransactions,
   getWalletsForUser,
@@ -158,7 +159,7 @@ function internationalTransferRequestResponse(
     sourceCurrency: request.sourceCurrency,
     sourceAmount: formatMinorAmount(request.sourceAmountMinor),
     destinationCurrency: request.destinationCurrency,
-    destinationAmount: formatMinorAmount(request.destinationAmountMinor),
+    destinationAmount: formatMinorAmount(request.destinationAmountMinor, request.destinationCurrency),
     exchangeRate: request.exchangeRate,
     rateUpdatedAt: request.rateUpdatedAt.toISOString(),
     remark: request.remark,
@@ -965,7 +966,8 @@ router.post("/bank/international-transfer-requests", async (req, res): Promise<v
             ),
           ),
         )
-        .limit(1);
+        .limit(1)
+        .for("share");
       if (!configuredRate) {
         return {
           error: `No internal ${parsed.data.sourceCurrency} to ${parsed.data.destinationCurrency} rate is configured. Contact Globus operations.`,
@@ -974,10 +976,16 @@ router.post("/bank/international-transfer-requests", async (req, res): Promise<v
       rate = configuredRate.rate;
       rateUpdatedAt = configuredRate.updatedAt;
     }
+    if (
+      parsed.data.expectedExchangeRate !== undefined &&
+      !conversionRatesMatch(parsed.data.expectedExchangeRate, rate)
+    ) {
+      return { error: "The conversion rate has changed. Review the updated quote and confirm again." };
+    }
 
     let destinationAmountMinor: bigint;
     try {
-      destinationAmountMinor = convertMinorAmount(amountMinor, rate);
+      destinationAmountMinor = convertMinorAmount(amountMinor, rate, parsed.data.destinationCurrency);
     } catch (error) {
       return {
         error:
@@ -1012,7 +1020,7 @@ router.post("/bank/international-transfer-requests", async (req, res): Promise<v
     }
 
     const reference = createReference();
-    const conversionSummary = `${formatMinorAmount(amountMinor)} ${parsed.data.sourceCurrency} converted to ${formatMinorAmount(destinationAmountMinor)} ${parsed.data.destinationCurrency} at ${rate}`;
+    const conversionSummary = `${formatMinorAmount(amountMinor)} ${parsed.data.sourceCurrency} converted to ${formatMinorAmount(destinationAmountMinor, parsed.data.destinationCurrency)} ${parsed.data.destinationCurrency} at ${rate}`;
     const [transaction] = await tx
       .insert(bankTransactionsTable)
       .values({

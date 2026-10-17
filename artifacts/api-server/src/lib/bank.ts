@@ -164,17 +164,25 @@ export function parseAmountToMinor(amount: string): bigint {
   return whole * 100n + fraction;
 }
 
-export function formatMinorAmount(amountMinor: bigint): string {
+export function currencyMinorDigits(currency: string): number {
+  return new Intl.NumberFormat("en", { style: "currency", currency })
+    .resolvedOptions().maximumFractionDigits ?? 2;
+}
+
+export function formatMinorAmount(amountMinor: bigint, currency?: string): string {
+  const digits = currency ? currencyMinorDigits(currency) : 2;
+  const scale = 10n ** BigInt(digits);
   const negative = amountMinor < 0n;
   const absolute = negative ? -amountMinor : amountMinor;
-  const whole = absolute / 100n;
-  const fraction = (absolute % 100n).toString().padStart(2, "0");
-  return `${negative ? "-" : ""}${whole}.${fraction}`;
+  const whole = absolute / scale;
+  const fraction = (absolute % scale).toString().padStart(digits, "0");
+  return `${negative ? "-" : ""}${whole}${digits ? `.${fraction}` : ""}`;
 }
 
 export function convertMinorAmount(
   amountMinor: bigint,
   rate: string,
+  destinationCurrency?: string,
 ): bigint {
   const match = /^(\d{1,12})(?:\.(\d{1,10}))?$/.exec(rate);
   if (!match) {
@@ -186,11 +194,25 @@ export function convertMinorAmount(
   if (rateScaled <= 0n) {
     throw new Error("The configured conversion rate must be greater than zero.");
   }
-  const converted = (amountMinor * rateScaled + scale / 2n) / scale;
+  const targetScale = 10n ** BigInt(destinationCurrency ? currencyMinorDigits(destinationCurrency) : 2);
+  const divisor = scale * 100n;
+  const converted = (amountMinor * rateScaled * targetScale + divisor / 2n) / divisor;
   if (converted > 9_223_372_036_854_775_807n) {
     throw new Error("The converted amount is above the supported limit.");
   }
   return converted;
+}
+
+/** Compare rates without floating-point precision loss, ignoring decimal padding. */
+export function conversionRatesMatch(left: string, right: string): boolean {
+  const canonical = (rate: string) => {
+    const match = /^(\d{1,12})(?:\.(\d{1,10}))?$/.exec(rate);
+    return match
+      ? BigInt(match[1]) * 10n ** 10n + BigInt((match[2] ?? "").padEnd(10, "0"))
+      : null;
+  };
+  const a = canonical(left);
+  return a !== null && a === canonical(right);
 }
 
 export function createReference(): string {

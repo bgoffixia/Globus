@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ActiveCurrencyCode } from './activeCurrencyCode';
+import type { DestinationCurrencyCode } from './destinationCurrencyCode';
 import type { InternationalTransferRequestInputTransferType } from './internationalTransferRequestInputTransferType';
 
 export interface InternationalTransferRequestInput {
@@ -42,7 +43,12 @@ export interface InternationalTransferRequestInput {
      */
   recipientAccountNumber: string;
   sourceCurrency: ActiveCurrencyCode;
-  destinationCurrency: ActiveCurrencyCode;
+  destinationCurrency: DestinationCurrencyCode;
+  /**
+     * Rate reviewed by the customer; reject if it no longer matches the authoritative rate.
+     * @pattern ^[0-9]{1,12}(\.[0-9]{1,10})?$
+     */
+  expectedExchangeRate?: string;
   /** @pattern ^[0-9]{1,12}(\.[0-9]{1,2})?$ */
   amount: string;
   /** @maxLength 140 */

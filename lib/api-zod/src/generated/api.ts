@@ -375,12 +375,13 @@ export const CreateExternalTransferResponse = zod.void()
 /**
  * @summary List administrator-maintained internal conversion rates
  */
+export const listBankExchangeRatesResponseDestinationCurrencyRegExp = new RegExp('^[A-Z]{3}$');
 export const listBankExchangeRatesResponseRateRegExp = new RegExp('^[0-9]+(\\.[0-9]{1,10})?$');
 
 
 export const ListBankExchangeRatesResponseItem = zod.object({
   "sourceCurrency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
-  "destinationCurrency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
+  "destinationCurrency": zod.string().regex(listBankExchangeRatesResponseDestinationCurrencyRegExp).describe('ISO 4217 destination currency, independent of supported source wallets.'),
   "rate": zod.string().regex(listBankExchangeRatesResponseRateRegExp),
   "updatedAt": zod.coerce.date()
 })
@@ -391,6 +392,7 @@ export const ListBankExchangeRatesResponse = zod.array(ListBankExchangeRatesResp
  * @summary List the authenticated user's internal international transfer requests
  */
 export const listInternationalTransferRequestsResponseRecipientAccountLast4RegExp = new RegExp('^[A-Z0-9]{4}$');
+export const listInternationalTransferRequestsResponseDestinationCurrencyRegExp = new RegExp('^[A-Z]{3}$');
 
 
 export const ListInternationalTransferRequestsResponseItem = zod.object({
@@ -406,7 +408,7 @@ export const ListInternationalTransferRequestsResponseItem = zod.object({
   "recipientAccountLast4": zod.string().regex(listInternationalTransferRequestsResponseRecipientAccountLast4RegExp),
   "sourceCurrency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
   "sourceAmount": zod.string(),
-  "destinationCurrency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
+  "destinationCurrency": zod.string().regex(listInternationalTransferRequestsResponseDestinationCurrencyRegExp).describe('ISO 4217 destination currency, independent of supported source wallets.'),
   "destinationAmount": zod.string(),
   "exchangeRate": zod.string(),
   "rateUpdatedAt": zod.coerce.date(),
@@ -440,6 +442,8 @@ export const createInternationalTransferRequestBodyRecipientAccountNumberMax = 3
 
 
 export const createInternationalTransferRequestBodyRecipientAccountNumberRegExp = new RegExp('^[A-Za-z0-9 ]+$');
+export const createInternationalTransferRequestBodyDestinationCurrencyRegExp = new RegExp('^[A-Z]{3}$');
+export const createInternationalTransferRequestBodyExpectedExchangeRateRegExp = new RegExp('^[0-9]{1,12}(\\.[0-9]{1,10})?$');
 export const createInternationalTransferRequestBodyAmountRegExp = new RegExp('^[0-9]{1,12}(\\.[0-9]{1,2})?$');
 export const createInternationalTransferRequestBodyRemarkMax = 140;
 
@@ -458,7 +462,8 @@ export const CreateInternationalTransferRequestBody = zod.object({
   "recipientAccountName": zod.string().min(1).max(createInternationalTransferRequestBodyRecipientAccountNameMax),
   "recipientAccountNumber": zod.string().min(createInternationalTransferRequestBodyRecipientAccountNumberMin).max(createInternationalTransferRequestBodyRecipientAccountNumberMax).regex(createInternationalTransferRequestBodyRecipientAccountNumberRegExp),
   "sourceCurrency": zod.enum(['USD', 'EUR', 'GBP', 'CAD', 'AUD']),
-  "destinationCurrency": zod.enum(['USD', 'EUR', 'GBP', 'CAD', 'AUD']),
+  "destinationCurrency": zod.string().regex(createInternationalTransferRequestBodyDestinationCurrencyRegExp).describe('ISO 4217 destination currency, independent of supported source wallets.'),
+  "expectedExchangeRate": zod.string().regex(createInternationalTransferRequestBodyExpectedExchangeRateRegExp).optional().describe('Rate reviewed by the customer; reject if it no longer matches the authoritative rate.'),
   "amount": zod.string().regex(createInternationalTransferRequestBodyAmountRegExp),
   "remark": zod.string().max(createInternationalTransferRequestBodyRemarkMax).optional(),
   "idempotencyKey": zod.string().min(createInternationalTransferRequestBodyIdempotencyKeyMin).max(createInternationalTransferRequestBodyIdempotencyKeyMax),
@@ -466,6 +471,7 @@ export const CreateInternationalTransferRequestBody = zod.object({
 })
 
 export const createInternationalTransferRequestResponseRecipientAccountLast4RegExp = new RegExp('^[A-Z0-9]{4}$');
+export const createInternationalTransferRequestResponseDestinationCurrencyRegExp = new RegExp('^[A-Z]{3}$');
 
 
 export const CreateInternationalTransferRequestResponse = zod.object({
@@ -481,7 +487,7 @@ export const CreateInternationalTransferRequestResponse = zod.object({
   "recipientAccountLast4": zod.string().regex(createInternationalTransferRequestResponseRecipientAccountLast4RegExp),
   "sourceCurrency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
   "sourceAmount": zod.string(),
-  "destinationCurrency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
+  "destinationCurrency": zod.string().regex(createInternationalTransferRequestResponseDestinationCurrencyRegExp).describe('ISO 4217 destination currency, independent of supported source wallets.'),
   "destinationAmount": zod.string(),
   "exchangeRate": zod.string(),
   "rateUpdatedAt": zod.coerce.date(),
@@ -493,6 +499,7 @@ export const CreateInternationalTransferRequestResponse = zod.object({
 /**
  * @summary Set an administrator-maintained internal conversion rate
  */
+export const upsertBankExchangeRateBodyDestinationCurrencyRegExp = new RegExp('^[A-Z]{3}$');
 export const upsertBankExchangeRateBodyRateRegExp = new RegExp('^[0-9]{1,12}(\\.[0-9]{1,10})?$');
 export const upsertBankExchangeRateBodyReasonMin = 5;
 export const upsertBankExchangeRateBodyReasonMax = 500;
@@ -502,18 +509,19 @@ export const upsertBankExchangeRateBodyTransactionPinRegExp = new RegExp('^[0-9]
 
 export const UpsertBankExchangeRateBody = zod.object({
   "sourceCurrency": zod.enum(['USD', 'EUR', 'GBP', 'CAD', 'AUD']),
-  "destinationCurrency": zod.enum(['USD', 'EUR', 'GBP', 'CAD', 'AUD']),
+  "destinationCurrency": zod.string().regex(upsertBankExchangeRateBodyDestinationCurrencyRegExp).describe('ISO 4217 destination currency, independent of supported source wallets.'),
   "rate": zod.string().regex(upsertBankExchangeRateBodyRateRegExp),
   "reason": zod.string().min(upsertBankExchangeRateBodyReasonMin).max(upsertBankExchangeRateBodyReasonMax),
   "transactionPin": zod.string().regex(upsertBankExchangeRateBodyTransactionPinRegExp)
 })
 
+export const upsertBankExchangeRateResponseDestinationCurrencyRegExp = new RegExp('^[A-Z]{3}$');
 export const upsertBankExchangeRateResponseRateRegExp = new RegExp('^[0-9]+(\\.[0-9]{1,10})?$');
 
 
 export const UpsertBankExchangeRateResponse = zod.object({
   "sourceCurrency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
-  "destinationCurrency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
+  "destinationCurrency": zod.string().regex(upsertBankExchangeRateResponseDestinationCurrencyRegExp).describe('ISO 4217 destination currency, independent of supported source wallets.'),
   "rate": zod.string().regex(upsertBankExchangeRateResponseRateRegExp),
   "updatedAt": zod.coerce.date()
 })

@@ -1219,11 +1219,15 @@ components:
     ActiveCurrencyCode:
       type: string
       enum: [USD, EUR, GBP, CAD, AUD]
+    DestinationCurrencyCode:
+      type: string
+      pattern: "^[A-Z]{3}$"
+      description: ISO 4217 destination currency, independent of supported source wallets.
     BankExchangeRate:
       type: object
       properties:
         sourceCurrency: { $ref: "#/components/schemas/CurrencyCode" }
-        destinationCurrency: { $ref: "#/components/schemas/CurrencyCode" }
+        destinationCurrency: { $ref: "#/components/schemas/DestinationCurrencyCode" }
         rate: { type: string, pattern: "^[0-9]+(\\.[0-9]{1,10})?$" }
         updatedAt: { type: string, format: date-time }
       required: [sourceCurrency, destinationCurrency, rate, updatedAt]
@@ -1231,7 +1235,7 @@ components:
       type: object
       properties:
         sourceCurrency: { $ref: "#/components/schemas/ActiveCurrencyCode" }
-        destinationCurrency: { $ref: "#/components/schemas/ActiveCurrencyCode" }
+        destinationCurrency: { $ref: "#/components/schemas/DestinationCurrencyCode" }
         rate: { type: string, pattern: "^[0-9]{1,12}(\\.[0-9]{1,10})?$" }
         reason: { type: string, minLength: 5, maxLength: 500 }
         transactionPin: { type: string, pattern: "^[0-9]{6}$" }
@@ -1247,7 +1251,8 @@ components:
         recipientAccountName: { type: string, minLength: 1, maxLength: 120 }
         recipientAccountNumber: { type: string, minLength: 4, maxLength: 34, pattern: "^[A-Za-z0-9 ]+$" }
         sourceCurrency: { $ref: "#/components/schemas/ActiveCurrencyCode" }
-        destinationCurrency: { $ref: "#/components/schemas/ActiveCurrencyCode" }
+        destinationCurrency: { $ref: "#/components/schemas/DestinationCurrencyCode" }
+        expectedExchangeRate: { type: string, pattern: "^[0-9]{1,12}(\\.[0-9]{1,10})?$", description: Rate reviewed by the customer; reject if it no longer matches the authoritative rate. }
         amount: { type: string, pattern: "^[0-9]{1,12}(\\.[0-9]{1,2})?$" }
         remark: { type: string, maxLength: 140 }
         idempotencyKey: { type: string, minLength: 16, maxLength: 100 }
@@ -1268,7 +1273,7 @@ components:
         recipientAccountLast4: { type: string, pattern: "^[A-Z0-9]{4}$" }
         sourceCurrency: { $ref: "#/components/schemas/CurrencyCode" }
         sourceAmount: { type: string }
-        destinationCurrency: { $ref: "#/components/schemas/CurrencyCode" }
+        destinationCurrency: { $ref: "#/components/schemas/DestinationCurrencyCode" }
         destinationAmount: { type: string }
         exchangeRate: { type: string }
         rateUpdatedAt: { type: string, format: date-time }

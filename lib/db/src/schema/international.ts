@@ -14,7 +14,7 @@ export const bankExchangeRatesTable = pgTable(
   "bank_exchange_rates",
   {
     sourceCurrency: bankCurrencyEnum("source_currency").notNull(),
-    destinationCurrency: bankCurrencyEnum("destination_currency").notNull(),
+    destinationCurrency: text("destination_currency").notNull(),
     rate: numeric("rate", { precision: 24, scale: 10 }).notNull(),
     updatedByUserId: text("updated_by_user_id")
       .notNull()
@@ -46,7 +46,7 @@ export const bankInternationalTransferRequestsTable = pgTable(
       .references(() => bankWalletsTable.id),
     sourceCurrency: bankCurrencyEnum("source_currency").notNull(),
     sourceAmountMinor: bigint("source_amount_minor", { mode: "bigint" }).notNull(),
-    destinationCurrency: bankCurrencyEnum("destination_currency").notNull(),
+    destinationCurrency: text("destination_currency").notNull(),
     destinationAmountMinor: bigint("destination_amount_minor", {
       mode: "bigint",
     }).notNull(),

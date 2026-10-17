@@ -10,6 +10,8 @@ export interface TransactionReceiptPdfData {
   sourceAmount?: string;
   exchangeRate?: string;
   convertedAmount?: string;
+  recipient?: string;
+  route?: string;
 }
 
 const PAGE_WIDTH = 1240;
@@ -112,24 +114,24 @@ function drawReceipt(context: CanvasRenderingContext2D, logo: HTMLImageElement, 
   context.fillStyle = '#ffffff';
   context.fillRect(0, 0, PAGE_WIDTH, PAGE_HEIGHT);
 
-  const logoHeight = 94;
+  const logoHeight = 72;
   const logoWidth = Math.min(430, logo.naturalWidth / logo.naturalHeight * logoHeight);
-  context.drawImage(logo, PAGE_MARGIN, 92, logoWidth, logoHeight);
+  context.drawImage(logo, PAGE_MARGIN, 72, logoWidth, logoHeight);
 
   context.fillStyle = '#518c91';
   context.font = '700 21px Arial, sans-serif';
-  context.fillText('INTERNAL LEDGER RECEIPT', PAGE_MARGIN, 260);
+  context.fillText('INTERNAL LEDGER RECEIPT', PAGE_MARGIN, 210);
 
   context.fillStyle = '#203851';
   context.font = '700 48px Arial, sans-serif';
-  context.fillText('Transaction receipt', PAGE_MARGIN, 328);
+  context.fillText('Transaction receipt', PAGE_MARGIN, 265);
 
   context.fillStyle = '#64798e';
   context.font = '400 24px Arial, sans-serif';
   const activityLines = wrapText(context, receipt.activity, TEXT_WIDTH);
-  activityLines.forEach((line, index) => context.fillText(line, PAGE_MARGIN, 378 + index * 34));
+  activityLines.forEach((line, index) => context.fillText(line, PAGE_MARGIN, 305 + index * 34));
 
-  const amountY = 506 + Math.max(0, activityLines.length - 1) * 34;
+  const amountY = 392 + Math.max(0, activityLines.length - 1) * 34;
   context.fillStyle = '#203851';
   context.font = '700 58px Arial, sans-serif';
   context.fillText(receipt.amount, PAGE_MARGIN, amountY);
@@ -156,6 +158,8 @@ function drawReceipt(context: CanvasRenderingContext2D, logo: HTMLImageElement, 
     ['Source amount', receipt.sourceAmount ?? ''],
     ['Exchange rate', receipt.exchangeRate ?? ''],
     ['Total converted amount', receipt.convertedAmount ?? ''],
+    ['Recipient', receipt.recipient ?? ''],
+    ['Route', receipt.route ?? ''],
     ['Description', receipt.description],
     ['Date', receipt.date],
     ['Counterparty label', receipt.counterparty],
@@ -163,23 +167,20 @@ function drawReceipt(context: CanvasRenderingContext2D, logo: HTMLImageElement, 
   for (const [label, value] of fields) {
     if (!value) continue;
     context.fillStyle = '#8492a1';
-    context.font = '400 20px Arial, sans-serif';
-    context.fillText(label.toUpperCase(), PAGE_MARGIN, y);
-    y += 37;
+    context.font = '700 16px Arial, sans-serif';
+    const labelLines = wrapText(context, label.toUpperCase(), 210);
+    labelLines.forEach((line, index) => context.fillText(line, PAGE_MARGIN, y + index * 25));
 
     context.fillStyle = '#40566e';
-    context.font = label === 'Reference' ? '700 25px monospace' : '600 25px Arial, sans-serif';
-    const lines = wrapText(context, value, TEXT_WIDTH);
-    lines.forEach(line => {
-      context.fillText(line, PAGE_MARGIN, y);
-      y += 36;
-    });
-    y += 26;
+    context.font = label === 'Reference' ? '700 22px monospace' : '600 22px Arial, sans-serif';
+    const lines = wrapText(context, value, TEXT_WIDTH - 240);
+    lines.forEach((line, index) => context.fillText(line, PAGE_MARGIN + 240, y + index * 30));
+    y += Math.max(lines.length * 30, labelLines.length * 25) + 22;
   }
 
   const disclaimerY = Math.max(y + 24, PAGE_HEIGHT - 300);
   context.fillStyle = '#f5f8f9';
-  context.fillRect(PAGE_MARGIN, disclaimerY, TEXT_WIDTH, 174);
+  context.fillRect(PAGE_MARGIN, disclaimerY, TEXT_WIDTH, 200);
   context.fillStyle = '#29425c';
   context.font = '700 20px Arial, sans-serif';
   context.fillText('IMPORTANT', PAGE_MARGIN + 28, disclaimerY + 42);

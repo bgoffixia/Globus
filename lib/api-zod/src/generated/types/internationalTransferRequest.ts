@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CurrencyCode } from './currencyCode';
+import type { DestinationCurrencyCode } from './destinationCurrencyCode';
 import type { InternationalTransferRequestTransferType } from './internationalTransferRequestTransferType';
 import type { TransactionStatus } from './transactionStatus';
 
@@ -25,7 +26,7 @@ export interface InternationalTransferRequest {
   recipientAccountLast4: string;
   sourceCurrency: CurrencyCode;
   sourceAmount: string;
-  destinationCurrency: CurrencyCode;
+  destinationCurrency: DestinationCurrencyCode;
   destinationAmount: string;
   exchangeRate: string;
   rateUpdatedAt: Date;
