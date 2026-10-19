@@ -74,9 +74,6 @@ export function receiptFromRequest(r: InternationalTransferRequest): ReceiptTran
   } as ReceiptTransaction;
 }
 
-const transferDisclosure = 'This receipt records a transfer request in Globus only. It is not confirmation that an outside bank received or paid funds. Recipient details and the converted amount are recorded in Globus; no outside payment is represented.';
-const accountDisclosure = 'This receipt records activity in your Globus account. It is not proof of funds received or sent by an outside account. Globus does not process bank payments or real-money transfers.';
-
 export function TransferReceiptModal({ transaction, onClose, title }: { transaction: ReceiptTransaction; onClose: () => void; title?: string }) {
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState('');
@@ -87,7 +84,6 @@ export function TransferReceiptModal({ transaction, onClose, title }: { transact
   const completed = transaction.status === 'completed';
   const isTransfer = transaction.type === 'external_transfer';
   const heading = title ?? (isTransfer ? 'Routed transfer' : humanizeStatus(transaction.type));
-  const disclosure = isTransfer ? transferDisclosure : accountDisclosure;
 
   useEffect(() => {
     const prev = document.activeElement as HTMLElement | null;
@@ -115,7 +111,6 @@ export function TransferReceiptModal({ transaction, onClose, title }: { transact
         convertedAmount: conversion ? formatAmount(conversion.destinationAmount, conversion.destinationCurrency) : undefined,
         recipient: transaction.recipient?.name,
         route: transaction.recipient?.route,
-        disclaimer: disclosure,
       }, `${import.meta.env.BASE_URL}globus-wordmark.png`);
     } catch (error) {
       setDownloadError(error instanceof Error ? error.message : 'The PDF receipt could not be downloaded.');
@@ -170,7 +165,6 @@ export function TransferReceiptModal({ transaction, onClose, title }: { transact
                 <Row label="Recorded" value={formatDateTime(transaction.createdAt)} />
                 <Row label="Status" value={humanizeStatus(transaction.status)} />
               </dl>
-              <p className="mt-3 rounded-lg border border-[#e5ecef] bg-white p-3 text-[9px] leading-4 text-[#6f8193]">{completed ? disclosure : `This request has not been completed. ${disclosure}`}</p>
             </div>
           </article>
           <div className="receipt-actions flex flex-wrap items-center justify-end gap-2 border-t border-[#ecefef] px-6 py-4">

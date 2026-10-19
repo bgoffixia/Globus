@@ -6,7 +6,6 @@ export interface TransactionReceiptPdfData {
   description: string;
   counterparty: string;
   activity: string;
-  disclaimer: string;
   sourceAmount?: string;
   exchangeRate?: string;
   convertedAmount?: string;
@@ -177,17 +176,6 @@ function drawReceipt(context: CanvasRenderingContext2D, logo: HTMLImageElement, 
     lines.forEach((line, index) => context.fillText(line, PAGE_MARGIN + 240, y + index * 30));
     y += Math.max(lines.length * 30, labelLines.length * 25) + 22;
   }
-
-  const disclaimerY = Math.max(y + 24, PAGE_HEIGHT - 300);
-  context.fillStyle = '#f5f8f9';
-  context.fillRect(PAGE_MARGIN, disclaimerY, TEXT_WIDTH, 200);
-  context.fillStyle = '#29425c';
-  context.font = '700 20px Arial, sans-serif';
-  context.fillText('IMPORTANT', PAGE_MARGIN + 28, disclaimerY + 42);
-  context.fillStyle = '#64798e';
-  context.font = '400 19px Arial, sans-serif';
-  wrapText(context, receipt.disclaimer, TEXT_WIDTH - 56)
-    .forEach((line, index) => context.fillText(line, PAGE_MARGIN + 28, disclaimerY + 78 + index * 29));
 
   context.fillStyle = '#8795a2';
   context.font = '400 16px Arial, sans-serif';
