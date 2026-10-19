@@ -2,6 +2,7 @@ import { Link, useLocation } from 'wouter';
 import {
   ArrowDownLeft,
   ArrowLeftRight,
+  Calculator,
   CircleHelp,
   Contact,
   CreditCard,
@@ -26,6 +27,7 @@ const primaryLinks = [
   { href: '/wallets', label: 'Wallets', icon: WalletCards },
   { href: '/customer-id', label: 'Customer ID', icon: Contact },
   { href: '/transactions', label: 'Activity', icon: ArrowLeftRight },
+  { href: '/calculator', label: 'Currency converter', icon: Calculator },
 ];
 
 const moneyLinks = [
@@ -140,6 +142,7 @@ function pageLabel(path: string) {
     '/dashboard': 'Overview',
     '/wallets': 'Wallets',
     '/transactions': 'Activity',
+    '/calculator': 'Currency converter',
     '/international-transfer': 'Transfer',
     '/transfer': 'Transfer',
     '/customer-id': 'Customer ID',

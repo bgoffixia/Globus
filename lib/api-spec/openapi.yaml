@@ -344,7 +344,7 @@ paths:
           in: query
           required: true
           schema:
-            $ref: "#/components/schemas/ActiveCurrencyCode"
+            $ref: "#/components/schemas/DestinationCurrencyCode"
         - name: destinationCurrency
           in: query
           required: true
@@ -1257,7 +1257,7 @@ components:
     DestinationCurrencyCode:
       type: string
       pattern: "^[A-Z]{3}$"
-      description: ISO 4217 destination currency, independent of supported source wallets.
+      description: ISO 4217 currency code for a rate quote, independent of supported source wallets.
     BankExchangeRate:
       type: object
       properties:
@@ -1269,7 +1269,7 @@ components:
     BankExchangeRateQuote:
       type: object
       properties:
-        sourceCurrency: { $ref: "#/components/schemas/ActiveCurrencyCode" }
+        sourceCurrency: { $ref: "#/components/schemas/DestinationCurrencyCode" }
         destinationCurrency: { $ref: "#/components/schemas/DestinationCurrencyCode" }
         rate: { type: string, pattern: "^[0-9]{1,12}(\\.[0-9]{1,10})?$" }
         provider: { type: string, enum: [Frankfurter, Grey, Globus] }

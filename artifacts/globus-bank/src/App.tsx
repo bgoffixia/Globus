@@ -21,6 +21,7 @@ import {
   TransactionsPage,
   WalletsPage,
 } from '@/pages/bank-pages';
+import { CurrencyCalculatorPage } from '@/pages/currency-calculator-page';
 import { AdminWorkspace } from '@/pages/admin-workspace';
 import {
   Redirect,
@@ -224,6 +225,7 @@ function ClerkRoutes() {
         <Route path="/dashboard"><ProtectedPage><DashboardPage /></ProtectedPage></Route>
         <Route path="/wallets"><ProtectedPage><WalletsPage /></ProtectedPage></Route>
         <Route path="/transactions"><ProtectedPage><TransactionsPage /></ProtectedPage></Route>
+        <Route path="/calculator"><ProtectedPage><CurrencyCalculatorPage /></ProtectedPage></Route>
         <Route path="/send"><Redirect to="/transfer" /></Route>
         <Route path="/transfer"><ProtectedPage><InternationalTransferPage /></ProtectedPage></Route>
         <Route path="/international-transfer"><ProtectedPage><InternationalTransferPage /></ProtectedPage></Route>

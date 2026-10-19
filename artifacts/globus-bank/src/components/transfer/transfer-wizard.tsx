@@ -20,6 +20,7 @@ import { BankSelect } from '@/components/bank-select';
 import { CountrySelect } from '@/components/country-select';
 import { countries } from '@/lib/countries';
 import { currencyLabel, destinationCurrencies, destinationCurrencyForCountry } from '@/lib/destination-currency';
+import { previewConversion } from '@/lib/currency-conversion';
 import { digitsFor, formatAmount, formatRate, humanizeStatus, receiptFromRequest, TransferReceiptModal, type ReceiptTransaction } from './transfer-receipt';
 
 type TransferType = 'local_routing' | 'international_wire';
@@ -35,20 +36,6 @@ const GUIDE = [
 ];
 const SWIFT_RE = /^[A-Za-z0-9]{8}([A-Za-z0-9]{3})?$/;
 const AMOUNT_RE = /^\d{1,12}(\.\d{1,2})?$/;
-
-/** Exact conversion: source has 2 decimals, rate up to 10, result rounded half-up to target minor digits. */
-export function previewConversion(amount: string, rate: string, targetDigits: number): string | null {
-  const a = /^(\d{1,12})(?:\.(\d{1,2}))?$/.exec(amount);
-  const r = /^(\d{1,12})(?:\.(\d{1,10}))?$/.exec(rate);
-  if (!a || !r) return null;
-  const minor = BigInt(a[1]) * 100n + BigInt((a[2] ?? '').padEnd(2, '0'));
-  const rateScaled = BigInt(r[1]) * 10n ** 10n + BigInt((r[2] ?? '').padEnd(10, '0'));
-  const denom = 100n * 10n ** 10n;
-  const target = 10n ** BigInt(targetDigits);
-  const out = (minor * rateScaled * target + denom / 2n) / denom;
-  if (targetDigits === 0) return out.toString();
-  return `${out / target}.${(out % target).toString().padStart(targetDigits, '0')}`;
-}
 
 function newKey() {
   return typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;

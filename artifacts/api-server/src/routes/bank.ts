@@ -117,8 +117,6 @@ type CachedExchangeRate = {
 const exchangeRateCache = new Map<string, CachedExchangeRate>();
 const exchangeRateLoads = new Map<string, Promise<CachedExchangeRate>>();
 const EXCHANGE_RATE_CACHE_MS = 15 * 60 * 1000;
-const activeTransferCurrencies = new Set(["USD", "EUR", "GBP", "CAD", "AUD"]);
-
 async function fetchFrankfurterExchangeRate(
   sourceCurrency: string,
   destinationCurrency: string,
@@ -959,8 +957,8 @@ router.get(
       sourceCurrency: req.query.sourceCurrency,
       destinationCurrency: req.query.destinationCurrency,
     });
-    if (!parsed.success || !activeTransferCurrencies.has(parsed.data.sourceCurrency)) {
-      res.status(400).json({ error: "Choose a supported source and destination currency." });
+    if (!parsed.success) {
+      res.status(400).json({ error: "Choose valid source and destination currencies." });
       return;
     }
 

@@ -13,6 +13,7 @@ import {
   Clock3,
   Contact,
   Copy,
+  Calculator,
   Download,
   FileText,
   Globe2,
@@ -333,6 +334,7 @@ export function DashboardPage() {
             <ActionTile href={currencyActionHref('/add-money', actionCurrency)} icon={<WalletCards size={16} />} label="Deposit" testId="dashboard-quick-deposit" />
             <ActionTile href={currencyActionHref('/withdraw', actionCurrency)} icon={<ArrowUpRight size={16} />} label="Withdraw" testId="dashboard-quick-withdraw" />
             <ActionTile href={currencyActionHref('/transfer', actionCurrency)} icon={<ArrowLeftRight size={16} />} label="Transfer" testId="dashboard-quick-transfer" />
+            <ActionTile href="/calculator" icon={<Calculator size={16} />} label="Convert" testId="dashboard-quick-converter" />
             <ActionTile href="/wallets" icon={<WalletCards size={16} />} label="Wallets" testId="dashboard-quick-wallets" />
             <ActionTile href="/transactions" icon={<History size={16} />} label="Activity" testId="dashboard-quick-activity" />
             {adminAccess.data?.allowed && <ActionTile href="/admin" icon={<ShieldCheck size={16} />} label="Admin" testId="dashboard-quick-admin" />}
