@@ -3,3 +3,4 @@
 - [Internal ledger boundaries](internal-ledger-boundaries.md) — Keep money movement internal; international requests use admin-maintained estimates and never send or reserve funds.
 - [Admin transaction controls](admin-transaction-controls.md) — Status corrections never change postings; restrictions are additive and enforced server-side.
 - [Transaction PIN security](transaction-pin-security.md) — Store only PIN hashes; admins reset member PINs but never view or assign their values.
+- [Flutterwave quote boundary](flutterwave-quote-boundary.md) — Use Flutterwave only for read-only rate quotes; Globus records the conversion but never moves funds through the provider.

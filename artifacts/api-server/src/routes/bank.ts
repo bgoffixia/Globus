@@ -18,6 +18,8 @@ import {
   CreateInternationalTransferRequestResponse,
   CreateLedgerRequestResponse,
   GetBankDashboardResponse,
+  GetBankExchangeRateQuoteQueryParams,
+  GetBankExchangeRateQuoteResponse,
   GetBankProfileResponse,
   ListBankExchangeRatesResponse,
   ListInternationalTransferRequestsResponse,
@@ -84,6 +86,85 @@ const customerIdLookupLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: "Unable to verify those details. Try again later." },
 });
+const exchangeRateQuoteLimiter = rateLimit({
+  windowMs: 60_000,
+  limit: 30,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { error: "Rate quotes are temporarily limited. Please try again shortly." },
+});
+
+type FlutterwaveRateReply = {
+  status?: unknown;
+  data?: {
+    rate?: unknown;
+    source?: { currency?: unknown };
+    destination?: { currency?: unknown };
+  } | null;
+};
+type CachedExchangeRate = {
+  rate: string;
+  checkedAt: Date;
+  expiresAt: number;
+};
+const flutterwaveRateCache = new Map<string, CachedExchangeRate>();
+const flutterwaveRateLoads = new Map<string, Promise<CachedExchangeRate>>();
+const FLUTTERWAVE_RATE_CACHE_MS = 15 * 60 * 1000;
+const activeTransferCurrencies = new Set(["USD", "EUR", "GBP", "CAD", "AUD"]);
+
+async function getFlutterwaveExchangeRate(
+  sourceCurrency: string,
+  destinationCurrency: string,
+): Promise<CachedExchangeRate> {
+  const cacheKey = `${sourceCurrency}:${destinationCurrency}`;
+  const cached = flutterwaveRateCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached;
+  const inflight = flutterwaveRateLoads.get(cacheKey);
+  if (inflight) return inflight;
+
+  const request = (async () => {
+    const secretKey = process.env.FLUTTERWAVE_SECRET_KEY;
+    if (!secretKey) throw new Error("Exchange rate provider is not configured.");
+
+    const url = new URL("https://api.flutterwave.com/v3/transfers/rates");
+    url.searchParams.set("source_currency", sourceCurrency);
+    url.searchParams.set("destination_currency", destinationCurrency);
+    url.searchParams.set("amount", "1000");
+
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${secretKey}` },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok) throw new Error("Exchange rate provider returned an error.");
+
+    const payload = (await response.json()) as FlutterwaveRateReply;
+    const rawRate = payload.data?.rate;
+    const numericRate = typeof rawRate === "number" ? rawRate : Number(rawRate);
+    if (
+      payload.status !== "success" ||
+      !Number.isFinite(numericRate) ||
+      numericRate <= 0 ||
+      payload.data?.source?.currency !== sourceCurrency ||
+      payload.data?.destination?.currency !== destinationCurrency
+    ) {
+      throw new Error("Exchange rate provider could not quote this currency pair.");
+    }
+    const rate = numericRate.toFixed(10).replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
+    const result = {
+      rate,
+      checkedAt: new Date(),
+      expiresAt: Date.now() + FLUTTERWAVE_RATE_CACHE_MS,
+    };
+    flutterwaveRateCache.set(cacheKey, result);
+    return result;
+  })();
+  flutterwaveRateLoads.set(cacheKey, request);
+  try {
+    return await request;
+  } finally {
+    flutterwaveRateLoads.delete(cacheKey);
+  }
+}
 
 function rejectExternalTransfer(res: Response, kind: "deposit" | "payout"): boolean {
   res.status(410).json({
@@ -805,6 +886,57 @@ router.post("/bank/transfers", (_req, res): void => {
   });
 });
 
+router.get(
+  "/bank/exchange-rates/quote",
+  requireSignedIn,
+  exchangeRateQuoteLimiter,
+  async (req, res): Promise<void> => {
+    const parsed = GetBankExchangeRateQuoteQueryParams.safeParse({
+      sourceCurrency: req.query.sourceCurrency,
+      destinationCurrency: req.query.destinationCurrency,
+    });
+    if (!parsed.success || !activeTransferCurrencies.has(parsed.data.sourceCurrency)) {
+      res.status(400).json({ error: "Choose a supported source and destination currency." });
+      return;
+    }
+
+    const { sourceCurrency, destinationCurrency } = parsed.data;
+    if (sourceCurrency === destinationCurrency) {
+      res.json(
+        GetBankExchangeRateQuoteResponse.parse({
+          sourceCurrency,
+          destinationCurrency,
+          rate: "1.0000000000",
+          provider: "Globus",
+          checkedAt: new Date().toISOString(),
+        }),
+      );
+      return;
+    }
+
+    try {
+      const quote = await getFlutterwaveExchangeRate(sourceCurrency, destinationCurrency);
+      res.json(
+        GetBankExchangeRateQuoteResponse.parse({
+          sourceCurrency,
+          destinationCurrency,
+          rate: quote.rate,
+          provider: "Flutterwave",
+          checkedAt: quote.checkedAt.toISOString(),
+        }),
+      );
+    } catch {
+      req.log.warn(
+        { sourceCurrency, destinationCurrency },
+        "Flutterwave rate quote unavailable",
+      );
+      res.status(503).json({
+        error: `Flutterwave could not provide a ${sourceCurrency} to ${destinationCurrency} quote. Choose another supported currency pair.`,
+      });
+    }
+  },
+);
+
 router.get("/bank/exchange-rates", async (req, res): Promise<void> => {
   if (!getAuth(req).userId) {
     res.status(401).json({ error: "Sign in to access your Globus account." });
@@ -917,6 +1049,33 @@ router.post("/bank/international-transfer-requests", async (req, res): Promise<v
     return;
   }
 
+  let rate = "1.0000000000";
+  let rateUpdatedAt = new Date();
+  if (parsed.data.sourceCurrency !== parsed.data.destinationCurrency) {
+    try {
+      const quote = await getFlutterwaveExchangeRate(
+        parsed.data.sourceCurrency,
+        parsed.data.destinationCurrency,
+      );
+      rate = quote.rate;
+      rateUpdatedAt = quote.checkedAt;
+    } catch {
+      res.status(503).json({
+        error: `Flutterwave could not provide a ${parsed.data.sourceCurrency} to ${parsed.data.destinationCurrency} quote. The transfer was not submitted.`,
+      });
+      return;
+    }
+  }
+  if (
+    parsed.data.expectedExchangeRate !== undefined &&
+    !conversionRatesMatch(parsed.data.expectedExchangeRate, rate)
+  ) {
+    res.status(409).json({
+      error: "The conversion rate changed. Review the updated quote and confirm again.",
+    });
+    return;
+  }
+
   const completedByMember = sender.verificationStatus === "approved";
   const routingCode = parsed.data.routingCode?.trim().toUpperCase() || null;
   const swiftBic = parsed.data.swiftBic?.trim().toUpperCase() || null;
@@ -949,38 +1108,6 @@ router.post("/bank/international-transfer-requests", async (req, res): Promise<v
       return existingRequest
         ? { request: existingRequest, transaction: duplicate }
         : { error: "The existing request record could not be loaded." };
-    }
-
-    let rate = "1.0000000000";
-    let rateUpdatedAt = new Date();
-    if (parsed.data.sourceCurrency !== parsed.data.destinationCurrency) {
-      const [configuredRate] = await tx
-        .select()
-        .from(bankExchangeRatesTable)
-        .where(
-          and(
-            eq(bankExchangeRatesTable.sourceCurrency, parsed.data.sourceCurrency),
-            eq(
-              bankExchangeRatesTable.destinationCurrency,
-              parsed.data.destinationCurrency,
-            ),
-          ),
-        )
-        .limit(1)
-        .for("share");
-      if (!configuredRate) {
-        return {
-          error: `No internal ${parsed.data.sourceCurrency} to ${parsed.data.destinationCurrency} rate is configured. Contact Globus operations.`,
-        };
-      }
-      rate = configuredRate.rate;
-      rateUpdatedAt = configuredRate.updatedAt;
-    }
-    if (
-      parsed.data.expectedExchangeRate !== undefined &&
-      !conversionRatesMatch(parsed.data.expectedExchangeRate, rate)
-    ) {
-      return { error: "The conversion rate has changed. Review the updated quote and confirm again." };
     }
 
     let destinationAmountMinor: bigint;

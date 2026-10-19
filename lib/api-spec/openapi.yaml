@@ -334,14 +334,43 @@ paths:
                 properties:
                   error:
                     type: string
+  /bank/exchange-rates/quote:
+    get:
+      operationId: getBankExchangeRateQuote
+      tags: [bank]
+      summary: Get a current Flutterwave rate quote for an internal conversion
+      parameters:
+        - name: sourceCurrency
+          in: query
+          required: true
+          schema:
+            $ref: "#/components/schemas/ActiveCurrencyCode"
+        - name: destinationCurrency
+          in: query
+          required: true
+          schema:
+            $ref: "#/components/schemas/DestinationCurrencyCode"
+      responses:
+        "200":
+          description: Current rate quote
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BankExchangeRateQuote"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
   /bank/exchange-rates:
     get:
       operationId: listBankExchangeRates
       tags: [bank]
-      summary: List administrator-maintained internal conversion rates
+      summary: List historical administrator-maintained conversion rates
       responses:
         "200":
-          description: Current internal rates
+          description: Historical rates
           content:
             application/json:
               schema:
@@ -1199,6 +1228,12 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
+    ServiceUnavailable:
+      description: The external rate provider is unavailable or does not support this pair
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
   schemas:
     HealthStatus:
       type: object
@@ -1231,6 +1266,15 @@ components:
         rate: { type: string, pattern: "^[0-9]+(\\.[0-9]{1,10})?$" }
         updatedAt: { type: string, format: date-time }
       required: [sourceCurrency, destinationCurrency, rate, updatedAt]
+    BankExchangeRateQuote:
+      type: object
+      properties:
+        sourceCurrency: { $ref: "#/components/schemas/ActiveCurrencyCode" }
+        destinationCurrency: { $ref: "#/components/schemas/DestinationCurrencyCode" }
+        rate: { type: string, pattern: "^[0-9]{1,12}(\\.[0-9]{1,10})?$" }
+        provider: { type: string, enum: [Flutterwave, Globus] }
+        checkedAt: { type: string, format: date-time }
+      required: [sourceCurrency, destinationCurrency, rate, provider, checkedAt]
     BankExchangeRateInput:
       type: object
       properties:

@@ -4,14 +4,14 @@ import { AlertTriangle, ArrowLeft, ArrowRight, Delete, FileText, Globe2, Landmar
 import { useQueryClient } from '@tanstack/react-query';
 import {
   getGetBankDashboardQueryKey,
+  getGetBankExchangeRateQuoteQueryKey,
   getGetBankProfileQueryKey,
-  getListBankExchangeRatesQueryKey,
   getListBankTransactionsQueryKey,
   getListBankWalletsQueryKey,
   getListInternationalTransferRequestsQueryKey,
   useCreateInternationalTransferRequest,
+  useGetBankExchangeRateQuote,
   useGetBankProfile,
-  useListBankExchangeRates,
   useListBankWallets,
   useListInternationalTransferRequests,
 } from '@workspace/api-client-react';
@@ -29,7 +29,7 @@ const STEPS = ['Route', 'Recipient', 'Amount', 'Review', 'Authorise'] as const;
 const GUIDE = [
   'Pick the wallet to debit, where the money is going, and the currency the recipient should receive.',
   'Enter the recipient exactly as their bank holds it. Double-check the account number.',
-  'Enter the amount from your wallet. The converted total uses the current Globus rate.',
+  'Enter the amount from your wallet. The converted total uses a Flutterwave quote.',
   'Read every line. Confirming locks this rate; if it changes you will be asked to review again.',
   'Enter your six-digit transaction PIN on the keypad to submit.',
 ];
@@ -58,7 +58,6 @@ export function InternationalTransferPage() {
   const queryClient = useQueryClient();
   const profile = useGetBankProfile({ query: { queryKey: getGetBankProfileQueryKey() } });
   const wallets = useListBankWallets({ query: { queryKey: getListBankWalletsQueryKey() } });
-  const rates = useListBankExchangeRates({ query: { queryKey: getListBankExchangeRatesQueryKey(), refetchInterval: 30_000, refetchOnWindowFocus: true } });
   const requests = useListInternationalTransferRequests({ query: { queryKey: getListInternationalTransferRequestsQueryKey() } });
   const createRequest = useCreateInternationalTransferRequest();
 
@@ -96,17 +95,27 @@ export function InternationalTransferPage() {
   const available = Number(wallet?.available ?? 0);
   const countryCode = countries.find(c => c.name === destinationCountry)?.code ?? '';
   const targetDigits = destinationCurrency ? digitsFor(destinationCurrency) : 2;
+  const quoteParams = { sourceCurrency, destinationCurrency };
+  const quote = useGetBankExchangeRateQuote(quoteParams, {
+    query: {
+      queryKey: getGetBankExchangeRateQuoteQueryKey(quoteParams),
+      enabled: !!destinationCurrency,
+      retry: false,
+      refetchInterval: 15 * 60_000,
+      refetchOnWindowFocus: true,
+      staleTime: 12 * 60_000,
+    },
+  });
 
   useEffect(() => {
     if (walletList.length && !walletList.some(w => w.currency === sourceCurrency)) setSourceCurrency(walletList[0].currency);
   }, [walletList, sourceCurrency]);
 
-  const configuredRate = destinationCurrency ? rates.data?.find(r => r.sourceCurrency === sourceCurrency && r.destinationCurrency === destinationCurrency) : undefined;
-  const liveRate = destinationCurrency && sourceCurrency === destinationCurrency ? '1.0000000000' : configuredRate?.rate ?? null;
+  const liveRate = quote.isError ? null : quote.data?.rate ?? null;
   const liveConverted = liveRate && AMOUNT_RE.test(amount) ? previewConversion(amount, liveRate, targetDigits) : null;
   const snapshotConverted = rateSnapshot && AMOUNT_RE.test(amount) ? previewConversion(amount, rateSnapshot, targetDigits) : null;
   const rateChanged = rateSnapshot !== null && liveRate !== null && formatRate(liveRate) !== formatRate(rateSnapshot);
-  const rateLost = rateSnapshot !== null && liveRate === null && !rates.isLoading;
+  const rateLost = rateSnapshot !== null && liveRate === null && !quote.isLoading;
 
   const fingerprint = JSON.stringify([transferType, sourceCurrency, destinationCountry, recipientBank, destinationCurrency, recipientAccountName.trim(), recipientAccountNumber.replace(/\s/g, ''), transferType === 'local_routing' ? routingCode.trim() : swiftBic.toUpperCase(), remark.trim(), amount, rateSnapshot]);
   const idempotencyKey = useMemo(() => {
@@ -256,12 +265,12 @@ export function InternationalTransferPage() {
                 {liveConverted !== null && Number(amount) > 0 && Number(liveConverted) === 0 && <p role="alert" className="text-[10px] text-[#a24940]">Increase the source amount so the converted total is at least one destination minor unit.</p>}
                 {wallet?.status === 'restricted' && <p role="alert" className="text-[10px] text-[#a24940]">This wallet is frozen; outgoing transfers are unavailable.</p>}
                 <div data-testid="conversion-quote" aria-live="polite" className="rounded-xl border border-[#d9e7ea] bg-[#f3f8f9] p-4">
-                  <p className="text-[9px] font-bold uppercase tracking-[.14em] text-[#4f868b]">Live conversion</p>
-                  {rates.isLoading ? <div className="mt-2 h-7 w-40 animate-pulse rounded bg-[#e2ecee]" /> : liveRate ? <>
+                  <p className="text-[9px] font-bold uppercase tracking-[.14em] text-[#4f868b]">Current conversion quote</p>
+                  {quote.isLoading && !quote.data ? <div className="mt-2 h-7 w-40 animate-pulse rounded bg-[#e2ecee]" /> : liveRate ? <>
                     <p data-testid="text-converted-total" className="bank-display mt-1 text-[24px] font-semibold text-[#1b3654]">{liveConverted ? formatAmount(liveConverted, destinationCurrency) : `— ${destinationCurrency}`}</p>
                     <p data-testid="text-conversion-rate" className="mt-1 font-mono text-[10px] text-[#5d7488]">1 {sourceCurrency} = {formatRate(liveRate)} {destinationCurrency}</p>
-                    <p className="mt-1 text-[9px] text-[#8996a3]">{configuredRate ? `Globus rate · updated ${new Date(configuredRate.updatedAt).toLocaleString()}` : 'Same currency'} · refreshes every 30 seconds</p>
-                  </> : <p data-testid="status-rate-unavailable" className="mt-2 flex items-start gap-2 text-[11px] leading-5 text-[#8a6430]"><AlertTriangle size={14} className="mt-0.5 shrink-0" />No Globus rate is set for {sourceCurrency} to {destinationCurrency}. This transfer cannot continue until an administrator publishes one.</p>}
+                    <p className="mt-1 text-[9px] text-[#8996a3]">{quote.data?.provider === 'Flutterwave' ? `Flutterwave quote · checked ${quote.data.checkedAt ? new Date(quote.data.checkedAt).toLocaleString() : 'just now'}` : 'Same-currency rate · 1:1'}</p>
+                  </> : <p data-testid="status-rate-unavailable" className="mt-2 flex items-start gap-2 text-[11px] leading-5 text-[#8a6430]"><AlertTriangle size={14} className="mt-0.5 shrink-0" />Flutterwave could not quote {sourceCurrency} to {destinationCurrency}. Choose another currency pair or try again later.</p>}
                 </div>
               </>}
 
@@ -281,7 +290,7 @@ export function InternationalTransferPage() {
                 <RateWarning changed={rateChanged} lost={rateLost} onReview={() => { setRateSnapshot(liveRate); setConfirmed(false); }} />
                 <label className="flex cursor-pointer items-start gap-3 rounded-xl bg-[#f5f8f9] p-3 text-[11px] leading-5 text-[#3e566e]">
                   <input data-testid="checkbox-confirm-transfer" type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[#173b62]" />
-                  <span>I confirm these details are correct. {verified ? 'This transfer will be recorded in my Globus ledger once I enter my PIN.' : 'My account is not yet verified, so this will be sent to an administrator for review.'}</span>
+                  <span>I confirm these details are correct. {verified ? 'Globus will record this transfer once I enter my PIN.' : 'My account is not yet verified, so this will be sent to an administrator for review.'}</span>
                 </label>
               </>}
 
@@ -331,7 +340,7 @@ function R({ k, v, mono, strong, testId }: { k: string; v: string; mono?: boolea
 
 function RateWarning({ changed, lost, onReview }: { changed: boolean; lost: boolean; onReview: () => void }) {
   if (!changed && !lost) return null;
-  return <div role="alert" data-testid="status-rate-changed" className="flex items-start justify-between gap-3 rounded-xl border border-[#ecdcb6] bg-[#fcf7ea] p-3 text-[11px] leading-5 text-[#7d6230]"><span className="flex gap-2"><AlertTriangle size={14} className="mt-0.5 shrink-0" />{lost ? 'The Globus rate for this pair is no longer available. This transfer cannot be submitted.' : 'The Globus rate changed since you confirmed. Review the new total before continuing.'}</span>{changed && <button type="button" onClick={onReview} className="shrink-0 font-bold underline">Review</button>}</div>;
+  return <div role="alert" data-testid="status-rate-changed" className="flex items-start justify-between gap-3 rounded-xl border border-[#ecdcb6] bg-[#fcf7ea] p-3 text-[11px] leading-5 text-[#7d6230]"><span className="flex gap-2"><AlertTriangle size={14} className="mt-0.5 shrink-0" />{lost ? 'A current quote for this pair is unavailable. This transfer cannot be submitted.' : 'The conversion rate changed since you confirmed. Review the new total before continuing.'}</span>{changed && <button type="button" onClick={onReview} className="shrink-0 font-bold underline">Review</button>}</div>;
 }
 
 function PinPad({ value, onChange, disabled, onSubmit }: { value: string; onChange: (v: string) => void; disabled: boolean; onSubmit: () => void }) {

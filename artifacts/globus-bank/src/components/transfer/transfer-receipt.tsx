@@ -74,8 +74,8 @@ export function receiptFromRequest(r: InternationalTransferRequest): ReceiptTran
   } as ReceiptTransaction;
 }
 
-const transferDisclosure = 'This receipt records an internal Globus ledger transfer only. It is not confirmation that an outside bank received or paid funds. The recipient details and converted amount are recorded in Globus; no outside settlement is represented.';
-const ledgerDisclosure = 'This receipt records an entry in the Globus internal ledger. It is not proof of funds received or sent by an outside account. Globus does not connect to a bank, payment gateway, or real-money transfer service.';
+const transferDisclosure = 'This receipt records a transfer request in Globus only. It is not confirmation that an outside bank received or paid funds. Recipient details and the converted amount are recorded in Globus; no outside payment is represented.';
+const accountDisclosure = 'This receipt records activity in your Globus account. It is not proof of funds received or sent by an outside account. Globus does not process bank payments or real-money transfers.';
 
 export function TransferReceiptModal({ transaction, onClose, title }: { transaction: ReceiptTransaction; onClose: () => void; title?: string }) {
   const [downloading, setDownloading] = useState(false);
@@ -87,7 +87,7 @@ export function TransferReceiptModal({ transaction, onClose, title }: { transact
   const completed = transaction.status === 'completed';
   const isTransfer = transaction.type === 'external_transfer';
   const heading = title ?? (isTransfer ? 'Routed transfer' : humanizeStatus(transaction.type));
-  const disclosure = isTransfer ? transferDisclosure : ledgerDisclosure;
+  const disclosure = isTransfer ? transferDisclosure : accountDisclosure;
 
   useEffect(() => {
     const prev = document.activeElement as HTMLElement | null;
@@ -108,7 +108,7 @@ export function TransferReceiptModal({ transaction, onClose, title }: { transact
         status: humanizeStatus(transaction.status),
         date: formatDateTime(transaction.createdAt),
         description: transaction.description || heading,
-        counterparty: transaction.counterparty || 'Internal ledger',
+        counterparty: transaction.counterparty || 'Globus account',
         activity: heading,
         sourceAmount: conversion ? formatAmount(conversion.sourceAmount, conversion.sourceCurrency) : undefined,
         exchangeRate: conversion ? `1 ${conversion.sourceCurrency} = ${formatRate(conversion.exchangeRate)} ${conversion.destinationCurrency}` : undefined,
@@ -140,12 +140,12 @@ export function TransferReceiptModal({ transaction, onClose, title }: { transact
                 <img src={`${import.meta.env.BASE_URL}globus-wordmark-transparent.png`} alt="Globus Bank" className="h-auto w-[104px] brightness-0 invert" />
                 <button ref={closeRef} type="button" aria-label="Close receipt" data-testid="button-close-receipt" onClick={onClose} className="receipt-screen-only grid h-9 w-9 place-items-center rounded-lg text-[#c9d7e2] hover:bg-white/10"><X size={17} /></button>
               </div>
-              <p className="relative mt-5 text-[10px] font-bold uppercase tracking-[.18em] text-[#a8d3d6]">Internal ledger receipt</p>
+              <p className="relative mt-5 text-[10px] font-bold uppercase tracking-[.18em] text-[#a8d3d6]">Globus transaction receipt</p>
               <h2 id="receipt-title" className="bank-display relative mt-1 text-[20px] font-semibold">{heading}</h2>
               <p data-testid="text-receipt-amount" className="bank-display relative mt-3 text-[32px] font-semibold tracking-[-.04em]">{formatAmount(transaction.amount, transaction.currency)}</p>
               <span data-testid="text-receipt-status" className={`relative mt-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold ${completed ? 'bg-[#2c6b5a] text-[#d9f2e6]' : 'bg-[#6b5a2c] text-[#f6e8c4]'}`}>
                 {completed ? <BadgeCheck size={13} /> : <Clock3 size={13} />}
-                {completed ? 'Completed in Globus ledger' : `${humanizeStatus(transaction.status)} · awaiting administrator review`}
+                {completed ? 'Recorded in Globus' : `${humanizeStatus(transaction.status)} · awaiting administrator review`}
               </span>
             </header>
             <div className="px-6 pb-2 pt-4">
@@ -165,7 +165,7 @@ export function TransferReceiptModal({ transaction, onClose, title }: { transact
                   <Row label="Destination" value={transaction.recipient.country} />
                   <Row label="Route" value={transaction.recipient.route} />
                 </>}
-                {!transaction.recipient && <Row label="Counterparty" value={transaction.counterparty || 'Internal ledger'} />}
+                {!transaction.recipient && <Row label="Counterparty" value={transaction.counterparty || 'Globus account'} />}
                 <Row label="Description" value={transaction.description || heading} />
                 <Row label="Recorded" value={formatDateTime(transaction.createdAt)} />
                 <Row label="Status" value={humanizeStatus(transaction.status)} />

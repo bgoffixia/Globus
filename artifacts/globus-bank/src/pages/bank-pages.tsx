@@ -11,6 +11,7 @@ import {
   ChevronRight,
   CircleHelp,
   Clock3,
+  Contact,
   Copy,
   Download,
   FileText,
@@ -83,6 +84,7 @@ import type { AdminLedgerRequest, AdminUser, BankTransaction, IdentityDocument, 
 import { GlobusLoader } from '@/components/globus-loader';
 import { BankSelect } from '@/components/bank-select';
 import { CountrySelect } from '@/components/country-select';
+import { InstallAppButton } from '@/components/pwa-install-prompt';
 import { countries } from '@/lib/countries';
 import { destinationCurrencyForCountry } from '@/lib/destination-currency';
 import { TransferReceiptModal } from '@/components/transfer/transfer-receipt';
@@ -122,7 +124,7 @@ function currencyActionHref(path: string, currency: Currency) {
 export function HomePage() {
   const health = useHealthCheck({ query: { queryKey: getHealthCheckQueryKey(), retry: false } });
   return (
-    <div className="min-h-screen min-h-[100dvh] overflow-x-clip bg-[#f6f8fa] text-[#192e49]">
+    <div className="public-viewport-scroll bg-[#f6f8fa] text-[#192e49]">
       <header className="relative z-10 mx-auto flex max-w-[1320px] items-center justify-between gap-2 px-4 pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-5 sm:gap-3 sm:px-6 sm:py-6 lg:px-12">
         <Link href="/" aria-label="Globus Bank home" className="flex shrink-0 items-center">
           <img src={`${import.meta.env.BASE_URL}globus-wordmark.png`} alt="Globus Bank — Your world. Our priority." className="h-auto w-[108px] sm:w-[156px]" />
@@ -133,8 +135,9 @@ export function HomePage() {
           <Link href="/help" className="hover:text-[#142d4d]">Help</Link>
         </nav>
         <div className="flex shrink-0 items-center gap-1 sm:gap-3">
+          <InstallAppButton className="inline-flex items-center gap-1 rounded-xl border border-[#dbe5eb] bg-white px-2 py-2.5 text-[10px] font-bold text-[#36516d] hover:bg-[#f0f5f7] sm:gap-1.5 sm:px-3 sm:text-[12px]" />
           <Link href="/sign-in" className="whitespace-nowrap rounded-xl px-2 py-2.5 text-[12px] font-bold text-[#263e5b] hover:bg-[#eaf0f4] sm:px-4 sm:text-[13px]">Sign in</Link>
-          <Link href="/sign-up" className="whitespace-nowrap rounded-xl bg-[#142f51] px-3 py-2.5 text-[11px] font-bold text-white shadow-sm transition hover:bg-[#1b4269] sm:px-5 sm:text-[13px]"><span className="sm:hidden">Open account</span><span className="hidden sm:inline">Open an account</span></Link>
+          <Link href="/sign-up" className="whitespace-nowrap rounded-xl bg-[#142f51] px-2.5 py-2.5 text-[11px] font-bold text-white shadow-sm transition hover:bg-[#1b4269] sm:px-5 sm:text-[13px]"><span className="sm:hidden">Open</span><span className="hidden sm:inline">Open an account</span></Link>
         </div>
       </header>
 
@@ -142,7 +145,7 @@ export function HomePage() {
         <div className="relative z-10 min-w-0">
           <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-[#dbe7e9] bg-white px-3.5 py-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[#3b777d]">
             <span className="h-1.5 w-1.5 rounded-full bg-[#55a5a9]" />
-            An internal multi-currency ledger
+            A multi-currency account workspace
           </div>
           <h1 className="bank-display max-w-full text-[clamp(2.75rem,14vw,6.5rem)] font-semibold leading-[.98] tracking-[-.07em] text-[#142c49] sm:max-w-[700px] sm:text-[clamp(3.2rem,7.3vw,6.5rem)]">
             Your Money.
@@ -152,7 +155,7 @@ export function HomePage() {
             One Wallet.
           </h1>
           <p className="mt-7 max-w-[510px] text-[16px] leading-7 text-[#64758a] sm:text-[18px] sm:leading-8">
-            Bring your currencies together, understand every movement, and manage routed transfers and reviewed ledger requests with clear statuses.
+            Bring your currencies together, understand every movement, and manage routed transfers and reviewed deposit requests with clear statuses.
           </p>
           <div className="mt-8 flex flex-col items-stretch gap-2 sm:mt-9 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
             <Link href="/sign-up" className="inline-flex w-full items-center justify-center gap-3 rounded-xl bg-[#152f50] px-5 py-3.5 text-[13px] font-bold text-white shadow-[0_10px_24px_rgba(18,43,75,.16)] transition hover:-translate-y-0.5 hover:bg-[#1b4168] sm:w-auto sm:px-6 sm:py-4">
@@ -161,7 +164,7 @@ export function HomePage() {
             <Link href="/about" className="rounded-xl px-5 py-3.5 text-center text-[13px] font-bold text-[#36506c] hover:bg-[#eaf0f4] sm:py-4">How Globus works</Link>
           </div>
           <div className="mt-8 flex min-w-0 flex-wrap gap-x-5 gap-y-3 text-[10px] font-medium text-[#68798d] sm:mt-11 sm:gap-x-7 sm:text-[11px]">
-            <span className="inline-flex items-center gap-2"><ShieldCheck size={15} className="text-[#478b8e]" /> Internal ledger activity clearly identified</span>
+            <span className="inline-flex items-center gap-2"><ShieldCheck size={15} className="text-[#478b8e]" /> Globus account activity clearly identified</span>
             <span className="inline-flex items-center gap-2"><Globe2 size={15} className="text-[#478b8e]" /> Five supported currencies</span>
           </div>
         </div>
@@ -175,11 +178,11 @@ export function HomePage() {
                   <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[#78889a]">Illustrative interface</p>
                   <p className="mt-1 text-[11px] text-[#8492a2]">No account or balance data shown</p>
                 </div>
-                <span className="rounded-lg border border-[#d5e6e7] bg-[#edf7f7] px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[.12em] text-[#43868b]">Internal ledger</span>
+                <span className="rounded-lg border border-[#d5e6e7] bg-[#edf7f7] px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[.12em] text-[#43868b]">Globus account</span>
               </div>
               <div className="balance-panel mt-5 overflow-hidden rounded-[19px] px-5 py-6 text-white sm:px-7 sm:py-7">
                 <div className="flex items-center justify-between text-[11px] text-[#d4e1eb]">
-                  <span>Internal ledger balance</span>
+                  <span>Wallet balance</span>
                   <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-[#e4c876]" /> USD reference</span>
                 </div>
                 <div className="bank-display mt-3 max-w-full break-words text-[clamp(1.2rem,6vw,1.875rem)] font-semibold tracking-[-.05em] sm:text-[38px]">View after sign-in</div>
@@ -201,13 +204,13 @@ export function HomePage() {
               </div>
               <div className="mt-5 flex min-w-0 items-center gap-3 rounded-xl bg-white px-3 py-3 sm:px-4">
                 <span className="grid h-9 w-9 place-items-center rounded-full bg-[#eef5f5] text-[#4b898e]"><ArrowUpRight size={16} /></span>
-                <div className="min-w-0 flex-1"><p className="text-[11px] font-semibold text-[#334b66]">No ledger activity yet</p><p className="mt-0.5 break-words text-[10px] text-[#8b98a7]">Approved and recorded activity appears here</p></div>
+                <div className="min-w-0 flex-1"><p className="text-[11px] font-semibold text-[#334b66]">No account activity yet</p><p className="mt-0.5 break-words text-[10px] text-[#8b98a7]">Approved and recorded activity appears here</p></div>
                 <p className="text-[12px] font-semibold text-[#2e665f]">—</p>
               </div>
             </div>
             <div className="absolute -left-7 top-[38%] hidden -rotate-[4deg] items-center gap-3 rounded-2xl border border-[#e8edf0] bg-white px-4 py-3 shadow-lg sm:flex">
               <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#e8f3f4] text-[#4b8f94]"><LockKeyhole size={16} /></span>
-              <span><b className="block text-[11px] text-[#30465f]">Clear by design</b><small className="mt-1 block text-[9px] text-[#8391a1]">Ledger activity is clearly identified</small></span>
+              <span><b className="block text-[11px] text-[#30465f]">Clear by design</b><small className="mt-1 block text-[9px] text-[#8391a1]">Each record is clearly identified</small></span>
             </div>
           </div>
         </div>
@@ -216,25 +219,25 @@ export function HomePage() {
       <section className="border-y border-[#e2e8ed] bg-white">
         <div className="mx-auto grid max-w-[1320px] gap-8 px-6 py-8 sm:grid-cols-3 lg:px-12">
           <TrustNote icon={<Globe2 size={17} />} title="One view, many currencies" copy="Keep USD, EUR, GBP, CAD and AUD in view." />
-          <TrustNote icon={<ShieldCheck size={17} />} title="Internal ledger, clearly scoped" copy="Balances and transfers are recorded in Globus only. No bank or payment network is connected, and no outside funds are held or sent." />
+          <TrustNote icon={<ShieldCheck size={17} />} title="Globus records, clearly scoped" copy="Balances and transfers are recorded in Globus only. No bank or payment network is connected, and no outside funds are held or sent." />
           <TrustNote icon={<BadgeCheck size={17} />} title="No banking claims" copy="Globus is a software platform, not a licensed bank." />
         </div>
       </section>
       <section className="mx-auto grid max-w-[1320px] gap-12 px-6 py-20 lg:grid-cols-[.8fr_1.2fr] lg:px-12 lg:py-28">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[.18em] text-[#528f95]">An internal ledger, clearly scoped</p>
+          <p className="text-[10px] font-bold uppercase tracking-[.18em] text-[#528f95]">Globus account records, clearly scoped</p>
           <h2 className="bank-display mt-4 max-w-[450px] text-[42px] font-semibold leading-[1.08] text-[#17304f] sm:text-[52px]">Know what Globus records.<br />Know what it doesn’t.</h2>
         </div>
         <div className="grid gap-8 sm:grid-cols-2">
           <FeatureBlock number="01" title="See the whole picture" copy="Review individual currency wallets, pending amounts and recent transactions in one focused workspace." />
           <FeatureBlock number="02" title="Route transfers with clarity" copy="Choose local routing or an international wire, review the currency conversion, and follow the recorded status in your account." />
-          <FeatureBlock number="03" title="Review deposits and withdrawals" copy="Deposit requests and reserved withdrawals require administrator approval before the internal ledger changes." />
-          <FeatureBlock number="04" title="Keep a clean record" copy="Every ledger transaction has a reference, status and timestamp for straightforward review." />
+          <FeatureBlock number="03" title="Review deposit requests" copy="Card and bank-transfer deposit requests require administrator approval before a wallet balance changes." />
+          <FeatureBlock number="04" title="Keep a clear record" copy="Every transaction has a reference, status and timestamp for straightforward review." />
         </div>
       </section>
       <section className="mx-4 mb-16 rounded-[28px] bg-[#132f51] px-5 py-10 text-white sm:mx-10 sm:px-12 sm:py-12 lg:mx-auto lg:max-w-[1240px] lg:px-16 lg:py-16">
         <div className="grid items-center gap-8 md:grid-cols-[1fr_auto]">
-          <div><p className="text-[10px] font-bold uppercase tracking-[.18em] text-[#a6d5d8]">Make your next step clearer</p><h2 className="bank-display mt-3 max-w-[640px] text-[34px] font-semibold leading-tight sm:text-[45px]">Your Globus ledger workspace, ready to use.</h2><p className="mt-4 max-w-[520px] text-[14px] leading-6 text-[#cfdae4]">Create an account to manage internal wallets, routed transfer requests and ledger activity reviewed by Globus administrators. No outside funds are received or sent.</p></div>
+          <div><p className="text-[10px] font-bold uppercase tracking-[.18em] text-[#a6d5d8]">Make your next step clearer</p><h2 className="bank-display mt-3 max-w-[640px] text-[34px] font-semibold leading-tight sm:text-[45px]">Your Globus account workspace, ready to use.</h2><p className="mt-4 max-w-[520px] text-[14px] leading-6 text-[#cfdae4]">Create an account to manage multi-currency wallets, routed transfer requests and transaction activity reviewed by Globus administrators. No outside funds are received or sent.</p></div>
           <Link href="/sign-up" className="inline-flex items-center justify-center gap-3 rounded-xl bg-[#d5b765] px-6 py-4 text-[13px] font-bold text-[#17304d] hover:bg-[#e0c879]">Create your account <ArrowRight size={15} /></Link>
         </div>
       </section>
@@ -313,7 +316,7 @@ export function DashboardPage() {
           )}
           {dash?.profile.accountStatus === 'suspended' && <p role="status" className="relative mt-3 rounded-lg border border-white/15 bg-white/[.08] px-3 py-2 text-[9px] leading-4 text-[#f2d8d1]">Your account is suspended. You can review account information and activity, but financial actions are currently unavailable.</p>}
           {dash?.profile.accountStatus === 'restricted' && <p role="status" className="relative mt-3 rounded-lg border border-white/15 bg-white/[.08] px-3 py-2 text-[9px] leading-4 text-[#f2e7c9]">Some account operations are restricted. Your balances and transaction history remain available.</p>}
-          {selectedWallet?.status === 'restricted' && dash?.profile.accountStatus === 'active' && <p role="status" className="relative mt-3 rounded-lg border border-white/15 bg-white/[.08] px-3 py-2 text-[9px] leading-4 text-[#f2e7c9]">This wallet is frozen. Outgoing transfers and withdrawals are unavailable; incoming credits may still be received.</p>}
+          {selectedWallet?.status === 'restricted' && dash?.profile.accountStatus === 'active' && <p role="status" className="relative mt-3 rounded-lg border border-white/15 bg-white/[.08] px-3 py-2 text-[9px] leading-4 text-[#f2e7c9]">This wallet is frozen. Outgoing transfers and withdrawals are unavailable; eligible incoming credits may still be recorded.</p>}
           <Link href="/wallets" className="relative mt-2 inline-flex items-center gap-1 text-[9px] font-bold text-[#d9e7eb] hover:text-white">Manage wallets <ChevronRight size={12} /></Link>
         </section>
 
@@ -326,7 +329,7 @@ export function DashboardPage() {
             {selectedWallet && <span className="shrink-0 rounded-full bg-[#eff5f6] px-2.5 py-1 text-[9px] font-bold text-[#456c73]">{selectedWallet.currency} wallet</span>}
           </div>
           <nav role="toolbar" aria-label="Dashboard actions" className="-mx-1 flex min-w-0 gap-2 overflow-x-auto px-1 pb-1 sm:flex-wrap sm:overflow-visible">
-            <ActionTile href="/receive" icon={<ArrowDownLeft size={16} />} label="Receive" testId="dashboard-quick-receive" />
+            <ActionTile href="/customer-id" icon={<Contact size={16} />} label="Customer ID" testId="dashboard-quick-customer-id" />
             <ActionTile href={currencyActionHref('/add-money', actionCurrency)} icon={<WalletCards size={16} />} label="Deposit" testId="dashboard-quick-deposit" />
             <ActionTile href={currencyActionHref('/withdraw', actionCurrency)} icon={<ArrowUpRight size={16} />} label="Withdraw" testId="dashboard-quick-withdraw" />
             <ActionTile href={currencyActionHref('/transfer', actionCurrency)} icon={<ArrowLeftRight size={16} />} label="Transfer" testId="dashboard-quick-transfer" />
@@ -361,17 +364,31 @@ export function DashboardPage() {
 
 export function WalletsPage() {
   const query = useListBankWallets({ query: { queryKey: getListBankWalletsQueryKey() } });
+  const profile = useGetBankProfile({ query: { queryKey: getGetBankProfileQueryKey() } });
   if (query.isLoading) return <PageSkeleton />;
   if (query.isError) return <Failure title="Wallets could not be loaded" retry={() => query.refetch()} />;
   return (
     <>
       <PageHeading eyebrow="Currencies" title="Your wallets" subtitle="Available, pending and reserved amounts, shown separately." />
-      <div className="mt-7 flex items-center gap-3 rounded-2xl border border-[#dce9ea] bg-[#eef7f7] px-4 py-4 text-[12px] leading-5 text-[#467b80]"><Globe2 size={17} className="shrink-0" /> Balances are internal Globus ledger records, not funds held by a bank. No outside payments are sent or received.</div>
+      <div className="mt-7 flex items-center gap-3 rounded-2xl border border-[#dce9ea] bg-[#eef7f7] px-4 py-4 text-[12px] leading-5 text-[#467b80]"><Globe2 size={17} className="shrink-0" /> Balances show activity recorded in your Globus account. No outside bank or payment service holds or moves funds.</div>
       <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {(query.data ?? []).map((wallet) => <WalletCard key={wallet.id} wallet={wallet} />)}
+        {(query.data ?? []).map((wallet) => <div key={wallet.id} className="min-w-0"><WalletCard wallet={wallet} /><WalletReference customerId={profile.data?.customerId ?? ''} wallet={wallet} /></div>)}
       </div>
       {!query.data?.length && <EmptyState title="No currency wallets yet" text="Wallets will appear here when they are provisioned for your account." />}
     </>
+  );
+}
+
+function WalletReference({ customerId, wallet }: { customerId: string; wallet: Wallet }) {
+  const reference = customerId
+    ? `GB-${customerId}-${wallet.currency}-${wallet.id.replace(/-/g, '').slice(0, 8).toUpperCase()}`
+    : `GB-${wallet.currency}-${wallet.id.replace(/-/g, '').slice(0, 12).toUpperCase()}`;
+  return (
+    <div className="mt-2 min-w-0 rounded-xl border border-[#e0e8ed] bg-white px-4 py-3">
+      <p className="text-[9px] font-bold uppercase tracking-[.12em] text-[#7c8c99]">Globus wallet reference</p>
+      <p className="mt-1 break-all font-mono text-[11px] font-semibold text-[#294763]">{reference}</p>
+      <p className="mt-1 text-[9px] leading-4 text-[#8794a1]">Identifies this Globus wallet only. It is not a bank account, routing number, or payment destination.</p>
+    </div>
   );
 }
 
@@ -386,14 +403,14 @@ export function TransactionsPage() {
   const query = useListBankTransactions(params, { query: { queryKey: getListBankTransactionsQueryKey(params) } });
   return (
     <>
-      <PageHeading eyebrow="Ledger view" title="Activity" subtitle="Search your recorded transactions. Each entry is an internal Globus ledger record." />
+      <PageHeading eyebrow="Account activity" title="Activity" subtitle="Search transactions recorded in your Globus account." />
       <div className="mt-7 flex flex-col gap-3 sm:flex-row">
         <label className="relative flex-1"><Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#8695a5]" /><input aria-label="Search transactions" data-testid="input-transaction-search" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search description, reference or recipient" className="h-12 w-full rounded-xl border border-[#dfe6ec] bg-white pl-11 pr-4 text-[12px] outline-none transition focus:border-[#6aa6aa]" /></label>
         <select aria-label="Filter by currency" data-testid="select-transaction-currency" value={currency} onChange={event => setCurrency(event.target.value)} className="h-12 rounded-xl border border-[#dfe6ec] bg-white px-4 text-[12px] text-[#435872] outline-none focus:border-[#6aa6aa]"><option value="">All currencies</option>{currencies.map(item => <option key={item} value={item}>{item} · {currencyNames[item]}</option>)}</select>
       </div>
       <section className="mt-5 overflow-hidden rounded-[20px] border border-[#e1e8ee] bg-white">
         <div className="flex items-center justify-between border-b border-[#edf0f3] px-5 py-4 sm:px-7"><p className="text-[13px] font-bold text-[#28405c]">Transaction history</p><span className="text-[10px] font-semibold text-[#8291a1]">{query.data?.length ?? 0} entries</span></div>
-        {query.isLoading ? <ListSkeleton /> : query.isError ? <Failure title="Transaction history isn’t available" retry={() => query.refetch()} /> : query.data?.length ? <TransactionList transactions={query.data} /> : <EmptyState title="No matching activity" text="Try a different search or come back after recording an internal ledger entry." />}
+        {query.isLoading ? <ListSkeleton /> : query.isError ? <Failure title="Transaction history isn’t available" retry={() => query.refetch()} /> : query.data?.length ? <TransactionList transactions={query.data} /> : <EmptyState title="No matching activity" text="Try a different search or check back when an account transaction is recorded." />}
       </section>
     </>
   );
@@ -487,24 +504,30 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
   const [currency, setCurrency] = useState<Currency>(() => preferredCurrencyFromQuery());
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
+  const [depositMethod, setDepositMethod] = useState<'bank_card' | 'bank_transfer'>('bank_transfer');
+  const [sourceReference, setSourceReference] = useState('');
   const [transactionPin, setTransactionPin] = useState('');
   const [result, setResult] = useState<{ reference: string; message: string; status: string } | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
   const selectedWallet = walletsQuery.data?.find(wallet => wallet.currency === currency);
   const available = Number(selectedWallet?.available ?? 0);
-  const heading = type === 'deposit' ? 'Request a ledger deposit' : 'Request a ledger withdrawal';
+  const heading = type === 'deposit' ? 'Request a deposit' : 'Request a withdrawal';
   const sub = type === 'deposit'
-    ? 'Ask an administrator to post an internal credit to your selected currency wallet.'
-    : 'Ask an administrator to review an internal debit from your selected currency wallet.';
+    ? 'Choose a request method and ask an administrator to review a credit to your selected wallet.'
+    : 'Ask an administrator to review a withdrawal from your selected wallet.';
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setResult(null);
     setErrorMessage('');
-    mutation.mutate({ data: { type, currency, amount, ...(description.trim() ? { description: description.trim() } : {}), transactionPin, idempotencyKey: crypto.randomUUID() } }, {
+    const requestDescription = type === 'deposit'
+      ? `${depositMethod === 'bank_card' ? 'Bank card' : 'Bank transfer'} deposit request${sourceReference.trim() ? ` · Reference: ${sourceReference.trim()}` : ''}${description.trim() ? ` · Note: ${description.trim()}` : ''}`.slice(0, 140)
+      : description.trim();
+    mutation.mutate({ data: { type, currency, amount, ...(requestDescription ? { description: requestDescription } : {}), transactionPin, idempotencyKey: crypto.randomUUID() } }, {
       onSuccess: request => {
         setResult(request);
         setAmount('');
         setDescription('');
+        setSourceReference('');
         setTransactionPin('');
         queryClient.invalidateQueries({ queryKey: getGetBankDashboardQueryKey() });
         queryClient.invalidateQueries({ queryKey: getListBankTransactionsQueryKey() });
@@ -515,35 +538,47 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
   };
   return (
     <>
-      <PageHeading eyebrow="Internal ledger" title={heading} subtitle={sub} />
+      <PageHeading eyebrow={type === 'deposit' ? 'Deposit request' : 'Withdrawal request'} title={heading} subtitle={sub} />
       <div className="mt-7 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <form onSubmit={submit} className="rounded-[22px] border border-[#e1e8ee] bg-white p-5 sm:p-8">
-          <div className="mb-7 rounded-xl border border-[#eadfbe] bg-[#fbf7eb] p-4">
-            <div className="flex gap-3"><Clock3 size={17} className="mt-0.5 shrink-0 text-[#a17e36]" /><div><p className="text-[12px] font-bold text-[#715b2c]">Administrator review required</p><p className="mt-1 text-[11px] leading-5 text-[#89784f]">{type === 'deposit' ? 'Approval posts an internal ledger credit. No outside funds are received.' : 'The requested amount is reserved while pending. Approval posts a ledger debit; no outside payout is made.'}</p></div></div>
-          </div>
+          {type === 'deposit' ? (
+            <div className="mb-6 rounded-xl border border-[#eadfbe] bg-[#fbf7eb] p-4">
+              <div className="flex gap-3"><Clock3 size={17} className="mt-0.5 shrink-0 text-[#a17e36]" /><div><p className="text-[12px] font-bold text-[#715b2c]">Administrator review required</p><p className="mt-1 text-[11px] leading-5 text-[#89784f]">These options submit a request only. Globus does not charge a card or provide bank-payment instructions.</p></div></div>
+              <div className="mt-4 grid gap-2 sm:grid-cols-2" role="group" aria-label="Deposit request method">
+                <button type="button" onClick={() => setDepositMethod('bank_card')} aria-pressed={depositMethod === 'bank_card'} className={`rounded-lg border px-3 py-3 text-left text-[11px] font-bold transition ${depositMethod === 'bank_card' ? 'border-[#4e8c91] bg-white text-[#315c67]' : 'border-[#eadfbe] bg-transparent text-[#826f48]'}`}>Bank card request</button>
+                <button type="button" onClick={() => setDepositMethod('bank_transfer')} aria-pressed={depositMethod === 'bank_transfer'} className={`rounded-lg border px-3 py-3 text-left text-[11px] font-bold transition ${depositMethod === 'bank_transfer' ? 'border-[#4e8c91] bg-white text-[#315c67]' : 'border-[#eadfbe] bg-transparent text-[#826f48]'}`}>Bank transfer request</button>
+              </div>
+              <p className="mt-3 text-[10px] leading-5 text-[#89784f]">Do not enter card numbers, expiry dates, security codes, or online banking credentials. A Globus wallet reference is not a receiving bank account.</p>
+              <div className="mt-4"><Field label="Optional payment reference or sender-bank name"><input maxLength={70} value={sourceReference} onChange={event => setSourceReference(event.target.value)} placeholder="Reference only — no card or account credentials" className={inputClass} /></Field></div>
+            </div>
+          ) : (
+            <div className="mb-7 rounded-xl border border-[#eadfbe] bg-[#fbf7eb] p-4">
+              <div className="flex gap-3"><Clock3 size={17} className="mt-0.5 shrink-0 text-[#a17e36]" /><div><p className="text-[12px] font-bold text-[#715b2c]">Administrator review required</p><p className="mt-1 text-[11px] leading-5 text-[#89784f]">The requested amount remains reserved while pending. Approval records the withdrawal in Globus; no outside payout is made.</p></div></div>
+            </div>
+          )}
           <div className="grid gap-5 sm:grid-cols-2">
             <Field label="Wallet currency"><select value={currency} onChange={event => setCurrency(event.target.value as Currency)} className={inputClass}>{currencies.map(item => <option key={item} value={item}>{item} · {currencyNames[item]}</option>)}</select></Field>
             <Field label="Amount"><input required inputMode="decimal" pattern="[0-9]+(\.[0-9]{1,2})?" min="0.01" max={type === 'withdrawal' ? available : 1000000} value={amount} onChange={event => setAmount(event.target.value)} placeholder="0.00" className={inputClass} /><span className="mt-1.5 block text-[10px] text-[#8391a0]">{type === 'withdrawal' ? `Available to withdraw: ${formatMoney(available, currency)}` : 'Maximum request: 1,000,000.00'}</span></Field>
           </div>
-          <div className="mt-5"><Field label="Note for the administrator (optional)"><input maxLength={140} value={description} onChange={event => setDescription(event.target.value)} placeholder="Add context for your request" className={inputClass} /></Field></div>
+          <div className="mt-5"><Field label="Note for the administrator (optional)"><input maxLength={80} value={description} onChange={event => setDescription(event.target.value)} placeholder="Add context for your request" className={inputClass} /></Field></div>
           <div className="mt-5"><Field label="6-digit transaction PIN"><input required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="off" value={transactionPin} onChange={event => setTransactionPin(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="Enter your PIN" className={inputClass} /></Field></div>
           {profileQuery.data?.transactionPinConfigured === false && <p className="mt-4 rounded-lg border border-[#eadfbe] bg-[#fbf7eb] px-4 py-3 text-[10px] leading-5 text-[#806b3d]">Set up your transaction PIN in <Link href="/settings" className="font-bold underline">Settings</Link> before submitting this request.</p>}
           {(errorMessage || mutation.isError) && <p role="alert" className="mt-5 rounded-lg bg-[#fff1ef] px-4 py-3 text-[11px] text-[#a24940]">{errorMessage || 'The request could not be recorded.'}</p>}
           {result && <div role="status" className="mt-5 rounded-xl border border-[#d6e6e5] bg-[#f2f8f7] p-4 text-[12px] text-[#426e70]"><p className="font-bold">Request recorded · {humanize(result.status)}</p><p className="mt-1">{result.message}</p><p className="mt-2 font-mono text-[10px]">Reference {result.reference}</p></div>}
           <button disabled={mutation.isPending || transactionPin.length !== 6 || !amount || Number(amount) <= 0 || (type === 'withdrawal' && Number(amount) > available)} className="mt-7 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#142f51] text-[12px] font-bold text-white transition hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">{mutation.isPending ? 'Sending for review…' : 'Submit request'} <ArrowRight size={15} /></button>
-          <p className="mt-3 text-center text-[10px] text-[#8794a1]">Globus stores the request and review result in its internal ledger database.</p>
+          <p className="mt-3 text-center text-[10px] text-[#8794a1]">The request and review result are saved to your Globus activity.</p>
         </form>
         <div className="rounded-[22px] border border-[#e1e8ee] bg-white p-6">
-          <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#72859b]">Wallet availability</p>
-          <div className="mt-4 space-y-3">{walletsQuery.isLoading ? <ListSkeleton /> : walletsQuery.isError ? <InlineError text="Wallet balances are unavailable." retry={() => walletsQuery.refetch()} /> : (walletsQuery.data ?? []).filter(wallet => wallet.currency === currency).map(wallet => <WalletMini key={wallet.id} wallet={wallet} />)}</div>
-          <p className="mt-6 text-[10px] leading-5 text-[#7d8b9b]">Balances are internal records in Globus. The service does not receive deposits or send withdrawals to outside accounts.</p>
+          <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#72859b]">Selected wallet</p>
+          <div className="mt-4 space-y-3">{walletsQuery.isLoading ? <ListSkeleton /> : walletsQuery.isError ? <InlineError text="Wallet balances are unavailable." retry={() => walletsQuery.refetch()} /> : selectedWallet && <><WalletMini wallet={selectedWallet} /><WalletReference customerId={profileQuery.data?.customerId ?? ''} wallet={selectedWallet} /></>}</div>
+          <p className="mt-6 text-[10px] leading-5 text-[#7d8b9b]">Account activity is recorded in Globus. A deposit request does not transfer outside funds.</p>
         </div>
       </div>
     </>
   );
 }
 
-export function ReceivePage() {
+export function CustomerIdPage() {
   const profile = useGetBankProfile({ query: { queryKey: getGetBankProfileQueryKey() } });
   const walletsQuery = useListBankWallets({ query: { queryKey: getListBankWalletsQueryKey() } });
   const [copied, setCopied] = useState(false);
@@ -560,7 +595,7 @@ export function ReceivePage() {
   return (
     <>
       <PageHeading eyebrow="Member access" title="Your Customer ID" subtitle="Use this unique seven-character ID with your password to sign in." />
-      {profile.isLoading ? <PageSkeleton /> : profile.isError ? <Failure title="Your wallet identifier isn’t available" retry={() => profile.refetch()} /> : (
+      {profile.isLoading ? <PageSkeleton /> : profile.isError ? <Failure title="Your account ID isn’t available" retry={() => profile.refetch()} /> : (
         <div className="mt-8 grid gap-6 xl:grid-cols-[1fr_.78fr]">
           <section className="balance-panel rounded-[22px] p-6 text-white sm:p-9">
             <span className="grid h-12 w-12 place-items-center rounded-2xl bg-white/10 text-[#a5d8d8]"><WalletCards size={22} /></span>
@@ -570,9 +605,9 @@ export function ReceivePage() {
             <p className="mt-7 max-w-lg text-[11px] leading-5 text-[#c1d0db]">Keep this ID for sign-in. It identifies your Globus account and is not a bank account or payment address.</p>
           </section>
           <section className="rounded-[22px] border border-[#e1e8ee] bg-white p-6 sm:p-8">
-            <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#518c91]">Internal transfers</p>
-            <ol className="mt-5 space-y-5">{[['Share your registered email', 'The sender uses the email registered to your Globus profile.'], ['Choose the same currency', 'Both members need an active wallet in that currency.'], ['Review the ledger', 'Completed transfers appear in both members’ activity and wallet balances.']].map(([title, copy], index) => <li key={title} className="flex gap-4"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#edf5f6] text-[11px] font-bold text-[#42868b]">0{index + 1}</span><span><b className="block text-[12px] text-[#2c425c]">{title}</b><span className="mt-1 block text-[11px] leading-5 text-[#7d8b9b]">{copy}</span></span></li>)}</ol>
-            <p className="mt-6 text-[10px] leading-5 text-[#7d8b9b]">Globus does not receive outside deposits or hold funds at a bank.</p>
+            <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#518c91]">Account access</p>
+            <h2 className="mt-3 text-[15px] font-bold text-[#2c425c]">Use your Customer ID to sign in</h2>
+            <p className="mt-3 text-[11px] leading-5 text-[#7d8b9b]">Enter this seven-character ID and your password on the Globus sign-in page. Keep it private; it is not a bank account number or payment address.</p>
           </section>
         </div>
       )}
@@ -581,7 +616,7 @@ export function ReceivePage() {
         <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {walletsQuery.isLoading ? <ListSkeleton /> : walletsQuery.isError ? <InlineError text="Wallet balances are unavailable." retry={() => walletsQuery.refetch()} /> : (walletsQuery.data ?? []).map(wallet => <WalletMini key={wallet.id} wallet={wallet} />)}
         </div>
-        <Link href="/add-money" className="mt-6 inline-flex items-center gap-2 text-[11px] font-bold text-[#367b82]">Request a ledger deposit <ArrowRight size={14} /></Link>
+        <Link href="/add-money" className="mt-6 inline-flex items-center gap-2 text-[11px] font-bold text-[#367b82]">Request a deposit <ArrowRight size={14} /></Link>
       </section>
     </>
   );
@@ -998,10 +1033,10 @@ function AdminLedgerRequestQueue() {
       <section className="mt-6 overflow-hidden rounded-[20px] border border-[#e1e8ee] bg-white">
         <div className="border-b border-[#edf0f3] px-5 py-4 sm:px-7">
           <h2 className="text-[14px] font-bold text-[#28405c]">Deposit and withdrawal approvals</h2>
-          <p className="mt-1 text-[10px] leading-4 text-[#8592a1]">Approval posts an internal ledger credit or debit only. It does not receive an outside deposit or make a payout. Every decision needs an audit reason and administrator PIN.</p>
+          <p className="mt-1 text-[10px] leading-4 text-[#8592a1]">Approval records a Globus wallet credit or debit only. It does not receive an outside deposit or make a payout. Every decision needs an audit reason and administrator PIN.</p>
         </div>
         {error && !reviewTarget && <p role="alert" className="border-b border-[#edf0f3] bg-[#fff1ef] px-5 py-3 text-[11px] text-[#a24940]">{error}</p>}
-        {requests.isLoading ? <ListSkeleton /> : requests.isError ? <InlineError text="Ledger requests are unavailable." retry={() => requests.refetch()} /> : requests.data?.length ? (
+        {requests.isLoading ? <ListSkeleton /> : requests.isError ? <InlineError text="Customer requests are unavailable." retry={() => requests.refetch()} /> : requests.data?.length ? (
           <div className="divide-y divide-[#edf0f2]">
             {requests.data.map(request => (
               <article key={request.id} className="flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7">
@@ -1023,7 +1058,7 @@ function AdminLedgerRequestQueue() {
       {reviewTarget && <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#14263e]/55 p-4">
         <form role="dialog" aria-modal="true" aria-labelledby="ledger-review-title" onSubmit={submitDecision} className="w-full max-w-lg rounded-[22px] border border-[#dfe7ec] bg-white p-5 shadow-2xl sm:p-7">
           <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#55868b]">Administrator authorization</p>
-          <h2 id="ledger-review-title" className="mt-1 text-[16px] font-bold text-[#29425c]">{reviewTarget.decision === 'approve' ? 'Approve ledger request' : 'Reject ledger request'}</h2>
+          <h2 id="ledger-review-title" className="mt-1 text-[16px] font-bold text-[#29425c]">{reviewTarget.decision === 'approve' ? 'Approve customer request' : 'Reject customer request'}</h2>
           <p className="mt-2 text-[11px] leading-5 text-[#718296]">{reviewTarget.request.memberName} · {reviewTarget.request.reference} · {formatMoney(Number(reviewTarget.request.amount), reviewTarget.request.currency)}</p>
           <div className="mt-5">
             <Field label="Your 6-digit transaction PIN"><input required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="current-password" value={transactionPin} onChange={event => setTransactionPin(event.target.value.replace(/\D/g, '').slice(0, 6))} className={inputClass} /></Field>
@@ -1213,15 +1248,15 @@ export function AdminPage() {
   };
   return (
     <>
-      <PageHeading eyebrow="Restricted operations" title="Operations overview" subtitle="Review customer accounts, ledger requests and recorded balance activity." />
+      <PageHeading eyebrow="Restricted operations" title="Operations overview" subtitle="Review customer accounts, requests and recorded balance activity." />
       {summary.isError && <InlineError text="Summary totals are unavailable." retry={() => summary.refetch()} />}
       <div className="mt-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Metric label="Registered users" value={summary.data?.registeredUsers} />
         <Metric label="Active accounts" value={summary.data?.activeAccounts} />
         <Metric label="Pending operations" value={summary.data?.pendingOperations} />
-        <Metric label="Ledger transactions" value={summary.data?.ledgerTransactions} />
+        <Metric label="Wallet transactions" value={summary.data?.ledgerTransactions} />
       </div>
-      <div className="mt-5 flex flex-wrap items-center gap-3 rounded-xl border border-[#d9e7e8] bg-[#eff7f7] px-4 py-3 text-[11px] text-[#48767b]"><ShieldCheck size={15} /> Internal ledger operations only · no outside funds are held or sent.</div>
+      <div className="mt-5 flex flex-wrap items-center gap-3 rounded-xl border border-[#d9e7e8] bg-[#eff7f7] px-4 py-3 text-[11px] text-[#48767b]"><ShieldCheck size={15} /> Globus wallet records only · no outside funds are held or sent.</div>
       <section className="mt-5 flex flex-wrap items-center justify-between gap-4 rounded-[18px] border border-[#dfe7ec] bg-white px-5 py-4">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#718296]">Your admin identity</p>
@@ -1270,7 +1305,7 @@ export function AdminPage() {
           <div><p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#55868b]">Admin balance adjustment</p><h2 className="mt-1 text-[15px] font-bold text-[#29425c]">Adjust a user wallet</h2><p className="mt-1 text-[11px] text-[#7e8d9c]">{[fundTarget.firstName, fundTarget.lastName].filter(Boolean).join(' ') || 'Globus member'} · {fundTarget.email}</p></div>
           <button type="button" aria-label="Close funding form" onClick={() => { setFundTarget(null); setFundingError(''); setFundingSuccess(null); setFundSenderName(''); setFundDescription(''); setFundReason(''); setFundTransactionPin(''); }} className="rounded-lg p-2 text-[#6d8092] hover:bg-[#f1f5f7]"><X size={16} /></button>
         </div>
-        <p className="mb-5 rounded-lg border border-[#d9e8e9] bg-[#f2f8f8] px-4 py-3 text-[10px] leading-4 text-[#4e777a]">This records a credit or debit in Globus’s internal ledger and writes an audit entry. It does not receive or send outside funds. Maximum per entry: 1,000,000.00.</p>
+        <p className="mb-5 rounded-lg border border-[#d9e8e9] bg-[#f2f8f8] px-4 py-3 text-[10px] leading-4 text-[#4e777a]">This records a wallet credit or debit in Globus and writes an audit entry. It does not move outside funds. Maximum per entry: 1,000,000.00.</p>
         <form onSubmit={submitFunding} className="grid gap-4 sm:grid-cols-2">
           <Field label="Adjustment direction"><select value={fundDirection} onChange={event => setFundDirection(event.target.value as typeof fundDirection)} className={inputClass}><option value="credit">Credit wallet</option><option value="debit">Debit wallet</option></select></Field>
           <Field label="Currency"><select value={fundCurrency} onChange={event => setFundCurrency(event.target.value as Currency)} className={inputClass}>{currencies.map(item => <option key={item} value={item}>{item} · {currencyNames[item]}</option>)}</select></Field>
@@ -1290,8 +1325,8 @@ export function AdminPage() {
         {users.isLoading ? <ListSkeleton /> : users.isError ? <InlineError text="User records are unavailable." retry={() => users.refetch()} /> : users.data?.length ? <div className="overflow-x-auto"><table className="w-full min-w-[1080px] text-left"><thead className="bg-[#f7f9fa] text-[9px] uppercase tracking-[.13em] text-[#8291a0]"><tr><th className="px-6 py-3">Member</th><th className="px-4 py-3">Region</th><th className="px-4 py-3">Verification</th><th className="px-4 py-3">Account</th><th className="px-4 py-3">Wallets</th><th className="px-6 py-3 text-right">Actions</th></tr></thead><tbody>{users.data.map(user => <tr key={user.id} className="border-t border-[#edf0f2] text-[11px] text-[#445a71]"><td className="px-6 py-4"><b className="block text-[#2d435c]">{[user.firstName, user.lastName].filter(Boolean).join(' ') || 'Globus member'}</b><span className="mt-1 block text-[10px] text-[#8a97a5]">{user.email}</span><span className="mt-1 block font-mono text-[10px] font-semibold tracking-[.08em] text-[#52717e]">Customer ID: {user.customerId ?? '—'}</span></td><td className="px-4 py-4">{user.country || '—'}</td><td className="px-4 py-4"><span>{humanize(user.verificationStatus)}</span>{user.verificationNote && <span className="mt-1 block max-w-[220px] truncate text-[9px] text-[#8794a2]" title={user.verificationNote}>{user.verificationNote}</span>}</td><td className="px-4 py-4">{humanize(user.accountStatus)}</td><td className="px-4 py-4">{user.walletCount}</td><td className="px-6 py-4 text-right"><div className="flex justify-end gap-2"><Link href={`/admin/users/${encodeURIComponent(user.id)}`} className="rounded-lg border border-[#dfe6eb] px-3 py-2 text-[10px] font-bold text-[#3f5c75] hover:bg-[#f4f7f8]">Manage</Link>{(user.verificationStatus === 'pending' || user.verificationStatus === 'additional_information_required') && <button onClick={() => openIdentityReview(user)} className="rounded-lg border border-[#d7e6e7] bg-[#f2f8f8] px-3 py-2 text-[10px] font-bold text-[#36777c] hover:bg-[#e5f2f2]">Review ID</button>}<button disabled={user.accountStatus !== 'active'} onClick={() => { setFundTarget(user); setFundingError(''); setFundingSuccess(null); }} className="rounded-lg bg-[#eff7f7] px-3 py-2 text-[10px] font-bold text-[#36777c] hover:bg-[#e2f1f1] disabled:cursor-not-allowed disabled:opacity-40">Fund</button><button disabled={update.isPending} onClick={() => setStatus(user.id, user.accountStatus === 'active' ? 'suspended' : 'active')} className="rounded-lg border border-[#dfe6eb] px-3 py-2 text-[10px] font-bold text-[#3f5c75] hover:bg-[#f4f7f8] disabled:opacity-50">{user.accountStatus === 'active' ? 'Suspend' : 'Reactivate'}</button></div></td></tr>)}</tbody></table></div> : <EmptyState title="No users found" text="Try another email, name, or Customer ID." />}
       </section>
       <section className="mt-6 overflow-hidden rounded-[20px] border border-[#e1e8ee] bg-white">
-        <div className="border-b border-[#edf0f3] px-5 py-4 sm:px-7"><h2 className="text-[14px] font-bold text-[#28405c]">Ledger review</h2><p className="mt-1 text-[10px] text-[#8592a1]">Review ledger activity and transaction status. Corrections preserve the original transaction and are recorded as separate ledger entries.</p></div>
-        {ledger.isLoading ? <ListSkeleton /> : ledger.isError ? <InlineError text="Ledger records are unavailable." retry={() => ledger.refetch()} /> : ledger.data?.length ? <TransactionList transactions={ledger.data} onStatusOverride={transaction => setStatusTarget(transaction)} statusPending={updateTransactionStatus.isPending} /> : <EmptyState title="Ledger is clear" text="There are no recorded transactions to review." />}
+        <div className="border-b border-[#edf0f3] px-5 py-4 sm:px-7"><h2 className="text-[14px] font-bold text-[#28405c]">Transaction review</h2><p className="mt-1 text-[10px] text-[#8592a1]">Review account activity and transaction status. Corrections preserve the original record and create separate audited entries.</p></div>
+        {ledger.isLoading ? <ListSkeleton /> : ledger.isError ? <InlineError text="Transaction records are unavailable." retry={() => ledger.refetch()} /> : ledger.data?.length ? <TransactionList transactions={ledger.data} onStatusOverride={transaction => setStatusTarget(transaction)} statusPending={updateTransactionStatus.isPending} /> : <EmptyState title="No transactions to review" text="There are no recorded transactions to review." />}
       </section>
       {identityTarget && <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#14263e]/55 p-4" role="presentation">
         <section role="dialog" aria-modal="true" aria-labelledby="identity-review-title" className="max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-[22px] border border-[#dfe7ec] bg-white p-5 shadow-2xl sm:p-7">
@@ -1550,7 +1585,7 @@ export function AdminUserManagementPage() {
       <PageHeading
         eyebrow="Restricted operations · Member management"
         title={memberName}
-        subtitle="Review this member’s profile, internal ledger balances, activity, and account status."
+        subtitle="Review this member’s profile, wallet balances, activity, and account status."
       />
       {pageMessage && <p role="status" className="mt-4 rounded-lg border border-[#cfe5db] bg-[#f1f8f4] px-4 py-3 text-[11px] text-[#417461]">{pageMessage}</p>}
       {pageError && <p role="alert" className="mt-4 rounded-lg bg-[#fff1ef] px-4 py-3 text-[11px] text-[#a24940]">{pageError}</p>}
@@ -1588,21 +1623,21 @@ export function AdminUserManagementPage() {
           </section>
 
           <section className="rounded-[20px] border border-[#e1e8ee] bg-white p-5 sm:p-7">
-            <div className="flex items-end justify-between gap-4"><div><p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#71869a]">Wallets</p><h2 className="mt-1 text-[14px] font-bold text-[#28405c]">Internal balances</h2></div><span className="text-[10px] text-[#8492a0]">{detail.data.wallets.length} wallet{detail.data.wallets.length === 1 ? '' : 's'}</span></div>
-            {detail.data.wallets.length ? <div className="mt-4 grid gap-3 sm:grid-cols-2">{detail.data.wallets.map(wallet => <WalletCard key={wallet.id} wallet={wallet} />)}</div> : <EmptyState title="No wallets yet" text="Wallets are created with the account. Internal transfers and approved adjustments update their balances." />}
+            <div className="flex items-end justify-between gap-4"><div><p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#71869a]">Wallets</p><h2 className="mt-1 text-[14px] font-bold text-[#28405c]">Wallet balances</h2></div><span className="text-[10px] text-[#8492a0]">{detail.data.wallets.length} wallet{detail.data.wallets.length === 1 ? '' : 's'}</span></div>
+            {detail.data.wallets.length ? <div className="mt-4 grid gap-3 sm:grid-cols-2">{detail.data.wallets.map(wallet => <WalletCard key={wallet.id} wallet={wallet} />)}</div> : <EmptyState title="No wallets yet" text="Wallets are created with the account. Approved account adjustments update their balances." />}
           </section>
 
           <section className="overflow-hidden rounded-[20px] border border-[#e1e8ee] bg-white">
-            <div className="border-b border-[#edf0f3] px-5 py-4 sm:px-7"><h2 className="text-[14px] font-bold text-[#28405c]">Recent activity</h2><p className="mt-1 text-[10px] text-[#8592a1]">Latest 50 transactions. Posted records remain intact; corrections create separately audited ledger entries.</p></div>
+            <div className="border-b border-[#edf0f3] px-5 py-4 sm:px-7"><h2 className="text-[14px] font-bold text-[#28405c]">Recent activity</h2><p className="mt-1 text-[10px] text-[#8592a1]">Latest 50 transactions. Posted records remain intact; corrections create separate audited entries.</p></div>
             {detail.data.transactions.length ? <TransactionList transactions={detail.data.transactions} onStatusOverride={transaction => setStatusTarget(transaction)} statusPending={updateTransactionStatus.isPending} /> : <EmptyState title="No activity yet" text="This member has no recorded transactions." />}
           </section>
         </div>
 
         <aside className="space-y-5">
           <section className="rounded-[20px] border border-[#e1e8ee] bg-white p-5 sm:p-6">
-            <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#55868b]">Internal ledger</p>
+            <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#55868b]">Globus account</p>
             <h2 className="mt-1 text-[14px] font-bold text-[#29425c]">Fund this user</h2>
-            <p className="mt-2 text-[10px] leading-4 text-[#7e8d9c]">Records an internal wallet credit or debit with an audit entry. No outside funds are received or sent.</p>
+            <p className="mt-2 text-[10px] leading-4 text-[#7e8d9c]">Records a wallet credit or debit with an audit entry. No outside funds are moved.</p>
             <form onSubmit={submitFunding} className="mt-4 space-y-3">
               <Field label="Adjustment direction"><select value={adjustmentDirection} onChange={event => setAdjustmentDirection(event.target.value as typeof adjustmentDirection)} className={inputClass}><option value="credit">Credit wallet</option><option value="debit">Debit wallet</option></select></Field>
               <Field label="Currency"><select value={currency} onChange={event => setCurrency(event.target.value as Currency)} className={inputClass}>{currencies.map(code => <option key={code} value={code}>{code} · {currencyNames[code]}</option>)}</select></Field>
@@ -1665,18 +1700,18 @@ export function AdminUserManagementPage() {
 }
 
 const disclosureCopy: Record<string, { eyebrow: string; title: string; intro: string; sections: [string, string][] }> = {
-  '/about': { eyebrow: 'About Globus', title: 'An internal ledger for clear account activity.', intro: 'Globus records multi-currency wallets, routed transfer requests and administrative balance adjustments in its application database.', sections: [['A platform, not a bank', 'Globus is not a licensed bank, payment institution or custodian. It does not accept, hold or send outside funds.'], ['Internal balances', 'Wallet balances are records in the Globus ledger. No external bank, payment gateway or money-transfer provider is connected.'], ['Built for clear review', 'Balances, requests and activity include statuses, references and audit records to make each change traceable.']] },
-  '/help': { eyebrow: 'Support', title: 'Help with your Globus ledger.', intro: 'Understand how account activity is recorded inside Globus.', sections: [['How do deposits work?', 'Submit a ledger deposit request. An administrator must approve it before an internal wallet credit is recorded. No outside deposit is received.'], ['How do withdrawals work?', 'A pending withdrawal reserves the requested amount. Approval debits the internal wallet; rejection releases the reserve. No outside payout is made.'], ['Can I send someone money?', 'You can transfer an available balance to another active Globus member. Both internal wallets update together; no outside account is contacted.'], ['How do international requests work?', 'Globus records the request and an administrator-maintained conversion estimate. It does not contact the destination bank, reserve or debit your wallet, or send outside funds.'], ['Where can I find my member ID?', 'Open Receive from your account navigation. Share your registered email with another member so they can address an internal transfer.']] },
-  '/fees': { eyebrow: 'Fees and rates', title: 'Understand the scope of ledger activity.', intro: 'Globus does not process external deposits, payouts, payment gateway transactions or real-money currency conversions.', sections: [['External providers', 'No bank, payment gateway or real-money transfer provider is connected. Routed transfer records affect Globus ledger entries only.'], ['Fees', 'Globus does not charge an external transaction fee because it does not process outside payments.'], ['Currency balances', 'Currency wallets are recorded separately. Transfer estimates use administrator-maintained rates; they are not live quotes.']] },
+  '/about': { eyebrow: 'About Globus', title: 'Clear multi-currency account activity.', intro: 'Globus records multi-currency wallets, routed transfer requests and administrative balance adjustments in its application database.', sections: [['A platform, not a bank', 'Globus is not a licensed bank, payment institution or custodian. It does not accept, hold or send outside funds.'], ['Account balances', 'Wallet balances and transactions are records in Globus. No external bank or payment service processes these operations.'], ['Built for clear review', 'Balances, requests and activity include statuses, references and audit records to make each change traceable.']] },
+  '/help': { eyebrow: 'Support', title: 'Help with your Globus account.', intro: 'Understand how account activity and requests are handled.', sections: [['How do deposits work?', 'Choose a bank-card or bank-transfer request. An administrator must approve it before your Globus wallet balance changes. Globus does not charge a card or receive an outside deposit.'], ['How do withdrawals work?', 'A pending withdrawal reserves the requested amount. Approval records the change in Globus; rejection releases the reserve. No outside payout is made.'], ['Can I send someone money?', 'Globus does not support member-to-member transfers. Transfer requests record the details in Globus but do not contact the recipient’s bank or send outside funds.'], ['How do international requests work?', 'A current Flutterwave rate quote is used to show a converted amount. The quote provider does not execute the transfer; Globus does not contact the destination bank or send outside funds.'], ['Where can I find my Customer ID?', 'Open Customer ID in your account navigation. It identifies your Globus account, not a bank account or payment address.']] },
+  '/fees': { eyebrow: 'Fees and rates', title: 'Understand transfer requests and rates.', intro: 'Globus does not process external deposits, payouts, or card payments.', sections: [['Rate quotes', 'Globus requests conversion estimates from Flutterwave. Availability depends on currency-pair support; quotes can change and are not confirmation of a payment.'], ['Fees', 'Globus records account requests and does not charge an outside transaction fee through a payment provider.'], ['Currency balances', 'Currency wallets are recorded separately. The rate and converted amount shown on a transfer receipt match the quote used when Globus recorded that request.']] },
   '/privacy': { eyebrow: 'Privacy notice', title: 'Your information deserves clarity.', intro: 'This page summarizes account information Globus uses to provide its software services.', sections: [['Account details', 'Profile details and account identifiers associate internal records with your account. Authentication is provided through Clerk.'], ['Private identity documents', 'Documents submitted for internal review are stored privately and accessible only to the submitting member and authorized Globus admins. Files are deleted after approval or rejection. The verification status and an audit record of the decision remain. This review is not legal, bank or government identity verification.'], ['Operational records', 'Transactions and requests may include references, status, currency, amount, descriptions and timestamps. For international transfer requests, only the recipient account’s last four characters are retained.'], ['Your choices', 'Use Settings to review your profile and manage identity documents before submitting them. Contact the support team with questions about account information or platform operations.']] },
-  '/terms': { eyebrow: 'Terms of use', title: 'Internal ledger records, not bank deposits.', intro: 'Globus records account activity in its own database and does not move outside funds.', sections: [['No banking service', 'Globus is not a licensed bank and does not accept deposits, provide credit, custody funds or promise payment execution.'], ['Internal records', 'Displayed balances and transactions represent entries in the Globus ledger. An approved deposit request records an internal credit; an approved withdrawal records an internal debit. Neither action moves outside funds.'], ['Use responsibly', 'Do not rely on ledger balances or status labels as proof of funds held by a bank or as a promise of payment.']] },
-  '/contact': { eyebrow: 'Contact', title: 'Contact information is not configured yet.', intro: 'A verified support channel has not been configured for Globus.', sections: [['Account help', 'Visit Help for guidance about the software. Do not include passwords, verification codes or sensitive payment details in support requests.'], ['Recorded activity', 'Include the transaction reference when asking about a ledger entry in your account.'], ['Operational disclosure', 'Globus support cannot complete, trace or reverse an external payment through this product.']] },
+  '/terms': { eyebrow: 'Terms of use', title: 'Globus account records, not bank deposits.', intro: 'Globus records account activity in its own database and does not move outside funds.', sections: [['No banking service', 'Globus is not a licensed bank and does not accept deposits, provide credit, custody funds or promise payment execution.'], ['Account records', 'Displayed balances and transactions represent entries in Globus. An approved deposit request records a wallet credit; an approved withdrawal records a wallet debit. Neither action moves outside funds.'], ['Use responsibly', 'Do not rely on Globus balances or status labels as proof of funds held by a bank or as a promise of payment.']] },
+  '/contact': { eyebrow: 'Contact', title: 'Contact information is not configured yet.', intro: 'A verified support channel has not been configured for Globus.', sections: [['Account help', 'Visit Help for guidance about the software. Do not include passwords, verification codes or sensitive payment details in support requests.'], ['Recorded activity', 'Include the transaction reference when asking about an account record.'], ['Operational disclosure', 'Globus support cannot complete, trace or reverse an external payment through this product.']] },
 };
 
 export function DisclosurePage({ path }: { path: string }) {
   const data = disclosureCopy[path] ?? disclosureCopy['/about'];
   return (
-    <div className="min-h-[100dvh] bg-[#f5f8fa]">
+    <div className="public-viewport-scroll bg-[#f5f8fa]">
       <header className="mx-auto flex max-w-[1200px] items-center justify-between gap-4 px-4 py-6 sm:px-6"><Link href="/" aria-label="Globus Bank home" className="flex shrink-0 items-center"><img src={`${import.meta.env.BASE_URL}globus-wordmark.png`} alt="Globus Bank — Your world. Our priority." className="h-auto w-[128px] sm:w-[156px]" /></Link><Link href="/" className="text-[12px] font-semibold text-[#456077] hover:text-[#347e83]">Back to home</Link></header>
       <main className="mx-auto max-w-[1020px] px-6 pb-20 pt-10 sm:pt-16">
         <p className="text-[10px] font-bold uppercase tracking-[.17em] text-[#4b8b90]">{data.eyebrow}</p>
@@ -1687,7 +1722,7 @@ export function DisclosurePage({ path }: { path: string }) {
         </div>
         <div className="mt-8 rounded-xl border border-[#d9e7e8] bg-[#edf6f6] p-5 text-[11px] leading-5 text-[#4c7579]"><b className="text-[#35676b]">Important:</b> Globus Bank is a product name for a software platform. It is not a representation that Globus is a licensed bank or financial institution.</div>
       </main>
-      <footer className="border-t border-[#e2e8ed] bg-white px-6 py-7 text-center text-[10px] text-[#8794a3]">Globus · Internal ledger software · no outside funds are held or sent</footer>
+      <footer className="border-t border-[#e2e8ed] bg-white px-6 py-7 text-center text-[10px] text-[#8794a3]">Globus · Account activity software · no outside funds are held or sent</footer>
     </div>
   );
 }
@@ -1726,19 +1761,19 @@ function WalletMini({ wallet }: { wallet: Wallet }) {
 function transactionDisplayType(transaction: BankTransaction) {
   switch (transaction.type) {
     case 'simulation_credit':
-      return 'Opening ledger balance';
+      return 'Opening balance';
     case 'admin_funding':
       return 'Balance adjustment credit';
     case 'admin_debit':
       return 'Balance adjustment debit';
     case 'transfer_in':
-      return 'Member transfer received';
+      return 'Member transfer';
     case 'transfer_out':
       return 'Member transfer sent';
     case 'external_transfer':
       return transaction.status === 'pending' ? 'Transfer request' : 'Routed transfer';
     case 'external_transfer_in':
-      return 'Prior ledger entry';
+      return 'Prior account record';
     default:
       return humanize(transaction.type);
   }
@@ -1761,7 +1796,7 @@ function TransactionList({
       const canPrintReceipt = transaction.status === 'completed';
       return <div key={transaction.id} className="flex flex-wrap items-center gap-x-2 gap-y-2 border-b border-[#edf0f2] px-4 py-4 last:border-0 sm:flex-nowrap sm:gap-4 sm:px-7">
         <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${isIncoming ? 'bg-[#edf7f3] text-[#4d8c72]' : isInternationalRequest ? 'bg-[#fbf7eb] text-[#a0793b]' : 'bg-[#f0f4f7] text-[#658097]'}`}>{isInternationalRequest ? <Globe2 size={16} /> : isIncoming ? <ArrowDownLeft size={16} /> : <ArrowUpRight size={16} />}</span>
-        <div className="min-w-0 flex-1"><p className="truncate text-[11px] font-semibold text-[#334a63]">{transaction.description || transactionDisplayType(transaction)}</p><p className="mt-1 truncate text-[9px] text-[#8996a4]">{transaction.counterparty || 'Internal ledger'} · {formatDate(transaction.createdAt)} · Internal ledger</p></div>
+        <div className="min-w-0 flex-1"><p className="truncate text-[11px] font-semibold text-[#334a63]">{transaction.description || transactionDisplayType(transaction)}</p><p className="mt-1 truncate text-[9px] text-[#8996a4]">{transaction.counterparty || 'Globus account'} · {formatDate(transaction.createdAt)} · Globus record</p></div>
         <div className="shrink-0 text-right"><p className={`text-[11px] font-bold ${isIncoming ? 'text-[#417f69]' : isInternationalRequest ? 'text-[#a0793b]' : 'text-[#3c5269]'}`}>{isInternationalRequest ? 'Request · ' : isIncoming ? '+' : '−'}{formatMoney(Number(transaction.amount), transaction.currency)}</p><p className={`mt-1 text-[9px] capitalize ${transaction.status === 'completed' ? 'text-[#4f8c75]' : 'text-[#9b8050]'}`}>{humanize(transaction.status)}</p></div>
         {(canPrintReceipt || onStatusOverride) && <div className="flex w-full flex-wrap justify-end gap-2 sm:ml-auto sm:w-auto sm:flex-nowrap">
           {canPrintReceipt && <button type="button" onClick={() => setReceipt(transaction)} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#dfe7eb] px-2.5 py-2 text-[9px] font-bold text-[#4a667e] hover:bg-[#f5f8f9]" aria-label={`View receipt ${transaction.reference}`}><FileText size={13} /><span className="hidden sm:inline">Receipt</span></button>}
@@ -1879,7 +1914,7 @@ function TransactionStatusDialog({
           <div><p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#55868b]">Admin transaction control</p><h2 id="transaction-status-title" className="mt-1 text-[16px] font-bold text-[#29425c]">Correct internal processing status</h2><p className="mt-1 break-all text-[10px] text-[#7e8d9c]">{transaction.reference}</p></div>
           <button type="button" aria-label="Close status override" onClick={onClose} className="rounded-lg p-2 text-[#6d8092] hover:bg-[#f1f5f7]"><X size={16} /></button>
         </div>
-        <p className="mt-4 rounded-lg border border-[#e5e9ed] bg-[#f7f9fa] px-4 py-3 text-[10px] leading-4 text-[#64798e]">This status-only correction never posts or removes ledger entries. The server checks the authoritative record and postings; completing or reversing transactions uses separate ledger workflows. Pending deposits and withdrawals must be handled in their review queue.</p>
+        <p className="mt-4 rounded-lg border border-[#e5e9ed] bg-[#f7f9fa] px-4 py-3 text-[10px] leading-4 text-[#64798e]">This status-only correction never changes wallet balances or their underlying records. The server checks the authoritative transaction; posted operations must use a separate audited reversal. Pending deposits and withdrawals must be handled in their review queue.</p>
         <form onSubmit={submit} className="mt-5 space-y-4">
           <Field label="New status">
             <select value={status} onChange={event => setStatus(event.target.value as BankTransaction['status'])} className={inputClass}>

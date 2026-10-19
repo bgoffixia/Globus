@@ -14,19 +14,43 @@ type InstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform?: string }>;
 };
 
+const PROMPT_INTERVAL_MS = 5 * 60 * 60 * 1000;
+const PROMPT_SHOWN_KEY = "globus:pwa-prompt-shown-at";
+const INSTALLED_KEY = "globus:pwa-installed";
+const OPEN_PROMPT_EVENT = "globus:open-install-prompt";
+const INSTALLED_EVENT = "globus:pwa-installed";
+
+function isAppInstalled() {
+  let wasInstalled = false;
+  try {
+    wasInstalled = localStorage.getItem(INSTALLED_KEY) === "true";
+  } catch {
+    // Standalone display mode is sufficient when browser storage is unavailable.
+  }
+  return (
+    window.matchMedia("(display-mode: standalone)").matches ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true ||
+    wasInstalled
+  );
+}
+
+function markPromptShown() {
+  try {
+    localStorage.setItem(PROMPT_SHOWN_KEY, String(Date.now()));
+  } catch {
+    // The install action remains available if storage is disabled.
+  }
+}
+
 export function PwaInstallPrompt() {
   const installPrompt = useRef<InstallPromptEvent | null>(null);
-  const dismissedThisLoad = useRef(false);
   const [open, setOpen] = useState(false);
   const [isIos, setIsIos] = useState(false);
   const [canInstall, setCanInstall] = useState(false);
   const [installError, setInstallError] = useState("");
 
   useEffect(() => {
-    const isStandalone =
-      window.matchMedia("(display-mode: standalone)").matches ||
-      (navigator as Navigator & { standalone?: boolean }).standalone === true;
-    if (isStandalone) return;
+    if (isAppInstalled()) return;
 
     const platform = navigator.userAgent.toLowerCase();
     setIsIos(
@@ -34,26 +58,51 @@ export function PwaInstallPrompt() {
         (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1),
     );
 
-    // Do not persist dismissal: the offer returns after the next full page load.
-    const showTimer = window.setTimeout(() => setOpen(true), 900);
+    const openIfEligible = () => {
+      if (isAppInstalled()) return;
+      let lastShown = 0;
+      try {
+        lastShown = Number(localStorage.getItem(PROMPT_SHOWN_KEY) ?? 0);
+      } catch {
+        lastShown = 0;
+      }
+      if (Number.isFinite(lastShown) && Date.now() - lastShown < PROMPT_INTERVAL_MS) return;
+      markPromptShown();
+      setOpen(true);
+    };
+    const showTimer = window.setTimeout(openIfEligible, 900);
+    const handleManualOpen = () => {
+      if (isAppInstalled()) return;
+      markPromptShown();
+      setInstallError("");
+      setOpen(true);
+    };
     const handleInstallPrompt = (event: Event) => {
       event.preventDefault();
       installPrompt.current = event as InstallPromptEvent;
       setCanInstall(true);
-      if (!dismissedThisLoad.current) setOpen(true);
+      openIfEligible();
     };
     const handleInstalled = () => {
       installPrompt.current = null;
       setCanInstall(false);
       setOpen(false);
+      try {
+        localStorage.setItem(INSTALLED_KEY, "true");
+      } catch {
+        // Standalone mode is still detected when the installed app opens.
+      }
+      window.dispatchEvent(new Event(INSTALLED_EVENT));
     };
 
     window.addEventListener("beforeinstallprompt", handleInstallPrompt);
     window.addEventListener("appinstalled", handleInstalled);
+    window.addEventListener(OPEN_PROMPT_EVENT, handleManualOpen);
     return () => {
       window.clearTimeout(showTimer);
       window.removeEventListener("beforeinstallprompt", handleInstallPrompt);
       window.removeEventListener("appinstalled", handleInstalled);
+      window.removeEventListener(OPEN_PROMPT_EVENT, handleManualOpen);
     };
   }, []);
 
@@ -70,7 +119,8 @@ export function PwaInstallPrompt() {
     }
     try {
       await promptEvent.prompt();
-      await promptEvent.userChoice;
+      const choice = await promptEvent.userChoice;
+      if (choice.outcome === "accepted") setInstallError("");
       installPrompt.current = null;
       setCanInstall(false);
       setOpen(false);
@@ -83,7 +133,7 @@ export function PwaInstallPrompt() {
     <Dialog
       open={open}
       onOpenChange={(nextOpen) => {
-        if (!nextOpen) dismissedThisLoad.current = true;
+        if (!nextOpen) markPromptShown();
         setOpen(nextOpen);
       }}
     >
@@ -123,7 +173,7 @@ export function PwaInstallPrompt() {
           <button
             type="button"
             onClick={() => {
-              dismissedThisLoad.current = true;
+              markPromptShown();
               setOpen(false);
             }}
             className="h-10 rounded-xl border border-[#dfe6eb] px-4 text-[11px] font-bold text-[#546b80] hover:bg-[#f5f8f9]"
@@ -141,5 +191,34 @@ export function PwaInstallPrompt() {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+export function InstallAppButton({ className = "" }: { className?: string }) {
+  const [installed, setInstalled] = useState(() => isAppInstalled());
+
+  useEffect(() => {
+    const syncInstalled = () => setInstalled(isAppInstalled());
+    window.addEventListener(INSTALLED_EVENT, syncInstalled);
+    window.addEventListener("appinstalled", syncInstalled);
+    const displayMode = window.matchMedia("(display-mode: standalone)");
+    displayMode.addEventListener?.("change", syncInstalled);
+    return () => {
+      window.removeEventListener(INSTALLED_EVENT, syncInstalled);
+      window.removeEventListener("appinstalled", syncInstalled);
+      displayMode.removeEventListener?.("change", syncInstalled);
+    };
+  }, []);
+
+  if (installed) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => window.dispatchEvent(new Event(OPEN_PROMPT_EVENT))}
+      className={className}
+    >
+      <Download size={15} aria-hidden="true" />
+      Install app
+    </button>
   );
 }

@@ -63,9 +63,12 @@ export function BankSelect({
                 onChange(bank);
                 setOpen(false);
               }}
-              className="flex min-h-10 w-full items-center justify-between gap-2 rounded-lg px-3 text-left text-[11px] text-[#3e566e] hover:bg-[#f2f7f8]"
+              className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-3 text-left text-[11px] text-[#3e566e] hover:bg-[#f2f7f8]"
             >
-              <span>{bank}</span>
+              <span className="flex min-w-0 items-center gap-2.5">
+                <span aria-hidden="true" className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-[#dce7ec] bg-[#f3f7f8] text-[9px] font-extrabold tracking-tight text-[#315773]">{bankInitials(bank)}</span>
+                <span className="truncate">{bank}</span>
+              </span>
               {value === bank && <Check size={14} className="shrink-0 text-[#408589]" />}
             </button>
           )) : (
@@ -80,4 +83,12 @@ export function BankSelect({
       )}
     </div>
   );
+}
+
+function bankInitials(name: string) {
+  const words = name.replace(/[()]/g, '').trim().split(/\s+/).filter(Boolean);
+  const initials = words.length > 1
+    ? `${words[0][0]}${words[1][0]}`
+    : words[0]?.slice(0, 2);
+  return (initials || 'BK').toUpperCase();
 }

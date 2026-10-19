@@ -39,7 +39,7 @@ export function AuthFrame({ mode, children }: AuthFrameProps) {
           <span className="gb-orbit gb-orbit-one" />
           <span className="gb-orbit gb-orbit-two" />
           <span className="gb-orbit-dot" />
-          <span className="gb-world-label">GLOBAL LEDGER</span>
+          <span className="gb-world-label">GLOBAL FINANCE</span>
         </div>
         <div className="gb-panel-foot">
           <span>GLOBUS BANK</span>

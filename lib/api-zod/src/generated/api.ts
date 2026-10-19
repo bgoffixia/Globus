@@ -373,7 +373,31 @@ export const CreateExternalTransferResponse = zod.void()
 
 
 /**
- * @summary List administrator-maintained internal conversion rates
+ * @summary Get a current Flutterwave rate quote for an internal conversion
+ */
+export const getBankExchangeRateQuoteQueryDestinationCurrencyRegExp = new RegExp('^[A-Z]{3}$');
+
+
+export const GetBankExchangeRateQuoteQueryParams = zod.object({
+  "sourceCurrency": zod.enum(['USD', 'EUR', 'GBP', 'CAD', 'AUD']),
+  "destinationCurrency": zod.coerce.string().regex(getBankExchangeRateQuoteQueryDestinationCurrencyRegExp)
+})
+
+export const getBankExchangeRateQuoteResponseDestinationCurrencyRegExp = new RegExp('^[A-Z]{3}$');
+export const getBankExchangeRateQuoteResponseRateRegExp = new RegExp('^[0-9]{1,12}(\\.[0-9]{1,10})?$');
+
+
+export const GetBankExchangeRateQuoteResponse = zod.object({
+  "sourceCurrency": zod.enum(['USD', 'EUR', 'GBP', 'CAD', 'AUD']),
+  "destinationCurrency": zod.string().regex(getBankExchangeRateQuoteResponseDestinationCurrencyRegExp).describe('ISO 4217 destination currency, independent of supported source wallets.'),
+  "rate": zod.string().regex(getBankExchangeRateQuoteResponseRateRegExp),
+  "provider": zod.enum(['Flutterwave', 'Globus']),
+  "checkedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary List historical administrator-maintained conversion rates
  */
 export const listBankExchangeRatesResponseDestinationCurrencyRegExp = new RegExp('^[A-Z]{3}$');
 export const listBankExchangeRatesResponseRateRegExp = new RegExp('^[0-9]+(\\.[0-9]{1,10})?$');

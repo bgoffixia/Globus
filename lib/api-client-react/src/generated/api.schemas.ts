@@ -50,6 +50,23 @@ export interface BankExchangeRate {
   updatedAt: string;
 }
 
+export type BankExchangeRateQuoteProvider = typeof BankExchangeRateQuoteProvider[keyof typeof BankExchangeRateQuoteProvider];
+
+
+export const BankExchangeRateQuoteProvider = {
+  Flutterwave: 'Flutterwave',
+  Globus: 'Globus',
+} as const;
+
+export interface BankExchangeRateQuote {
+  sourceCurrency: ActiveCurrencyCode;
+  destinationCurrency: DestinationCurrencyCode;
+  /** @pattern ^[0-9]{1,12}(\.[0-9]{1,10})?$ */
+  rate: string;
+  provider: BankExchangeRateQuoteProvider;
+  checkedAt: string;
+}
+
 export interface BankExchangeRateInput {
   sourceCurrency: ActiveCurrencyCode;
   destinationCurrency: DestinationCurrencyCode;
@@ -1147,6 +1164,11 @@ export type NotFoundResponse = ErrorResponse;
  */
 export type ConflictResponse = ErrorResponse;
 
+/**
+ * The external rate provider is unavailable or does not support this pair
+ */
+export type ServiceUnavailableResponse = ErrorResponse;
+
 export type ListBankTransactionsParams = {
 currency?: CurrencyCode;
 status?: TransactionStatus;
@@ -1163,6 +1185,11 @@ limit?: number;
 
 export type CreateExternalTransfer410 = {
   error: string;
+};
+
+export type GetBankExchangeRateQuoteParams = {
+sourceCurrency: ActiveCurrencyCode;
+destinationCurrency: DestinationCurrencyCode;
 };
 
 export type CreateIncomingExternalTransfer410 = {

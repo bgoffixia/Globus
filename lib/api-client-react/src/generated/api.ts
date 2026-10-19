@@ -54,6 +54,7 @@ import type {
   BankDashboard,
   BankExchangeRate,
   BankExchangeRateInput,
+  BankExchangeRateQuote,
   BankProfile,
   BankProfileInput,
   BankTransaction,
@@ -64,6 +65,7 @@ import type {
   CustomerIdLookupResult,
   ExternalTransferInput,
   ForbiddenResponse,
+  GetBankExchangeRateQuoteParams,
   HealthStatus,
   IdentityDocument,
   IdentityDocumentUploadInput,
@@ -82,6 +84,7 @@ import type {
   ListAdminUsersParams,
   ListBankTransactionsParams,
   NotFoundResponse,
+  ServiceUnavailableResponse,
   TransactionPinInput,
   TransactionPinUpdateResult,
   TransferInput,
@@ -1354,6 +1357,90 @@ export const useCreateExternalTransfer = <TError = ErrorType<CreateExternalTrans
       return useMutation(getCreateExternalTransferMutationOptions(options));
     }
 
+export const getGetBankExchangeRateQuoteUrl = (params: GetBankExchangeRateQuoteParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/bank/exchange-rates/quote?${stringifiedParams}` : `/api/bank/exchange-rates/quote`
+}
+
+/**
+ * @summary Get a current Flutterwave rate quote for an internal conversion
+ */
+export const getBankExchangeRateQuote = async (params: GetBankExchangeRateQuoteParams, options?: Parameters<typeof customFetch>[1]): Promise<BankExchangeRateQuote> => {
+
+  return customFetch<BankExchangeRateQuote>(getGetBankExchangeRateQuoteUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetBankExchangeRateQuoteQueryKey = (params?: GetBankExchangeRateQuoteParams,) => {
+    return [
+    `/api/bank/exchange-rates/quote`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetBankExchangeRateQuoteQueryOptions = <TData = Awaited<ReturnType<typeof getBankExchangeRateQuote>>, TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ServiceUnavailableResponse>>(params: GetBankExchangeRateQuoteParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBankExchangeRateQuote>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetBankExchangeRateQuoteQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getBankExchangeRateQuote>>> = ({ signal }) => getBankExchangeRateQuote(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getBankExchangeRateQuote>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetBankExchangeRateQuoteQueryResult = NonNullable<Awaited<ReturnType<typeof getBankExchangeRateQuote>>>
+export type GetBankExchangeRateQuoteQueryError = ErrorType<BadRequestResponse | UnauthorizedResponse | ServiceUnavailableResponse>
+
+
+/**
+ * @summary Get a current Flutterwave rate quote for an internal conversion
+ */
+
+export function useGetBankExchangeRateQuote<TData = Awaited<ReturnType<typeof getBankExchangeRateQuote>>, TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ServiceUnavailableResponse>>(
+ params: GetBankExchangeRateQuoteParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBankExchangeRateQuote>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetBankExchangeRateQuoteQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getListBankExchangeRatesUrl = () => {
 
 
@@ -1363,7 +1450,7 @@ export const getListBankExchangeRatesUrl = () => {
 }
 
 /**
- * @summary List administrator-maintained internal conversion rates
+ * @summary List historical administrator-maintained conversion rates
  */
 export const listBankExchangeRates = async ( options?: Parameters<typeof customFetch>[1]): Promise<BankExchangeRate[]> => {
 
@@ -1410,7 +1497,7 @@ export type ListBankExchangeRatesQueryError = ErrorType<UnauthorizedResponse>
 
 
 /**
- * @summary List administrator-maintained internal conversion rates
+ * @summary List historical administrator-maintained conversion rates
  */
 
 export function useListBankExchangeRates<TData = Awaited<ReturnType<typeof listBankExchangeRates>>, TError = ErrorType<UnauthorizedResponse>>(

@@ -366,3 +366,78 @@
   .gb-form-heading h1 { font-size: 24px; }
 }
 @media (max-width: 330px) { .gb-field-grid { grid-template-columns: 1fr; } }
+
+/* The document remains fixed; auth content scrolls inside its own viewport. */
+.gb-auth-shell {
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  grid-template-columns: minmax(0, .88fr) minmax(0, 1.12fr);
+}
+
+.gb-brand-panel,
+.gb-form-side {
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+
+.gb-brand-panel {
+  padding-top: max(28px, env(safe-area-inset-top));
+  padding-bottom: max(24px, env(safe-area-inset-bottom));
+}
+
+.gb-form-side {
+  padding-top: max(24px, env(safe-area-inset-top));
+  padding-bottom: max(24px, env(safe-area-inset-bottom));
+}
+
+.gb-auth-content,
+.gb-signup-form-wrap,
+.gb-signin-form-wrap,
+.gb-auth-form,
+.gb-field-grid,
+.gb-field {
+  min-width: 0;
+}
+
+.gb-auth-shell :is(h1, h2, p, label, span, strong) {
+  overflow-wrap: anywhere;
+}
+
+.gb-auth-shell input,
+.gb-auth-shell button {
+  max-width: 100%;
+}
+
+@media (max-width: 760px) {
+  .gb-auth-shell {
+    display: block;
+  }
+
+  .gb-brand-panel {
+    display: none;
+  }
+
+  .gb-form-side {
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    padding: max(14px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  }
+
+  .gb-mobile-brand {
+    margin-top: 0;
+  }
+}
+
+@media (max-width: 360px) {
+  .gb-field-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

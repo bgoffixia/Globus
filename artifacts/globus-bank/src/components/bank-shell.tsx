@@ -3,6 +3,7 @@ import {
   ArrowDownLeft,
   ArrowLeftRight,
   CircleHelp,
+  Contact,
   CreditCard,
   LayoutDashboard,
   LogOut,
@@ -18,16 +19,17 @@ import {
   getGetAdminAccessQueryKey,
   useGetAdminAccess,
 } from '@workspace/api-client-react';
+import { InstallAppButton } from '@/components/pwa-install-prompt';
 
 const primaryLinks = [
   { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
   { href: '/wallets', label: 'Wallets', icon: WalletCards },
+  { href: '/customer-id', label: 'Customer ID', icon: Contact },
   { href: '/transactions', label: 'Activity', icon: ArrowLeftRight },
 ];
 
 const moneyLinks = [
   { href: '/transfer', label: 'Transfer', icon: ArrowLeftRight },
-  { href: '/receive', label: 'Receive', icon: ArrowDownLeft },
   { href: '/add-money', label: 'Deposit request', icon: CreditCard },
   { href: '/withdraw', label: 'Withdrawal request', icon: ArrowDownLeft },
 ];
@@ -57,14 +59,7 @@ export function BankShell({ children }: { children: ReactNode }) {
             <X size={18} />
           </button>
         </div>
-        <div className="mx-6 mb-5 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2.5">
-          <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-[#8ed4dc]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#7fc9d1]" />
-            Internal ledger
-          </div>
-          <p className="mt-1 text-[11px] leading-4 text-slate-400">Globus records only · no outside funds</p>
-        </div>
-        <nav className="flex-1 space-y-7 overflow-y-auto px-4 pb-5">
+        <nav className="min-h-0 flex-1 space-y-7 overflow-y-auto overscroll-contain px-4 pb-5">
           <NavGroup title="Your account" links={primaryLinks} location={location} onNavigate={() => setMobileMenu(false)} />
           <NavGroup title="Move money" links={moneyLinks} location={location} onNavigate={() => setMobileMenu(false)} />
           <div>
@@ -89,6 +84,7 @@ export function BankShell({ children }: { children: ReactNode }) {
           </div>
         </nav>
         <div className="border-t border-white/10 p-4">
+          <InstallAppButton className="mb-3 flex w-full items-center gap-2 rounded-lg border border-white/10 bg-white/[.06] px-3 py-2.5 text-left text-[11px] font-semibold text-slate-200 transition hover:bg-white/10" />
           <div className="flex items-center gap-3 rounded-xl px-2 py-2">
             <div className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full bg-[#d6eaf0] text-xs font-bold text-[#163753]">
               {user?.imageUrl ? <img src={user.imageUrl} alt="" className="h-full w-full object-cover" /> : initials}
@@ -104,7 +100,7 @@ export function BankShell({ children }: { children: ReactNode }) {
         </div>
       </aside>
       {mobileMenu && <button aria-label="Close menu overlay" className="fixed inset-0 z-30 bg-[#071729]/50 lg:hidden" onClick={() => setMobileMenu(false)} />}
-      <div className="min-h-screen min-h-[100dvh] min-w-0 w-full lg:pl-[252px]">
+      <div className="bank-main-column min-w-0 w-full lg:pl-[252px]">
         <header className="sticky top-0 z-20 flex min-h-[64px] items-center justify-between gap-2 border-b border-[#e3e9ef] bg-[#f7f9fb]/95 px-3 py-2 backdrop-blur-md sm:h-[72px] sm:px-8">
           <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
             <button aria-label="Open navigation" onClick={() => setMobileMenu(true)} className="shrink-0 rounded-lg p-2 text-[#283c55] hover:bg-[#e9eff4] lg:hidden">
@@ -113,13 +109,13 @@ export function BankShell({ children }: { children: ReactNode }) {
             <p className="min-w-0 truncate text-[11px] font-medium text-[#738297] sm:text-[12px]"><span className="hidden sm:inline">Globus Bank <span className="px-1.5 text-[#c5ced7]">/</span> </span><span className="text-[#253850]">{pageLabel(location)}</span></p>
           </div>
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-            <span className="hidden rounded-full border border-[#d6e8e9] bg-[#eff8f8] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-[#377d83] sm:inline-flex">Internal ledger</span>
+            <InstallAppButton className="hidden items-center gap-1.5 rounded-lg border border-[#d6e8e9] bg-white px-2.5 py-2 text-[10px] font-bold text-[#377d83] hover:bg-[#eff8f8] sm:inline-flex" />
             <div className="grid h-9 w-9 place-items-center overflow-hidden rounded-full border border-[#dbe3eb] bg-white text-xs font-bold text-[#27445e]">
               {user?.imageUrl ? <img src={user.imageUrl} alt="" className="h-full w-full object-cover" /> : initials}
             </div>
           </div>
         </header>
-        <main className="page-enter mx-auto min-w-0 w-full max-w-[1440px] px-4 py-6 sm:px-8 sm:py-9 lg:px-10">{children}</main>
+        <main className="page-enter mx-auto min-w-0 w-full max-w-[1440px] px-4 py-5 sm:px-8 sm:py-7 lg:px-10">{children}</main>
       </div>
     </div>
   );
@@ -146,7 +142,7 @@ function pageLabel(path: string) {
     '/transactions': 'Activity',
     '/international-transfer': 'Transfer',
     '/transfer': 'Transfer',
-    '/receive': 'Receive',
+    '/customer-id': 'Customer ID',
     '/add-money': 'Deposit request',
     '/withdraw': 'Withdrawal request',
     '/settings': 'Settings',

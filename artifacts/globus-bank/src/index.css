@@ -95,15 +95,20 @@
     @apply bg-background text-foreground antialiased;
     font-family: var(--app-font-sans);
     min-width: 320px;
+    height: 100%;
+    overflow: hidden;
   }
 
   html,
-  body,
   #root {
+    height: 100%;
     width: 100%;
     max-width: 100%;
     overflow-x: clip;
   }
+
+  html { overflow-y: hidden; }
+  #root { min-width: 0; }
 
   button,
   input,
@@ -114,11 +119,14 @@
 }
 
 .app-shell {
+  display: flex;
+  height: 100vh;
+  height: 100dvh;
   width: 100%;
   max-width: 100%;
-  min-height: 100vh;
-  min-height: 100dvh;
+  min-height: 0;
   overflow-x: clip;
+  overflow-y: hidden;
   background: #f4f7fa;
 }
 
@@ -127,18 +135,151 @@
   color: #dce6f1;
   padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
+  min-height: 0;
 }
 
-.app-shell > div:last-child {
+.app-shell > .bank-main-column {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.bank-main-column > header {
+  flex: 0 0 auto;
+  padding-top: max(.5rem, env(safe-area-inset-top));
+}
+
+.bank-main-column > main {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: clip;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
+  scrollbar-gutter: stable;
+}
+
+.public-viewport-scroll {
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow-x: clip;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.admin-viewport {
+  display: flex;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.admin-main-column {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.admin-main-column > header {
+  flex: 0 0 auto;
+  min-height: calc(64px + env(safe-area-inset-top));
+  height: auto;
+  padding-top: max(.5rem, env(safe-area-inset-top));
+}
+
+.admin-main-column > main {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: clip;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
+  scrollbar-gutter: stable;
+}
+
+.admin-sidebar {
+  min-height: 0;
   padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
+}
+
+.admin-main-column > main > * {
+  min-width: 0;
+}
+
+.admin-main-column table {
+  max-width: 100%;
+}
+
+.bank-main-column main > *,
+.admin-main-column main > * {
+  min-width: 0;
+}
+
+.bank-main-column main :where(section, article, form, label),
+.admin-main-column main :where(section, article, form, label) {
+  min-width: 0;
+}
+
+.bank-main-column main :where(p, h1, h2, h3, td, th, dd, dt),
+.admin-main-column main :where(p, h1, h2, h3, td, th, dd, dt) {
+  overflow-wrap: anywhere;
+}
+
+.public-viewport-scroll main,
+.bank-main-column main,
+.admin-main-column main {
+  min-width: 0;
+}
+
+.not-found-viewport {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow-x: clip;
+  overflow-y: auto;
+  padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+  background: #f3f6f6;
+}
+
+body, #root {
+  overflow-y: hidden;
+}
+
+img, svg, video, canvas {
+  max-width: 100%;
+}
+
+.admin-viewport [role="dialog"] {
+  max-width: calc(100vw - max(1.5rem, env(safe-area-inset-left) + env(safe-area-inset-right)));
+  max-height: calc(100dvh - max(1.5rem, env(safe-area-inset-top) + env(safe-area-inset-bottom)));
+  overflow-x: hidden;
+  overscroll-behavior: contain;
 }
 
 @supports not (overflow-x: clip) {
   html,
   body,
   #root,
-  .app-shell {
+  .app-shell,
+  .public-viewport-scroll {
     overflow-x: hidden;
   }
 }
