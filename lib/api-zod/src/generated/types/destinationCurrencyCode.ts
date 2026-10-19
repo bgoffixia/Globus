@@ -7,7 +7,7 @@
  */
 
 /**
- * ISO 4217 destination currency, independent of supported source wallets.
+ * ISO 4217 currency code for a rate quote, independent of supported source wallets.
  * @pattern ^[A-Z]{3}$
  */
 export type DestinationCurrencyCode = string;

@@ -57,13 +57,19 @@ export function InternationalTransferPage() {
   });
   const [destinationCountry, setDestinationCountry] = useState('');
   const [recipientBank, setRecipientBank] = useState('');
-  const [destinationCurrency, setDestinationCurrency] = useState('');
+  const [destinationCurrency, setDestinationCurrency] = useState(() => {
+    const requested = (params.get('destinationCurrency') ?? '').toUpperCase();
+    return destinationCurrencies.includes(requested) ? requested : '';
+  });
   const [recipientAccountName, setRecipientAccountName] = useState('');
   const [recipientAccountNumber, setRecipientAccountNumber] = useState('');
   const [routingCode, setRoutingCode] = useState('');
   const [swiftBic, setSwiftBic] = useState('');
   const [remark, setRemark] = useState('');
-  const [amount, setAmount] = useState('');
+  const [amount, setAmount] = useState(() => {
+    const requested = params.get('amount') ?? '';
+    return AMOUNT_RE.test(requested) ? requested : '';
+  });
   const [confirmed, setConfirmed] = useState(false);
   const [rateSnapshot, setRateSnapshot] = useState<string | null>(null);
   const [pin, setPin] = useState('');

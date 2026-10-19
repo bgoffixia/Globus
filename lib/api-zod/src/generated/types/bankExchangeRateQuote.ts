@@ -5,12 +5,11 @@
  * Globus internal ledger API; no external financial provider is connected
  * OpenAPI spec version: 0.1.0
  */
-import type { ActiveCurrencyCode } from './activeCurrencyCode';
 import type { BankExchangeRateQuoteProvider } from './bankExchangeRateQuoteProvider';
 import type { DestinationCurrencyCode } from './destinationCurrencyCode';
 
 export interface BankExchangeRateQuote {
-  sourceCurrency: ActiveCurrencyCode;
+  sourceCurrency: DestinationCurrencyCode;
   destinationCurrency: DestinationCurrencyCode;
   /** @pattern ^[0-9]{1,12}(\.[0-9]{1,10})?$ */
   rate: string;

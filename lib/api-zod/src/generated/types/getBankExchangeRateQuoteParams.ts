@@ -5,10 +5,9 @@
  * Globus internal ledger API; no external financial provider is connected
  * OpenAPI spec version: 0.1.0
  */
-import type { ActiveCurrencyCode } from './activeCurrencyCode';
 import type { DestinationCurrencyCode } from './destinationCurrencyCode';
 
 export type GetBankExchangeRateQuoteParams = {
-sourceCurrency: ActiveCurrencyCode;
+sourceCurrency: DestinationCurrencyCode;
 destinationCurrency: DestinationCurrencyCode;
 };

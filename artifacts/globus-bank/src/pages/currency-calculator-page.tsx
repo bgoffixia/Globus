@@ -10,6 +10,7 @@ import { digitsFor, formatAmount, formatRate } from '@/components/transfer/trans
 import { previewConversion } from '@/lib/currency-conversion';
 
 const currencies = destinationCurrencies;
+const transferWalletCurrencies = new Set(['USD', 'EUR', 'GBP', 'CAD', 'AUD']);
 const inputClass = 'h-12 w-full rounded-xl border border-[#dfe6ec] bg-white px-3.5 text-[13px] font-semibold text-[#273e57] outline-none transition focus:border-[#62a3a6] focus:ring-2 focus:ring-[#62a3a6]/15';
 
 export function CurrencyCalculatorPage() {
@@ -34,6 +35,14 @@ export function CurrencyCalculatorPage() {
   const converted = quote.data?.rate
     ? previewConversion(amount, quote.data.rate, targetDigits, sourceDigits)
     : null;
+  const canPrefillTransfer = transferWalletCurrencies.has(sourceCurrency);
+  const transferParams = new URLSearchParams();
+  if (canPrefillTransfer) {
+    transferParams.set('currency', sourceCurrency);
+    transferParams.set('destinationCurrency', destinationCurrency);
+    if (amount && converted !== null) transferParams.set('amount', amount);
+  }
+  const transferHref = `/transfer${transferParams.size ? `?${transferParams.toString()}` : ''}`;
 
   function swapCurrencies() {
     setSourceCurrency(destinationCurrency);
@@ -150,7 +159,7 @@ export function CurrencyCalculatorPage() {
               ) : (
                 <>
                   <p data-testid="text-calculated-amount" className="bank-display mt-6 break-words text-[32px] font-semibold leading-tight sm:text-[38px]">
-                    {converted === null ? `— ${destinationCurrency}` : formatAmount(converted, destinationCurrency)}
+                    {converted === null ? (quote.data ? 'Enter a valid amount' : `— ${destinationCurrency}`) : formatAmount(converted, destinationCurrency)}
                   </p>
                   {quote.data && <p data-testid="text-calculator-rate" className="mt-3 break-all font-mono text-[11px] text-[#d4e0e8]">1 {sourceCurrency} = {formatRate(quote.data.rate)} {destinationCurrency}</p>}
                 </>
@@ -164,8 +173,8 @@ export function CurrencyCalculatorPage() {
         </div>
         <div className="flex flex-col gap-3 border-t border-[#edf1f4] bg-[#fbfcfd] px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7">
           <p className="max-w-xl text-[10px] leading-5 text-[#748496]">This is an estimate based on a reference rate. It doesn’t submit or authorize a transfer.</p>
-          <Link href={`/transfer?currency=${encodeURIComponent(sourceCurrency)}`} data-testid="link-start-transfer" className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-[#173a60] px-4 text-[11px] font-bold text-white transition hover:bg-[#214c76]">
-            Start a transfer <ArrowUpRight size={14} />
+          <Link href={transferHref} data-testid="link-start-transfer" className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-[#173a60] px-4 text-[11px] font-bold text-white transition hover:bg-[#214c76]">
+            {canPrefillTransfer ? 'Start a transfer' : 'Open transfer'} <ArrowUpRight size={14} />
           </Link>
         </div>
       </section>

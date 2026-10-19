@@ -37,7 +37,7 @@ export const ActiveCurrencyCode = {
 } as const;
 
 /**
- * ISO 4217 destination currency, independent of supported source wallets.
+ * ISO 4217 currency code for a rate quote, independent of supported source wallets.
  * @pattern ^[A-Z]{3}$
  */
 export type DestinationCurrencyCode = string;
@@ -60,7 +60,7 @@ export const BankExchangeRateQuoteProvider = {
 } as const;
 
 export interface BankExchangeRateQuote {
-  sourceCurrency: ActiveCurrencyCode;
+  sourceCurrency: DestinationCurrencyCode;
   destinationCurrency: DestinationCurrencyCode;
   /** @pattern ^[0-9]{1,12}(\.[0-9]{1,10})?$ */
   rate: string;
@@ -1189,7 +1189,7 @@ export type CreateExternalTransfer410 = {
 };
 
 export type GetBankExchangeRateQuoteParams = {
-sourceCurrency: ActiveCurrencyCode;
+sourceCurrency: DestinationCurrencyCode;
 destinationCurrency: DestinationCurrencyCode;
 };
 
