@@ -537,7 +537,7 @@ function SettingsPage() {
       <Heading
         kicker="Operational policy"
         title="Settings & conversion quotes"
-        subtitle="Control funding policy. New transfer conversions use a current Grey rate quote."
+        subtitle="Control funding policy. Transfer conversions use current Frankfurter rates, with Grey as a fallback."
       />
       {settings.isError && <InlineError text="Operational settings could not be loaded." retry={() => settings.refetch()} />}
       {error && <p role="alert" className="mb-4 rounded-lg bg-[#fff2ed] p-3 text-[10px] text-[#a45247]">{error}</p>}
@@ -559,11 +559,11 @@ function SettingsPage() {
             </form>
           </div>
         </Panel>
-        <Panel title="Grey rate quotes" eyebrow="Current rate source" note="Quotes are read-only estimates; Globus does not use Grey money-moving endpoints.">
+        <Panel title="Exchange-rate quotes" eyebrow="Current rate sources" note="Frankfurter is primary; Grey is a read-only fallback. Neither is used to move money.">
           <div className="space-y-4 p-5 text-[11px] leading-5 text-[#657c82]">
-            <p>Globus requests a quote from Grey’s dedicated currency-rate endpoint when a transfer pair is selected. Quotes are cached briefly and refreshed; the rate and retrieval time used are saved with the Globus transaction record.</p>
-            <p>Currency-pair availability depends on Grey. If a pair cannot be quoted, the transfer is blocked rather than using an administrator-entered or guessed rate.</p>
-            <p>Globus calls only the rate-quote endpoint, not Grey swap, payout, or transfer endpoints. A quote does not confirm that an outside bank received or sent money.</p>
+            <p>Globus uses Frankfurter’s published reference rates when a transfer pair is selected. Quotes are cached briefly and refreshed; the rate and retrieval time used are saved with the Globus transaction record.</p>
+            <p>If Frankfurter cannot quote a pair, Globus tries Grey’s dedicated rate endpoint. If neither source can provide a valid rate, the transfer is blocked rather than using an administrator-entered or guessed value.</p>
+            <p>Globus requests rates only. It does not call any Grey swap, payout, or transfer endpoints. A quote does not confirm that an outside bank received or sent money.</p>
           </div>
         </Panel>
       </div>

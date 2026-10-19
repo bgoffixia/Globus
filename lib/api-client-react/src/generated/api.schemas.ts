@@ -54,6 +54,7 @@ export type BankExchangeRateQuoteProvider = typeof BankExchangeRateQuoteProvider
 
 
 export const BankExchangeRateQuoteProvider = {
+  Frankfurter: 'Frankfurter',
   Grey: 'Grey',
   Globus: 'Globus',
 } as const;

@@ -373,7 +373,7 @@ export const CreateExternalTransferResponse = zod.void()
 
 
 /**
- * @summary Get a current Grey rate quote for an internal conversion
+ * @summary Get a current Frankfurter rate quote (Grey fallback) for an internal conversion
  */
 export const getBankExchangeRateQuoteQueryDestinationCurrencyRegExp = new RegExp('^[A-Z]{3}$');
 
@@ -391,7 +391,7 @@ export const GetBankExchangeRateQuoteResponse = zod.object({
   "sourceCurrency": zod.enum(['USD', 'EUR', 'GBP', 'CAD', 'AUD']),
   "destinationCurrency": zod.string().regex(getBankExchangeRateQuoteResponseDestinationCurrencyRegExp).describe('ISO 4217 destination currency, independent of supported source wallets.'),
   "rate": zod.string().regex(getBankExchangeRateQuoteResponseRateRegExp),
-  "provider": zod.enum(['Grey', 'Globus']),
+  "provider": zod.enum(['Frankfurter', 'Grey', 'Globus']),
   "checkedAt": zod.coerce.date()
 })
 

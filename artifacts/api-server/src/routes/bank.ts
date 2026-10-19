@@ -94,6 +94,12 @@ const exchangeRateQuoteLimiter = rateLimit({
   message: { error: "Rate quotes are temporarily limited. Please try again shortly." },
 });
 
+type FrankfurterRateReply = {
+  date?: unknown;
+  base?: unknown;
+  quote?: unknown;
+  rate?: unknown;
+};
 type GreyRateReply = {
   status?: unknown;
   data?: {
@@ -104,70 +110,123 @@ type GreyRateReply = {
 };
 type CachedExchangeRate = {
   rate: string;
+  provider: "Frankfurter" | "Grey";
   checkedAt: Date;
   expiresAt: number;
 };
-const greyRateCache = new Map<string, CachedExchangeRate>();
-const greyRateLoads = new Map<string, Promise<CachedExchangeRate>>();
-const GREY_RATE_CACHE_MS = 15 * 60 * 1000;
+const exchangeRateCache = new Map<string, CachedExchangeRate>();
+const exchangeRateLoads = new Map<string, Promise<CachedExchangeRate>>();
+const EXCHANGE_RATE_CACHE_MS = 15 * 60 * 1000;
 const activeTransferCurrencies = new Set(["USD", "EUR", "GBP", "CAD", "AUD"]);
 
-async function getGreyExchangeRate(
+async function fetchFrankfurterExchangeRate(
+  sourceCurrency: string,
+  destinationCurrency: string,
+): Promise<CachedExchangeRate> {
+  const response = await fetch(
+    `https://api.frankfurter.dev/v2/rate/${encodeURIComponent(sourceCurrency)}/${encodeURIComponent(destinationCurrency)}`,
+    { signal: AbortSignal.timeout(10_000) },
+  );
+  if (!response.ok) throw new Error("Frankfurter rate provider returned an error.");
+
+  const payload = (await response.json()) as FrankfurterRateReply;
+  const numericRate = typeof payload.rate === "number" ? payload.rate : Number(payload.rate);
+  if (
+    payload.base !== sourceCurrency ||
+    payload.quote !== destinationCurrency ||
+    typeof payload.date !== "string" ||
+    !Number.isFinite(Date.parse(payload.date)) ||
+    !Number.isFinite(numericRate) ||
+    numericRate <= 0
+  ) {
+    throw new Error("Frankfurter could not quote this currency pair.");
+  }
+  return {
+    rate: numericRate.toFixed(10).replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, ""),
+    provider: "Frankfurter",
+    checkedAt: new Date(),
+    expiresAt: Date.now() + EXCHANGE_RATE_CACHE_MS,
+  };
+}
+
+async function fetchGreyExchangeRate(
+  sourceCurrency: string,
+  destinationCurrency: string,
+): Promise<CachedExchangeRate> {
+  const secretKey = process.env.GREY_API_SECRET_KEY;
+  if (!secretKey) throw new Error("Grey rate fallback is not configured.");
+
+  const response = await fetch("https://businessapi.grey.co/v1/currency/rate", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${secretKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      source_amount: 1000,
+      source_currency: sourceCurrency,
+      destination_currency: destinationCurrency,
+      transaction_type: "swap",
+    }),
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!response.ok) throw new Error("Grey rate provider returned an error.");
+
+  const payload = (await response.json()) as GreyRateReply;
+  const rawRate = payload.data?.source_destination_currency_rate;
+  const numericRate = typeof rawRate === "number" ? rawRate : Number(rawRate);
+  if (
+    payload.status !== "success" ||
+    !Number.isFinite(numericRate) ||
+    numericRate <= 0 ||
+    payload.data?.source_currency !== sourceCurrency ||
+    payload.data?.destination_currency !== destinationCurrency
+  ) {
+    throw new Error("Grey could not quote this currency pair.");
+  }
+  return {
+    rate: numericRate.toFixed(10).replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, ""),
+    provider: "Grey",
+    checkedAt: new Date(),
+    expiresAt: Date.now() + EXCHANGE_RATE_CACHE_MS,
+  };
+}
+
+async function getExchangeRate(
   sourceCurrency: string,
   destinationCurrency: string,
 ): Promise<CachedExchangeRate> {
   const cacheKey = `${sourceCurrency}:${destinationCurrency}`;
-  const cached = greyRateCache.get(cacheKey);
+  const cached = exchangeRateCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached;
-  const inflight = greyRateLoads.get(cacheKey);
+  const inflight = exchangeRateLoads.get(cacheKey);
   if (inflight) return inflight;
 
   const request = (async () => {
-    const secretKey = process.env.GREY_API_SECRET_KEY;
-    if (!secretKey) throw new Error("Exchange rate provider is not configured.");
-
-    const response = await fetch("https://businessapi.grey.co/v1/currency/rate", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${secretKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        source_amount: 1000,
-        source_currency: sourceCurrency,
-        destination_currency: destinationCurrency,
-        transaction_type: "swap",
-      }),
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (!response.ok) throw new Error("Exchange rate provider returned an error.");
-
-    const payload = (await response.json()) as GreyRateReply;
-    const rawRate = payload.data?.source_destination_currency_rate;
-    const numericRate = typeof rawRate === "number" ? rawRate : Number(rawRate);
-    if (
-      payload.status !== "success" ||
-      !Number.isFinite(numericRate) ||
-      numericRate <= 0 ||
-      payload.data?.source_currency !== sourceCurrency ||
-      payload.data?.destination_currency !== destinationCurrency
-    ) {
-      throw new Error("Exchange rate provider could not quote this currency pair.");
+    let frankfurterError: unknown;
+    try {
+      const result = await fetchFrankfurterExchangeRate(sourceCurrency, destinationCurrency);
+      exchangeRateCache.set(cacheKey, result);
+      return result;
+    } catch (error) {
+      frankfurterError = error;
     }
-    const rate = numericRate.toFixed(10).replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
-    const result = {
-      rate,
-      checkedAt: new Date(),
-      expiresAt: Date.now() + GREY_RATE_CACHE_MS,
-    };
-    greyRateCache.set(cacheKey, result);
-    return result;
+    try {
+      const result = await fetchGreyExchangeRate(sourceCurrency, destinationCurrency);
+      exchangeRateCache.set(cacheKey, result);
+      return result;
+    } catch (greyError) {
+      throw new AggregateError(
+        [frankfurterError, greyError],
+        "Neither exchange-rate source could quote this currency pair.",
+      );
+    }
   })();
-  greyRateLoads.set(cacheKey, request);
+  exchangeRateLoads.set(cacheKey, request);
   try {
     return await request;
   } finally {
-    greyRateLoads.delete(cacheKey);
+    exchangeRateLoads.delete(cacheKey);
   }
 }
 
@@ -920,23 +979,23 @@ router.get(
     }
 
     try {
-      const quote = await getGreyExchangeRate(sourceCurrency, destinationCurrency);
+      const quote = await getExchangeRate(sourceCurrency, destinationCurrency);
       res.json(
         GetBankExchangeRateQuoteResponse.parse({
           sourceCurrency,
           destinationCurrency,
           rate: quote.rate,
-          provider: "Grey",
+          provider: quote.provider,
           checkedAt: quote.checkedAt.toISOString(),
         }),
       );
     } catch {
       req.log.warn(
         { sourceCurrency, destinationCurrency },
-        "Grey rate quote unavailable",
+        "Frankfurter and Grey rate quotes unavailable",
       );
       res.status(503).json({
-        error: `Grey could not provide a ${sourceCurrency} to ${destinationCurrency} quote. Choose another supported currency pair.`,
+        error: `No rate source could provide a ${sourceCurrency} to ${destinationCurrency} quote. Choose another supported currency pair.`,
       });
     }
   },
@@ -1058,7 +1117,7 @@ router.post("/bank/international-transfer-requests", async (req, res): Promise<v
   let rateUpdatedAt = new Date();
   if (parsed.data.sourceCurrency !== parsed.data.destinationCurrency) {
     try {
-      const quote = await getGreyExchangeRate(
+      const quote = await getExchangeRate(
         parsed.data.sourceCurrency,
         parsed.data.destinationCurrency,
       );
@@ -1066,7 +1125,7 @@ router.post("/bank/international-transfer-requests", async (req, res): Promise<v
       rateUpdatedAt = quote.checkedAt;
     } catch {
       res.status(503).json({
-        error: `Grey could not provide a ${parsed.data.sourceCurrency} to ${parsed.data.destinationCurrency} quote. The transfer was not submitted.`,
+        error: `No rate source could provide a ${parsed.data.sourceCurrency} to ${parsed.data.destinationCurrency} quote. The transfer was not submitted.`,
       });
       return;
     }

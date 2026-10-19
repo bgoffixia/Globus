@@ -29,7 +29,7 @@ const STEPS = ['Route', 'Recipient', 'Amount', 'Review', 'Authorise'] as const;
 const GUIDE = [
   'Pick the wallet to debit, where the money is going, and the currency the recipient should receive.',
   'Enter the recipient exactly as their bank holds it. Double-check the account number.',
-  'Enter the amount from your wallet. The converted total uses a Grey rate quote.',
+  'Enter the amount from your wallet. The converted total uses a Frankfurter rate quote, with Grey as a fallback.',
   'Read every line. Confirming locks this rate; if it changes you will be asked to review again.',
   'Enter your six-digit transaction PIN on the keypad to submit.',
 ];
@@ -269,8 +269,8 @@ export function InternationalTransferPage() {
                   {quote.isLoading && !quote.data ? <div className="mt-2 h-7 w-40 animate-pulse rounded bg-[#e2ecee]" /> : liveRate ? <>
                     <p data-testid="text-converted-total" className="bank-display mt-1 text-[24px] font-semibold text-[#1b3654]">{liveConverted ? formatAmount(liveConverted, destinationCurrency) : `— ${destinationCurrency}`}</p>
                     <p data-testid="text-conversion-rate" className="mt-1 font-mono text-[10px] text-[#5d7488]">1 {sourceCurrency} = {formatRate(liveRate)} {destinationCurrency}</p>
-                    <p className="mt-1 text-[9px] text-[#8996a3]">{quote.data?.provider === 'Grey' ? `Grey quote · checked ${quote.data.checkedAt ? new Date(quote.data.checkedAt).toLocaleString() : 'just now'}` : 'Same-currency rate · 1:1'}</p>
-                  </> : <p data-testid="status-rate-unavailable" className="mt-2 flex items-start gap-2 text-[11px] leading-5 text-[#8a6430]"><AlertTriangle size={14} className="mt-0.5 shrink-0" />Grey could not quote {sourceCurrency} to {destinationCurrency}. Choose another currency pair or try again later.</p>}
+                    <p className="mt-1 text-[9px] text-[#8996a3]">{quote.data?.provider !== 'Globus' ? `${quote.data?.provider} quote · checked ${quote.data?.checkedAt ? new Date(quote.data.checkedAt).toLocaleString() : 'just now'}` : 'Same-currency rate · 1:1'}</p>
+                  </> : <p data-testid="status-rate-unavailable" className="mt-2 flex items-start gap-2 text-[11px] leading-5 text-[#8a6430]"><AlertTriangle size={14} className="mt-0.5 shrink-0" />No rate source could quote {sourceCurrency} to {destinationCurrency}. Choose another currency pair or try again later.</p>}
                 </div>
               </>}
 
