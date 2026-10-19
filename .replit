@@ -32,3 +32,6 @@ GLOBUS_ADMIN_EMAILS = "agbodave807@gmail.com"
 
 [userenv.production]
 GLOBUS_ADMIN_EMAILS = "bg.offixia@gmail.com"
+
+[objectStorage]
+defaultBucketID = "replit-objstore-4961e80f-6330-48d1-850b-c59d962859e1"
