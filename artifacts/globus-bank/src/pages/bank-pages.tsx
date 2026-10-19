@@ -5,7 +5,6 @@ import {
   ArrowLeftRight,
   ArrowRight,
   ArrowUpRight,
-  BadgeCheck,
   Camera,
   Check,
   ChevronRight,
@@ -217,13 +216,6 @@ export function HomePage() {
         </div>
       </section>
 
-      <section className="border-y border-[#e2e8ed] bg-white">
-        <div className="mx-auto grid max-w-[1320px] gap-8 px-6 py-8 sm:grid-cols-3 lg:px-12">
-          <TrustNote icon={<Globe2 size={17} />} title="One view, many currencies" copy="Keep USD, EUR, GBP, CAD and AUD in view." />
-          <TrustNote icon={<ShieldCheck size={17} />} title="Globus records, clearly scoped" copy="Balances and transfers are recorded in Globus only. No bank or payment network is connected, and no outside funds are held or sent." />
-          <TrustNote icon={<BadgeCheck size={17} />} title="No banking claims" copy="Globus is a software platform, not a licensed bank." />
-        </div>
-      </section>
       <section className="mx-auto grid max-w-[1320px] gap-12 px-6 py-20 lg:grid-cols-[.8fr_1.2fr] lg:px-12 lg:py-28">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[.18em] text-[#528f95]">Globus account records, clearly scoped</p>
@@ -1952,10 +1944,6 @@ function StatusLine({ label, value, positive }: { label: string; value: string; 
 
 function ActionTile({ href, icon, label, testId }: { href: string; icon: ReactNode; label: string; testId?: string }) {
   return <Link href={href} data-testid={testId} className="inline-flex min-h-10 min-w-[112px] shrink-0 items-center gap-2 rounded-lg border border-[#e5ebef] bg-[#fbfcfd] px-2.5 py-2 text-[10px] font-bold text-[#3d556d] transition hover:border-[#bbd7d8] hover:bg-[#f3f9f9] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#43888e]"><span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-[#edf5f6] text-[#478b90]">{icon}</span><span className="whitespace-nowrap">{label}</span></Link>;
-}
-
-function TrustNote({ icon, title, copy }: { icon: ReactNode; title: string; copy: string }) {
-  return <div className="flex gap-3"><span className="mt-0.5 text-[#498a8e]">{icon}</span><span><b className="block text-[12px] text-[#304761]">{title}</b><span className="mt-1 block max-w-[280px] text-[11px] leading-5 text-[#7b8b9d]">{copy}</span></span></div>;
 }
 
 function FeatureBlock({ number, title, copy }: { number: string; title: string; copy: string }) {
