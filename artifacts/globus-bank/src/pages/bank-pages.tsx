@@ -230,7 +230,7 @@ export function HomePage() {
       </section>
       <section className="mx-4 mb-16 rounded-[28px] bg-[#132f51] px-5 py-10 text-white sm:mx-10 sm:px-12 sm:py-12 lg:mx-auto lg:max-w-[1240px] lg:px-16 lg:py-16">
         <div className="grid items-center gap-8 md:grid-cols-[1fr_auto]">
-          <div><p className="text-[10px] font-bold uppercase tracking-[.18em] text-[#a6d5d8]">Make your next step clearer</p><h2 className="bank-display mt-3 max-w-[640px] text-[34px] font-semibold leading-tight sm:text-[45px]">Your Globus account workspace, ready to use.</h2><p className="mt-4 max-w-[520px] text-[14px] leading-6 text-[#cfdae4]">Create an account to manage multi-currency wallets, routed transfer requests and transaction activity reviewed by Globus administrators. No outside funds are received or sent.</p></div>
+          <div><p className="text-[10px] font-bold uppercase tracking-[.18em] text-[#a6d5d8]">Make your next step clearer</p><h2 className="bank-display mt-3 max-w-[640px] text-[34px] font-semibold leading-tight sm:text-[45px]">Your Globus account workspace, ready to use.</h2></div>
           <Link href="/sign-up" className="inline-flex items-center justify-center gap-3 rounded-xl bg-[#d5b765] px-6 py-4 text-[13px] font-bold text-[#17304d] hover:bg-[#e0c879]">Create your account <ArrowRight size={15} /></Link>
         </div>
       </section>
