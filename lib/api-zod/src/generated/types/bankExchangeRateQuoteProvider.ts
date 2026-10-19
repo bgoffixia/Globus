@@ -10,6 +10,6 @@ export type BankExchangeRateQuoteProvider = typeof BankExchangeRateQuoteProvider
 
 
 export const BankExchangeRateQuoteProvider = {
-  Flutterwave: 'Flutterwave',
+  Grey: 'Grey',
   Globus: 'Globus',
 } as const;

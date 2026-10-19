@@ -338,7 +338,7 @@ paths:
     get:
       operationId: getBankExchangeRateQuote
       tags: [bank]
-      summary: Get a current Flutterwave rate quote for an internal conversion
+      summary: Get a current Grey rate quote for an internal conversion
       parameters:
         - name: sourceCurrency
           in: query
@@ -1272,7 +1272,7 @@ components:
         sourceCurrency: { $ref: "#/components/schemas/ActiveCurrencyCode" }
         destinationCurrency: { $ref: "#/components/schemas/DestinationCurrencyCode" }
         rate: { type: string, pattern: "^[0-9]{1,12}(\\.[0-9]{1,10})?$" }
-        provider: { type: string, enum: [Flutterwave, Globus] }
+        provider: { type: string, enum: [Grey, Globus] }
         checkedAt: { type: string, format: date-time }
       required: [sourceCurrency, destinationCurrency, rate, provider, checkedAt]
     BankExchangeRateInput:

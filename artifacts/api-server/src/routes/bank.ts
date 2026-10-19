@@ -94,12 +94,12 @@ const exchangeRateQuoteLimiter = rateLimit({
   message: { error: "Rate quotes are temporarily limited. Please try again shortly." },
 });
 
-type FlutterwaveRateReply = {
+type GreyRateReply = {
   status?: unknown;
   data?: {
-    rate?: unknown;
-    source?: { currency?: unknown };
-    destination?: { currency?: unknown };
+    source_currency?: unknown;
+    destination_currency?: unknown;
+    source_destination_currency_rate?: unknown;
   } | null;
 };
 type CachedExchangeRate = {
@@ -107,45 +107,50 @@ type CachedExchangeRate = {
   checkedAt: Date;
   expiresAt: number;
 };
-const flutterwaveRateCache = new Map<string, CachedExchangeRate>();
-const flutterwaveRateLoads = new Map<string, Promise<CachedExchangeRate>>();
-const FLUTTERWAVE_RATE_CACHE_MS = 15 * 60 * 1000;
+const greyRateCache = new Map<string, CachedExchangeRate>();
+const greyRateLoads = new Map<string, Promise<CachedExchangeRate>>();
+const GREY_RATE_CACHE_MS = 15 * 60 * 1000;
 const activeTransferCurrencies = new Set(["USD", "EUR", "GBP", "CAD", "AUD"]);
 
-async function getFlutterwaveExchangeRate(
+async function getGreyExchangeRate(
   sourceCurrency: string,
   destinationCurrency: string,
 ): Promise<CachedExchangeRate> {
   const cacheKey = `${sourceCurrency}:${destinationCurrency}`;
-  const cached = flutterwaveRateCache.get(cacheKey);
+  const cached = greyRateCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached;
-  const inflight = flutterwaveRateLoads.get(cacheKey);
+  const inflight = greyRateLoads.get(cacheKey);
   if (inflight) return inflight;
 
   const request = (async () => {
-    const secretKey = process.env.FLUTTERWAVE_SECRET_KEY;
+    const secretKey = process.env.GREY_API_SECRET_KEY;
     if (!secretKey) throw new Error("Exchange rate provider is not configured.");
 
-    const url = new URL("https://api.flutterwave.com/v3/transfers/rates");
-    url.searchParams.set("source_currency", sourceCurrency);
-    url.searchParams.set("destination_currency", destinationCurrency);
-    url.searchParams.set("amount", "1000");
-
-    const response = await fetch(url, {
-      headers: { Authorization: `Bearer ${secretKey}` },
+    const response = await fetch("https://businessapi.grey.co/v1/currency/rate", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${secretKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        source_amount: 1000,
+        source_currency: sourceCurrency,
+        destination_currency: destinationCurrency,
+        transaction_type: "swap",
+      }),
       signal: AbortSignal.timeout(10_000),
     });
     if (!response.ok) throw new Error("Exchange rate provider returned an error.");
 
-    const payload = (await response.json()) as FlutterwaveRateReply;
-    const rawRate = payload.data?.rate;
+    const payload = (await response.json()) as GreyRateReply;
+    const rawRate = payload.data?.source_destination_currency_rate;
     const numericRate = typeof rawRate === "number" ? rawRate : Number(rawRate);
     if (
       payload.status !== "success" ||
       !Number.isFinite(numericRate) ||
       numericRate <= 0 ||
-      payload.data?.source?.currency !== sourceCurrency ||
-      payload.data?.destination?.currency !== destinationCurrency
+      payload.data?.source_currency !== sourceCurrency ||
+      payload.data?.destination_currency !== destinationCurrency
     ) {
       throw new Error("Exchange rate provider could not quote this currency pair.");
     }
@@ -153,16 +158,16 @@ async function getFlutterwaveExchangeRate(
     const result = {
       rate,
       checkedAt: new Date(),
-      expiresAt: Date.now() + FLUTTERWAVE_RATE_CACHE_MS,
+      expiresAt: Date.now() + GREY_RATE_CACHE_MS,
     };
-    flutterwaveRateCache.set(cacheKey, result);
+    greyRateCache.set(cacheKey, result);
     return result;
   })();
-  flutterwaveRateLoads.set(cacheKey, request);
+  greyRateLoads.set(cacheKey, request);
   try {
     return await request;
   } finally {
-    flutterwaveRateLoads.delete(cacheKey);
+    greyRateLoads.delete(cacheKey);
   }
 }
 
@@ -915,23 +920,23 @@ router.get(
     }
 
     try {
-      const quote = await getFlutterwaveExchangeRate(sourceCurrency, destinationCurrency);
+      const quote = await getGreyExchangeRate(sourceCurrency, destinationCurrency);
       res.json(
         GetBankExchangeRateQuoteResponse.parse({
           sourceCurrency,
           destinationCurrency,
           rate: quote.rate,
-          provider: "Flutterwave",
+          provider: "Grey",
           checkedAt: quote.checkedAt.toISOString(),
         }),
       );
     } catch {
       req.log.warn(
         { sourceCurrency, destinationCurrency },
-        "Flutterwave rate quote unavailable",
+        "Grey rate quote unavailable",
       );
       res.status(503).json({
-        error: `Flutterwave could not provide a ${sourceCurrency} to ${destinationCurrency} quote. Choose another supported currency pair.`,
+        error: `Grey could not provide a ${sourceCurrency} to ${destinationCurrency} quote. Choose another supported currency pair.`,
       });
     }
   },
@@ -1053,7 +1058,7 @@ router.post("/bank/international-transfer-requests", async (req, res): Promise<v
   let rateUpdatedAt = new Date();
   if (parsed.data.sourceCurrency !== parsed.data.destinationCurrency) {
     try {
-      const quote = await getFlutterwaveExchangeRate(
+      const quote = await getGreyExchangeRate(
         parsed.data.sourceCurrency,
         parsed.data.destinationCurrency,
       );
@@ -1061,7 +1066,7 @@ router.post("/bank/international-transfer-requests", async (req, res): Promise<v
       rateUpdatedAt = quote.checkedAt;
     } catch {
       res.status(503).json({
-        error: `Flutterwave could not provide a ${parsed.data.sourceCurrency} to ${parsed.data.destinationCurrency} quote. The transfer was not submitted.`,
+        error: `Grey could not provide a ${parsed.data.sourceCurrency} to ${parsed.data.destinationCurrency} quote. The transfer was not submitted.`,
       });
       return;
     }

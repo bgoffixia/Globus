@@ -1373,7 +1373,7 @@ export const getGetBankExchangeRateQuoteUrl = (params: GetBankExchangeRateQuoteP
 }
 
 /**
- * @summary Get a current Flutterwave rate quote for an internal conversion
+ * @summary Get a current Grey rate quote for an internal conversion
  */
 export const getBankExchangeRateQuote = async (params: GetBankExchangeRateQuoteParams, options?: Parameters<typeof customFetch>[1]): Promise<BankExchangeRateQuote> => {
 
@@ -1420,7 +1420,7 @@ export type GetBankExchangeRateQuoteQueryError = ErrorType<BadRequestResponse | 
 
 
 /**
- * @summary Get a current Flutterwave rate quote for an internal conversion
+ * @summary Get a current Grey rate quote for an internal conversion
  */
 
 export function useGetBankExchangeRateQuote<TData = Awaited<ReturnType<typeof getBankExchangeRateQuote>>, TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ServiceUnavailableResponse>>(

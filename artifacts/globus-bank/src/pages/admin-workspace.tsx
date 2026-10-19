@@ -537,7 +537,7 @@ function SettingsPage() {
       <Heading
         kicker="Operational policy"
         title="Settings & conversion quotes"
-        subtitle="Control funding policy. New transfer conversions use a current Flutterwave rate quote."
+        subtitle="Control funding policy. New transfer conversions use a current Grey rate quote."
       />
       {settings.isError && <InlineError text="Operational settings could not be loaded." retry={() => settings.refetch()} />}
       {error && <p role="alert" className="mb-4 rounded-lg bg-[#fff2ed] p-3 text-[10px] text-[#a45247]">{error}</p>}
@@ -559,11 +559,11 @@ function SettingsPage() {
             </form>
           </div>
         </Panel>
-        <Panel title="Flutterwave rate quotes" eyebrow="Current rate source" note="Quotes are read-only estimates and never submit a payment, payout, or currency trade.">
+        <Panel title="Grey rate quotes" eyebrow="Current rate source" note="Quotes are read-only estimates; Globus does not use Grey money-moving endpoints.">
           <div className="space-y-4 p-5 text-[11px] leading-5 text-[#657c82]">
-            <p>Globus requests a quote from Flutterwave’s rate endpoint when a transfer pair is selected. Quotes are cached briefly and refreshed; the rate and retrieval time used are saved with the Globus transaction record.</p>
-            <p>Currency-pair availability depends on Flutterwave. If a pair cannot be quoted, the transfer is blocked rather than using an administrator-entered or guessed rate.</p>
-            <p>Globus does not call Flutterwave payment, payout, or FX-trade endpoints. A quote does not confirm that an outside bank received or sent money.</p>
+            <p>Globus requests a quote from Grey’s dedicated currency-rate endpoint when a transfer pair is selected. Quotes are cached briefly and refreshed; the rate and retrieval time used are saved with the Globus transaction record.</p>
+            <p>Currency-pair availability depends on Grey. If a pair cannot be quoted, the transfer is blocked rather than using an administrator-entered or guessed rate.</p>
+            <p>Globus calls only the rate-quote endpoint, not Grey swap, payout, or transfer endpoints. A quote does not confirm that an outside bank received or sent money.</p>
           </div>
         </Panel>
       </div>
