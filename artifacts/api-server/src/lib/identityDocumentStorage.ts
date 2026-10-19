@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Storage, type File } from "@google-cloud/storage";
 
 const sidecarEndpoint = "http://127.0.0.1:1106";
+const identityDocumentMinBytes = 5 * 1024 * 1024;
 const identityDocumentMaxBytes = 10 * 1024 * 1024;
 
 export const identityDocumentStorage = new Storage({
@@ -109,7 +110,7 @@ export async function validateUploadedIdentityDocument(
   if (
     !Number.isSafeInteger(actualSize) ||
     actualSize !== expectedSize ||
-    actualSize < 8 ||
+    actualSize < identityDocumentMinBytes ||
     actualSize > identityDocumentMaxBytes
   ) {
     return false;

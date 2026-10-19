@@ -238,12 +238,13 @@ export const ListMyIdentityDocumentsResponse = zod.array(ListMyIdentityDocuments
  * @summary Request a private upload URL for an identity document
  */
 export const createIdentityDocumentUploadUrlBodySizeBytesMax = 10485760;
+export const createIdentityDocumentUploadUrlBodySizeBytesMin = 5242880;
 
 
 
 export const CreateIdentityDocumentUploadUrlBody = zod.object({
   "contentType": zod.enum(['application/pdf', 'image/jpeg', 'image/png']),
-  "sizeBytes": zod.number().int().min(1).max(createIdentityDocumentUploadUrlBodySizeBytesMax)
+  "sizeBytes": zod.number().int().min(createIdentityDocumentUploadUrlBodySizeBytesMin).max(createIdentityDocumentUploadUrlBodySizeBytesMax)
 })
 
 export const CreateIdentityDocumentUploadUrlResponse = zod.object({
