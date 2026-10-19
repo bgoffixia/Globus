@@ -3,4 +3,4 @@
 - [Internal ledger boundaries](internal-ledger-boundaries.md) — Keep money movement internal; international requests use admin-maintained estimates and never send or reserve funds.
 - [Admin transaction controls](admin-transaction-controls.md) — Status corrections never change postings; restrictions are additive and enforced server-side.
 - [Transaction PIN security](transaction-pin-security.md) — Store only PIN hashes; admins reset member PINs but never view or assign their values.
-- [Grey quote boundary](grey-quote-boundary.md) — Use Grey only for read-only rate quotes; never call its swap, payout, or transfer endpoints.
+- [Exchange-rate quote boundary](grey-quote-boundary.md) — Prefer Frankfurter reference rates with Grey as a read-only fallback; rate feeds never move money.
