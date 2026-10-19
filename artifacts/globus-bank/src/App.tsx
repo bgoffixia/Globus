@@ -17,7 +17,7 @@ import {
   InternationalTransferPage,
   ProviderRequestPage,
   CustomerIdPage,
-  SettingsPage,
+  ProfilePage,
   TransactionsPage,
   WalletsPage,
 } from '@/pages/bank-pages';
@@ -233,7 +233,8 @@ function ClerkRoutes() {
         <Route path="/withdraw"><ProtectedPage><ProviderRequestPage type="withdrawal" /></ProtectedPage></Route>
         <Route path="/customer-id"><ProtectedPage><CustomerIdPage /></ProtectedPage></Route>
         <Route path="/receive"><Redirect to="/customer-id" /></Route>
-        <Route path="/settings"><ProtectedPage><SettingsPage /></ProtectedPage></Route>
+        <Route path="/profile"><ProtectedPage><ProfilePage /></ProtectedPage></Route>
+        <Route path="/settings"><Redirect to="/profile" /></Route>
         <Route path="/admin/users/:userId"><ProtectedAdminPage /></Route>
         <Route path="/admin/users"><ProtectedAdminPage /></Route>
         <Route path="/admin/accounts"><ProtectedAdminPage /></Route>

@@ -247,9 +247,6 @@ export function HomePage() {
 
 export function DashboardPage() {
   const query = useGetBankDashboard({ query: { queryKey: getGetBankDashboardQueryKey() } });
-  const adminAccess = useGetAdminAccess({
-    query: { queryKey: getGetAdminAccessQueryKey(), retry: false },
-  });
   const [selectedCurrency, setSelectedCurrency] = useState<Currency | null>(null);
   const dash = query.data;
   const selectedWallet = dash?.wallets.find(wallet => wallet.currency === selectedCurrency)
@@ -263,10 +260,10 @@ export function DashboardPage() {
   if (query.isError) return <Failure title="Your overview isn’t available" retry={() => query.refetch()} />;
   return (
     <>
-      <PageHeading eyebrow="Your dashboard" title={`Good to see you${dash?.profile.firstName ? `, ${dash.profile.firstName}` : ''}.`} subtitle="Your currency wallets, quick actions, and recent activity in one place." />
+      <PageHeading eyebrow="Your dashboard" title={`Good to see you${dash?.profile.firstName ? `, ${dash.profile.firstName}` : ''}.`} subtitle="Wallets, quick actions, and recent activity." />
 
-      <div className="mt-4 grid min-w-0 gap-3.5 xl:grid-cols-[1.32fr_.68fr]">
-        <section className="balance-panel relative min-w-0 overflow-hidden rounded-[20px] p-4 text-white sm:p-5 xl:col-start-1 xl:row-start-1">
+      <div className="mt-3 grid min-w-0 gap-2.5 xl:grid-cols-[1.15fr_.85fr]">
+        <section className="balance-panel relative min-w-0 overflow-hidden rounded-[18px] p-3.5 text-white sm:p-4 xl:col-start-1 xl:row-start-1">
           <div className="absolute -right-10 -top-12 h-48 w-48 rounded-full border border-white/[.08]" />
           <div className="absolute -right-2 -top-5 h-32 w-32 rounded-full border border-white/[.08]" />
           <div className="relative flex items-start justify-between gap-4">
@@ -277,8 +274,8 @@ export function DashboardPage() {
             </div>
             {selectedWallet && <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/15 bg-white/[.08] px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[.13em] text-[#d9e7eb]"><span className="h-1.5 w-1.5 rounded-full bg-[#8fd2cf]" /> {selectedWallet.currency}</span>}
           </div>
-          <div className="relative mt-3.5 border-t border-white/10 pt-3">
-            <p className="mb-1.5 text-[9px] font-bold uppercase tracking-[.14em] text-[#b5c7d4]">Switch wallet</p>
+          <div className="relative mt-2.5 border-t border-white/10 pt-2.5">
+            <p className="mb-1 text-[8px] font-bold uppercase tracking-[.14em] text-[#b5c7d4]">Switch wallet</p>
             {dash?.wallets.length ? (
               <div role="group" aria-label="Switch dashboard wallet" className="flex min-w-0 gap-2 overflow-x-auto pb-1">
                 {dash.wallets.map(wallet => {
@@ -291,67 +288,60 @@ export function DashboardPage() {
                       aria-label={`${wallet.currency} wallet, available ${formatMoney(Number(wallet.available), wallet.currency)}`}
                       aria-pressed={isSelected}
                       onClick={() => setSelectedCurrency(wallet.currency as Currency)}
-                      className={`min-w-[108px] shrink-0 rounded-lg border px-2.5 py-1.5 text-left transition ${isSelected ? 'border-white/35 bg-white/15 text-white' : 'border-white/10 bg-white/[.06] text-[#d4e1eb] hover:bg-white/[.12]'}`}
+                      className={`min-w-[98px] shrink-0 rounded-lg border px-2 py-1 text-left transition ${isSelected ? 'border-white/35 bg-white/15 text-white' : 'border-white/10 bg-white/[.06] text-[#d4e1eb] hover:bg-white/[.12]'}`}
                     >
-                      <span className="block text-[9px] font-bold">{wallet.currency}</span>
-                      <span className="mt-0.5 block text-[9px] text-[#c2d2dd]">{formatMoney(Number(wallet.available), wallet.currency)}</span>
+                      <span className="block text-[8px] font-bold">{wallet.currency}</span>
+                      <span className="mt-0.5 block text-[8px] text-[#c2d2dd]">{formatMoney(Number(wallet.available), wallet.currency)}</span>
                     </button>
                   );
                 })}
               </div>
             ) : <p className="text-[11px] text-[#c2d2dd]">No wallets are available.</p>}
           </div>
-          {selectedWallet && (
-            <div className="relative mt-2 grid gap-x-8 border-t border-white/10 pt-2 sm:grid-cols-2">
-              <WalletAmount label="Pending" amount={selectedWallet.pending} currency={selectedWallet.currency} />
-              <WalletAmount label="Reserved" amount={selectedWallet.reserved} currency={selectedWallet.currency} />
-            </div>
-          )}
-          {dash?.profile.accountStatus === 'suspended' && <p role="status" className="relative mt-3 rounded-lg border border-white/15 bg-white/[.08] px-3 py-2 text-[9px] leading-4 text-[#f2d8d1]">Your account is suspended. You can review account information and activity, but financial actions are currently unavailable.</p>}
-          {dash?.profile.accountStatus === 'restricted' && <p role="status" className="relative mt-3 rounded-lg border border-white/15 bg-white/[.08] px-3 py-2 text-[9px] leading-4 text-[#f2e7c9]">Some account operations are restricted. Your balances and transaction history remain available.</p>}
-          {selectedWallet?.status === 'restricted' && dash?.profile.accountStatus === 'active' && <p role="status" className="relative mt-3 rounded-lg border border-white/15 bg-white/[.08] px-3 py-2 text-[9px] leading-4 text-[#f2e7c9]">This wallet is frozen. Outgoing transfers and withdrawals are unavailable; eligible incoming credits may still be recorded.</p>}
-          <Link href="/wallets" className="relative mt-2 inline-flex items-center gap-1 text-[9px] font-bold text-[#d9e7eb] hover:text-white">Manage wallets <ChevronRight size={12} /></Link>
+          {dash?.profile.accountStatus === 'suspended' && <p role="status" className="relative mt-2 rounded-lg border border-white/15 bg-white/[.08] px-3 py-1.5 text-[8px] leading-4 text-[#f2d8d1]">Your account is suspended. Financial actions are unavailable.</p>}
+          {dash?.profile.accountStatus === 'restricted' && <p role="status" className="relative mt-2 rounded-lg border border-white/15 bg-white/[.08] px-3 py-1.5 text-[8px] leading-4 text-[#f2e7c9]">Some account operations are restricted.</p>}
+          {selectedWallet?.status === 'restricted' && dash?.profile.accountStatus === 'active' && <p role="status" className="relative mt-2 rounded-lg border border-white/15 bg-white/[.08] px-3 py-1.5 text-[8px] leading-4 text-[#f2e7c9]">This wallet is frozen. Outgoing transfers and withdrawals are unavailable.</p>}
         </section>
 
-        <section data-testid="dashboard-action-toolbar" aria-label="Dashboard quick actions" className="min-w-0 rounded-[18px] border border-[#e2e9ef] bg-white p-3.5 sm:p-4 xl:col-start-1 xl:row-start-2">
-          <div className="mb-2 flex items-center justify-between gap-3">
+        <section data-testid="dashboard-action-toolbar" aria-label="Dashboard quick actions" className="min-w-0 rounded-[16px] border border-[#e2e9ef] bg-white p-3 xl:col-start-1 xl:row-start-2">
+          <div className="mb-2 flex items-center justify-between gap-2">
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#589198]">Quick actions</p>
-              <p className="mt-0.5 text-[10px] text-[#8190a0]">Using {actionCurrency}</p>
+              <p className="text-[9px] font-bold uppercase tracking-[.15em] text-[#589198]">Quick actions</p>
+              <p className="mt-0.5 text-[9px] text-[#8190a0]">Using {actionCurrency}</p>
             </div>
-            {selectedWallet && <span className="shrink-0 rounded-full bg-[#eff5f6] px-2.5 py-1 text-[9px] font-bold text-[#456c73]">{selectedWallet.currency} wallet</span>}
+            {selectedWallet && <span className="shrink-0 rounded-full bg-[#eff5f6] px-2 py-1 text-[8px] font-bold text-[#456c73]">{selectedWallet.currency} wallet</span>}
           </div>
-          <nav role="toolbar" aria-label="Dashboard actions" className="-mx-1 flex min-w-0 gap-2 overflow-x-auto px-1 pb-1 sm:flex-wrap sm:overflow-visible">
+          <nav role="toolbar" aria-label="Dashboard actions" className="grid min-w-0 grid-cols-3 gap-2">
             <ActionTile href="/customer-id" icon={<Contact size={16} />} label="Customer ID" testId="dashboard-quick-customer-id" />
             <ActionTile href={currencyActionHref('/add-money', actionCurrency)} icon={<WalletCards size={16} />} label="Deposit" testId="dashboard-quick-deposit" />
             <ActionTile href={currencyActionHref('/withdraw', actionCurrency)} icon={<ArrowUpRight size={16} />} label="Withdraw" testId="dashboard-quick-withdraw" />
             <ActionTile href={currencyActionHref('/transfer', actionCurrency)} icon={<ArrowLeftRight size={16} />} label="Transfer" testId="dashboard-quick-transfer" />
             <ActionTile href="/calculator" icon={<Calculator size={16} />} label="Convert" testId="dashboard-quick-converter" />
-            <ActionTile href="/wallets" icon={<WalletCards size={16} />} label="Wallets" testId="dashboard-quick-wallets" />
             <ActionTile href="/transactions" icon={<History size={16} />} label="Activity" testId="dashboard-quick-activity" />
-            {adminAccess.data?.allowed && <ActionTile href="/admin" icon={<ShieldCheck size={16} />} label="Admin" testId="dashboard-quick-admin" />}
           </nav>
         </section>
 
-        <section className="rounded-[20px] border border-[#e2e9ef] bg-white p-5 sm:p-6 xl:col-start-2 xl:row-span-2 xl:row-start-1">
+        <section className="rounded-[16px] border border-[#e2e9ef] bg-white p-3.5 sm:p-4 xl:col-start-2 xl:row-start-1">
           <div className="flex items-start justify-between">
-            <div><p className="text-[11px] font-medium text-[#78889a]">Account standing</p><h2 className="mt-2 text-[21px] font-semibold text-[#203851]">Your details, in order</h2></div>
-            <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#eef5f6] text-[#43888e]"><ShieldCheck size={19} /></span>
+            <div><p className="text-[9px] font-medium text-[#78889a]">Account standing</p><h2 className="mt-1 text-[15px] font-semibold text-[#203851]">Your details, in order</h2></div>
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#eef5f6] text-[#43888e]"><ShieldCheck size={16} /></span>
           </div>
-          <div className="mt-6 space-y-4">
+          <div className="mt-3 space-y-2.5">
             <StatusLine label="Account" value={humanize(dash?.profile.accountStatus)} positive={dash?.profile.accountStatus === 'active'} />
             <StatusLine label="Identity review" value={humanize(dash?.profile.verificationStatus)} positive={dash?.profile.verificationStatus === 'approved'} />
           </div>
-          <Link href="/settings" className="mt-6 inline-flex items-center gap-1.5 text-[11px] font-bold text-[#377b82]">Review profile <ChevronRight size={14} /></Link>
+          <Link href="/profile" data-testid="link-dashboard-profile" className="mt-3 inline-flex items-center gap-1 text-[9px] font-bold text-[#377b82]">Review profile <ChevronRight size={12} /></Link>
+        </section>
+        <section className="min-w-0 overflow-hidden rounded-[16px] border border-[#e2e9ef] bg-white xl:col-start-2 xl:row-start-2">
+          <div className="flex items-center justify-between gap-2 border-b border-[#edf0f3] px-3.5 py-2.5">
+            <div><h2 className="text-[12px] font-bold text-[#203851]">Recent activity{selectedWallet ? ` · ${selectedWallet.currency}` : ''}</h2><p className="mt-0.5 text-[9px] text-[#8592a1]">Latest wallet entries</p></div>
+            <Link href={currencyActionHref('/transactions', actionCurrency)} aria-label="View all activity" className="inline-flex shrink-0 items-center gap-1 text-[9px] font-bold text-[#397d83]">View all <ChevronRight size={12} /></Link>
+          </div>
+          <div className="max-h-[190px] overflow-y-auto">
+            {recentTransactions.length ? <TransactionList transactions={recentTransactions.slice(0, 3)} /> : <EmptyState title="Nothing recorded yet" text="Your latest activity will appear here." />}
+          </div>
         </section>
       </div>
-      <section className="mt-5 overflow-hidden rounded-[22px] border border-[#e2e9ef] bg-white">
-        <div className="flex items-center justify-between border-b border-[#edf0f3] px-5 py-5 sm:px-7">
-          <div><h2 className="text-[16px] font-bold text-[#203851]">Recent activity{selectedWallet ? ` · ${selectedWallet.currency}` : ''}</h2><p className="mt-1 text-[11px] text-[#8592a1]">Latest entries for this wallet</p></div>
-          <Link href={currencyActionHref('/transactions', actionCurrency)} className="inline-flex items-center gap-1 text-[11px] font-bold text-[#397d83]">View all <ChevronRight size={14} /></Link>
-        </div>
-        {recentTransactions.length ? <TransactionList transactions={recentTransactions.slice(0, 5)} /> : <EmptyState title="Nothing recorded yet" text="Your latest activity will appear here." />}
-      </section>
     </>
   );
 }
@@ -472,7 +462,7 @@ export function SendPage() {
             <Field label="Note (optional)"><input maxLength={140} value={description} onChange={event => setDescription(event.target.value)} placeholder="What’s this transfer for?" className={inputClass} /></Field>
             <Field label="6-digit transaction PIN"><input required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="off" value={transactionPin} onChange={event => setTransactionPin(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="Enter your PIN" className={inputClass} /></Field>
           </div>
-          {profileQuery.data?.transactionPinConfigured === false && <p className="mt-4 rounded-lg border border-[#eadfbe] bg-[#fbf7eb] px-4 py-3 text-[10px] leading-5 text-[#806b3d]">Set up your transaction PIN in <Link href="/settings" className="font-bold underline">Settings</Link> before sending a transfer.</p>}
+          {profileQuery.data?.transactionPinConfigured === false && <p className="mt-4 rounded-lg border border-[#eadfbe] bg-[#fbf7eb] px-4 py-3 text-[10px] leading-5 text-[#806b3d]">Set up your transaction PIN in <Link href="/profile" className="font-bold underline">Profile</Link> before sending a transfer.</p>}
           {(message || hasError) && <p role="alert" className="mt-5 rounded-lg bg-[#fff1ef] px-4 py-3 text-[11px] text-[#a24940]">{message || 'Please check the transfer details and try again.'}</p>}
           {success && <div role="status" className="mt-5 rounded-xl border border-[#cfe5db] bg-[#f1f8f4] p-4 text-[12px] text-[#417461]"><p className="font-bold">Member transfer recorded</p><p className="mt-1">Reference {success.reference} · {humanize(success.status)}</p><p className="mt-1">The recipient’s Globus wallet was credited. No outside account was involved.</p><button type="button" onClick={() => setReceipt(success)} className="mt-3 inline-flex items-center gap-2 rounded-lg border border-[#bfd8cc] bg-white px-3 py-2 text-[10px] font-bold text-[#3d725d] hover:bg-[#f7fbf8]"><FileText size={14} /> View receipt</button></div>}
           <button disabled={pending || transactionPin.length !== 6 || !recipientEmail.trim() || !amount || Number(amount) <= 0 || Number(amount) > available} className="mt-7 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#142f51] text-[12px] font-bold text-white transition hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">{pending ? 'Sending…' : 'Send internal transfer'} <ArrowRight size={15} /></button>
@@ -556,7 +546,7 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
           </div>
           <div className="mt-5"><Field label="Note for the administrator (optional)"><input maxLength={80} value={description} onChange={event => setDescription(event.target.value)} placeholder="Add context for your request" className={inputClass} /></Field></div>
           <div className="mt-5"><Field label="6-digit transaction PIN"><input required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="off" value={transactionPin} onChange={event => setTransactionPin(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="Enter your PIN" className={inputClass} /></Field></div>
-          {profileQuery.data?.transactionPinConfigured === false && <p className="mt-4 rounded-lg border border-[#eadfbe] bg-[#fbf7eb] px-4 py-3 text-[10px] leading-5 text-[#806b3d]">Set up your transaction PIN in <Link href="/settings" className="font-bold underline">Settings</Link> before submitting this request.</p>}
+          {profileQuery.data?.transactionPinConfigured === false && <p className="mt-4 rounded-lg border border-[#eadfbe] bg-[#fbf7eb] px-4 py-3 text-[10px] leading-5 text-[#806b3d]">Set up your transaction PIN in <Link href="/profile" className="font-bold underline">Profile</Link> before submitting this request.</p>}
           {(errorMessage || mutation.isError) && <p role="alert" className="mt-5 rounded-lg bg-[#fff1ef] px-4 py-3 text-[11px] text-[#a24940]">{errorMessage || 'The request could not be recorded.'}</p>}
           {result && <div role="status" className="mt-5 rounded-xl border border-[#d6e6e5] bg-[#f2f8f7] p-4 text-[12px] text-[#426e70]"><p className="font-bold">Request recorded · {humanize(result.status)}</p><p className="mt-1">{result.message}</p><p className="mt-2 font-mono text-[10px]">Reference {result.reference}</p></div>}
           <button disabled={mutation.isPending || transactionPin.length !== 6 || !amount || Number(amount) <= 0 || (type === 'withdrawal' && Number(amount) > available)} className="mt-7 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#142f51] text-[12px] font-bold text-white transition hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">{mutation.isPending ? 'Sending for review…' : 'Submit request'} <ArrowRight size={15} /></button>
@@ -616,7 +606,7 @@ export function CustomerIdPage() {
   );
 }
 
-export function SettingsPage() {
+export function ProfilePage() {
   const queryClient = useQueryClient();
   const query = useGetBankProfile({ query: { queryKey: getGetBankProfileQueryKey() } });
   const documentsQuery = useListMyIdentityDocuments({
@@ -838,20 +828,20 @@ export function SettingsPage() {
     }
   };
   if (query.isLoading) return <PageSkeleton />;
-  if (query.isError) return <Failure title="Profile settings are unavailable" retry={() => query.refetch()} />;
+  if (query.isError) return <Failure title="Your profile is unavailable" retry={() => query.refetch()} />;
   return (
     <>
-      <PageHeading eyebrow="Account settings" title="Your profile" subtitle="Manage your details, submit identity documents, and review your account status." />
-      <section className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-[18px] border border-[#e1e8ee] bg-white px-5 py-4 sm:px-6">
+      <PageHeading eyebrow="Your account" title="Your profile" subtitle="Manage your details, profile photo, and identity documents." />
+      <section className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-[16px] border border-[#e1e8ee] bg-white px-4 py-3">
         <div>
-          <p className="text-[9px] font-bold uppercase tracking-[.15em] text-[#718296]">Your Globus Customer ID</p>
-          <p className="mt-1 font-mono text-[20px] font-bold tracking-[.16em] text-[#17314f]">{profile?.customerId}</p>
+          <p className="text-[8px] font-bold uppercase tracking-[.15em] text-[#718296]">Your Globus Customer ID</p>
+          <p className="mt-1 font-mono text-[17px] font-bold tracking-[.16em] text-[#17314f]">{profile?.customerId}</p>
         </div>
-        <button type="button" onClick={copyCustomerId} className="inline-flex items-center gap-2 rounded-lg border border-[#dfe6eb] px-4 py-2.5 text-[10px] font-bold text-[#355570] hover:bg-[#f5f8f9]"><Copy size={14} />{customerIdCopied ? 'Copied' : 'Copy ID'}</button>
+        <button type="button" data-testid="button-copy-customer-id" onClick={copyCustomerId} className="inline-flex items-center gap-2 rounded-lg border border-[#dfe6eb] px-3 py-2 text-[9px] font-bold text-[#355570] hover:bg-[#f5f8f9]"><Copy size={13} />{customerIdCopied ? 'Copied' : 'Copy ID'}</button>
       </section>
-      <div className="mt-7 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <form onSubmit={submit} className="rounded-[22px] border border-[#e1e8ee] bg-white p-5 sm:p-8">
-          <div className="grid gap-5 sm:grid-cols-2">
+      <div className="mt-3 grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_300px]">
+        <form onSubmit={submit} className="rounded-[18px] border border-[#e1e8ee] bg-white p-4 sm:p-5">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Field label="First name"><input required maxLength={80} value={firstName} onChange={event => setFirstName(event.target.value)} className={inputClass} /></Field>
             <Field label="Last name"><input maxLength={80} value={lastName} onChange={event => setLastName(event.target.value)} className={inputClass} /></Field>
             <Field label="Phone"><input required minLength={3} maxLength={32} value={phone} onChange={event => setPhone(event.target.value)} className={inputClass} /></Field>
@@ -859,15 +849,15 @@ export function SettingsPage() {
             <Field label="Date of birth"><input type="date" value={dateOfBirth} onChange={event => setDateOfBirth(event.target.value)} className={inputClass} /></Field>
             <Field label="Email address"><input disabled value={profile?.email ?? ''} className={`${inputClass} bg-[#f4f7f9] text-[#8190a0]`} /></Field>
           </div>
-          <label className="mt-6 flex items-start gap-3 text-[11px] leading-5 text-[#728296]"><input type="checkbox" checked={accepted} onChange={event => setAccepted(event.target.checked)} className="mt-1 accent-[#387e84]" /><span>I confirm these profile details are accurate and accept the Globus account terms and privacy notice.</span></label>
-          {note && <p role="status" className={`mt-4 rounded-lg px-4 py-3 text-[11px] ${note.startsWith('Profile saved') ? 'bg-[#f0f8f4] text-[#41755f]' : 'bg-[#fff1ef] text-[#a24940]'}`}>{note}</p>}
-          <button disabled={!accepted || update.isPending} className="mt-6 h-11 rounded-xl bg-[#142f51] px-5 text-[11px] font-bold text-white hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-45">{update.isPending ? 'Saving profile…' : 'Save profile'}</button>
+          <label className="mt-3 flex items-start gap-2.5 text-[10px] leading-4 text-[#728296]"><input type="checkbox" checked={accepted} onChange={event => setAccepted(event.target.checked)} className="mt-0.5 accent-[#387e84]" /><span>I confirm these profile details are accurate and accept the Globus account terms and privacy notice.</span></label>
+          {note && <p role="status" className={`mt-3 rounded-lg px-3 py-2 text-[10px] ${note.startsWith('Profile saved') ? 'bg-[#f0f8f4] text-[#41755f]' : 'bg-[#fff1ef] text-[#a24940]'}`}>{note}</p>}
+          <button disabled={!accepted || update.isPending} className="mt-3 h-10 rounded-lg bg-[#142f51] px-4 text-[10px] font-bold text-white hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-45">{update.isPending ? 'Saving profile…' : 'Save profile'}</button>
         </form>
-        <section className="rounded-[22px] border border-[#e1e8ee] bg-white p-6">
-          <div className="mb-6 border-b border-[#edf0f2] pb-6">
-            <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#71869a]">Profile photo</p>
-            <div className="mt-4 flex items-center gap-4">
-              <div className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-full border border-[#dbe5ea] bg-[#eef5f6] text-lg font-bold text-[#387b82]">
+        <section className="rounded-[18px] border border-[#e1e8ee] bg-white p-4">
+          <div className="mb-4 border-b border-[#edf0f2] pb-4">
+            <p className="text-[9px] font-bold uppercase tracking-[.15em] text-[#71869a]">Profile photo</p>
+            <div className="mt-3 flex items-center gap-3">
+              <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-full border border-[#dbe5ea] bg-[#eef5f6] text-[15px] font-bold text-[#387b82]">
                 {user?.imageUrl
                   ? <img src={user.imageUrl} alt="Your profile" className="h-full w-full object-cover" />
                   : (user?.firstName?.[0] ?? profile?.email?.[0] ?? 'G').toUpperCase()}
@@ -881,49 +871,49 @@ export function SettingsPage() {
                 <p className="mt-2 text-[9px] text-[#8794a2]">JPG, PNG or WebP · up to 5 MB</p>
               </div>
             </div>
-            <p className="mt-3 text-[10px] leading-4 text-[#708196]">Your photo is managed with your secure sign-in profile and appears across Globus.</p>
-            {photoMessage && <p role="status" className="mt-3 rounded-lg bg-[#f0f8f4] px-3 py-2 text-[10px] text-[#41755f]">{photoMessage}</p>}
-            {photoError && <p role="alert" className="mt-3 rounded-lg bg-[#fff1ef] px-3 py-2 text-[10px] text-[#a24940]">{photoError}</p>}
+            <p className="mt-2 text-[9px] leading-4 text-[#708196]">Your photo appears across Globus.</p>
+            {photoMessage && <p role="status" className="mt-2 rounded-lg bg-[#f0f8f4] px-3 py-2 text-[9px] text-[#41755f]">{photoMessage}</p>}
+            {photoError && <p role="alert" className="mt-2 rounded-lg bg-[#fff1ef] px-3 py-2 text-[9px] text-[#a24940]">{photoError}</p>}
           </div>
-          <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#71869a]">Account status</p>
-          <div className="mt-5 space-y-4"><StatusLine label="Account" value={humanize(profile?.accountStatus)} positive={profile?.accountStatus === 'active'} /><StatusLine label="Verification" value={humanize(profile?.verificationStatus)} positive={profile?.verificationStatus === 'approved'} /></div>
-          <div className="mt-6 border-t border-[#edf0f2] pt-5"><p className="text-[10px] text-[#8995a2]">Member since</p><p className="mt-1 text-[12px] font-semibold text-[#324962]">{formatDate(profile?.createdAt)}</p><p className="mt-4 text-[10px] leading-5 text-[#8895a3]">Globus is software, not a licensed bank. Identity review is an internal account status, not verification by a financial institution or government.</p></div>
+          <p className="text-[9px] font-bold uppercase tracking-[.15em] text-[#71869a]">Account status</p>
+          <div className="mt-3 space-y-3"><StatusLine label="Account" value={humanize(profile?.accountStatus)} positive={profile?.accountStatus === 'active'} /><StatusLine label="Verification" value={humanize(profile?.verificationStatus)} positive={profile?.verificationStatus === 'approved'} /></div>
+          <div className="mt-4 border-t border-[#edf0f2] pt-3"><p className="text-[9px] text-[#8995a2]">Member since</p><p className="mt-1 text-[11px] font-semibold text-[#324962]">{formatDate(profile?.createdAt)}</p></div>
         </section>
       </div>
-      <section id="identity-verification" className="mt-6 rounded-[22px] border border-[#e1e8ee] bg-white p-5 sm:p-7">
-        <div className="flex flex-wrap items-start justify-between gap-4">
+      <section id="identity-verification" className="mt-3 rounded-[18px] border border-[#e1e8ee] bg-white p-4 sm:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#55868b]">Transaction security</p>
-            <h2 className="mt-1 text-[15px] font-bold text-[#29425c]">{profile?.transactionPinConfigured ? 'Update transaction PIN' : 'Create transaction PIN'}</h2>
-            <p className="mt-2 max-w-2xl text-[11px] leading-5 text-[#718296]">Use a six-digit PIN to authorize every transfer, deposit request, and withdrawal request from your account. Your PIN is stored as a secure hash and cannot be viewed by administrators.</p>
+            <p className="text-[9px] font-bold uppercase tracking-[.15em] text-[#55868b]">Transaction security</p>
+            <h2 className="mt-1 text-[13px] font-bold text-[#29425c]">{profile?.transactionPinConfigured ? 'Update transaction PIN' : 'Create transaction PIN'}</h2>
+            <p className="mt-1.5 max-w-2xl text-[10px] leading-4 text-[#718296]">Use a six-digit PIN to authorize every transfer, deposit request, and withdrawal request from your account. Your PIN is stored as a secure hash and cannot be viewed by administrators.</p>
           </div>
           <span className={`rounded-full px-3 py-1.5 text-[9px] font-bold ${profile?.transactionPinConfigured ? 'bg-[#eef7f3] text-[#4b826d]' : 'bg-[#fbf7eb] text-[#92773e]'}`}>{profile?.transactionPinConfigured ? 'PIN active' : 'PIN not set'}</span>
         </div>
-        <form onSubmit={submitPin} className="mt-5 grid gap-4 sm:grid-cols-2">
+        <form onSubmit={submitPin} className="mt-3 grid gap-3 sm:grid-cols-2">
           {profile?.transactionPinConfigured && <Field label="Current PIN"><input required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="current-password" value={currentPin} onChange={event => setCurrentPin(event.target.value.replace(/\D/g, '').slice(0, 6))} className={inputClass} /></Field>}
           <Field label="New 6-digit PIN"><input required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="new-password" value={newPin} onChange={event => setNewPin(event.target.value.replace(/\D/g, '').slice(0, 6))} className={inputClass} /></Field>
           <Field label="Confirm new PIN"><input required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="new-password" value={confirmPin} onChange={event => setConfirmPin(event.target.value.replace(/\D/g, '').slice(0, 6))} className={inputClass} /></Field>
           {pinMessage && <p role={pinMessage.startsWith('Transaction PIN saved') ? 'status' : 'alert'} className={`sm:col-span-2 rounded-lg px-4 py-3 text-[11px] ${pinMessage.startsWith('Transaction PIN saved') ? 'bg-[#f0f8f4] text-[#41755f]' : 'bg-[#fff1ef] text-[#a24940]'}`}>{pinMessage}</p>}
-          <button disabled={updatePin.isPending || newPin.length !== 6 || confirmPin.length !== 6} className="h-11 w-fit rounded-xl bg-[#142f51] px-5 text-[11px] font-bold text-white hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">{updatePin.isPending ? 'Saving PIN…' : profile?.transactionPinConfigured ? 'Update PIN' : 'Create PIN'}</button>
+          <button disabled={updatePin.isPending || newPin.length !== 6 || confirmPin.length !== 6} className="h-10 w-fit rounded-lg bg-[#142f51] px-4 text-[10px] font-bold text-white hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">{updatePin.isPending ? 'Saving PIN…' : profile?.transactionPinConfigured ? 'Update PIN' : 'Create PIN'}</button>
         </form>
       </section>
-      <section className="mt-6 rounded-[22px] border border-[#e1e8ee] bg-white p-5 sm:p-7">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <section className="mt-3 rounded-[18px] border border-[#e1e8ee] bg-white p-4 sm:p-5">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#55868b]">Private identity review</p>
-            <h2 className="mt-1 text-[15px] font-bold text-[#29425c]">Submit identity documents</h2>
-            <p className="mt-2 max-w-2xl text-[11px] leading-5 text-[#718296]">Upload up to five PDF, JPG or PNG files, 10 MB each. Only you and authorized Globus admins can access them. Files are deleted after approval or rejection; the review status and audit record remain. Admin accounts can submit documents and approve their own review; that decision is not independent identity verification.</p>
+            <p className="text-[9px] font-bold uppercase tracking-[.15em] text-[#55868b]">Private identity review</p>
+            <h2 className="mt-1 text-[13px] font-bold text-[#29425c]">Submit identity documents</h2>
+            <p className="mt-1.5 max-w-2xl text-[10px] leading-4 text-[#718296]">Upload PDF, JPG or PNG files, minimum of 5 MB storage size.</p>
           </div>
           <span className="shrink-0 rounded-lg border border-[#d9e8e9] bg-[#f2f8f8] px-3 py-2 text-[10px] font-bold text-[#4e777a]">{humanize(profile?.verificationStatus)}</span>
         </div>
-        {profile?.verificationNote && <p className="mt-4 rounded-lg border border-[#e4e9ed] bg-[#f8fafb] px-4 py-3 text-[11px] leading-5 text-[#52677c]"><b>Message from the reviewer:</b> {profile.verificationNote}</p>}
-        {identityMessage && <p role="status" className="mt-4 rounded-lg border border-[#cfe5db] bg-[#f1f8f4] px-4 py-3 text-[11px] text-[#417461]">{identityMessage}</p>}
-        {identityError && <p role="alert" className="mt-4 rounded-lg bg-[#fff1ef] px-4 py-3 text-[11px] text-[#a24940]">{identityError}</p>}
-        <div className="mt-5">
+        {profile?.verificationNote && <p className="mt-3 rounded-lg border border-[#e4e9ed] bg-[#f8fafb] px-3 py-2.5 text-[10px] leading-4 text-[#52677c]"><b>Message from the reviewer:</b> {profile.verificationNote}</p>}
+        {identityMessage && <p role="status" className="mt-3 rounded-lg border border-[#cfe5db] bg-[#f1f8f4] px-3 py-2.5 text-[10px] text-[#417461]">{identityMessage}</p>}
+        {identityError && <p role="alert" className="mt-3 rounded-lg bg-[#fff1ef] px-3 py-2.5 text-[10px] text-[#a24940]">{identityError}</p>}
+        <div className="mt-3">
           {documentsQuery.isLoading ? <ListSkeleton /> : documentsQuery.isError ? <InlineError text="Your identity documents are unavailable." retry={() => documentsQuery.refetch()} /> : documentsQuery.data?.length ? (
-            <ul className="space-y-2">
+            <ul className="space-y-1.5">
               {documentsQuery.data.map((document, index) => (
-                <li key={document.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#e7edf0] px-4 py-3">
+                <li key={document.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#e7edf0] px-3 py-2">
                   <div>
                     <p className="text-[11px] font-semibold text-[#344b64]">Document {index + 1} · {document.contentType === 'application/pdf' ? 'PDF' : document.contentType === 'image/png' ? 'PNG image' : 'JPG image'}</p>
                     <p className="mt-1 text-[10px] text-[#8492a0]">{(document.sizeBytes / 1024 / 1024).toFixed(2)} MB · {humanize(document.status)}{document.uploadedAt ? ` · ${formatDate(document.uploadedAt)}` : ''}</p>
@@ -936,18 +926,18 @@ export function SettingsPage() {
         </div>
         {profile?.verificationStatus !== 'pending' && profile?.verificationStatus !== 'approved' && (
           <>
-            <label htmlFor="identity-document-upload" className={`mt-5 inline-flex cursor-pointer items-center gap-2 rounded-lg border border-[#dfe7eb] px-4 py-3 text-[10px] font-bold text-[#3f5c75] hover:bg-[#f5f8f9] ${identityUploadPending ? 'pointer-events-none opacity-50' : ''}`}>
+            <label htmlFor="identity-document-upload" className={`mt-3 inline-flex cursor-pointer items-center gap-2 rounded-lg border border-[#dfe7eb] px-3 py-2.5 text-[9px] font-bold text-[#3f5c75] hover:bg-[#f5f8f9] ${identityUploadPending ? 'pointer-events-none opacity-50' : ''}`}>
               <FileText size={14} />
               {identityUploadPending ? 'Uploading documents…' : 'Choose PDF, JPG or PNG files'}
             </label>
             <input id="identity-document-upload" type="file" multiple accept="application/pdf,image/jpeg,image/png" className="sr-only" onChange={uploadIdentityDocuments} disabled={identityUploadPending} />
-            <p className="mt-2 text-[10px] text-[#8794a2]">Do not upload documents for another person. Documents are reviewed internally and are not submitted to a bank or government authority.</p>
-            <form onSubmit={submitForIdentityReview} className="mt-5 border-t border-[#edf0f2] pt-5">
-              <label className="flex items-start gap-3 text-[11px] leading-5 text-[#65798e]">
-                <input type="checkbox" required checked={identityConsent} onChange={event => setIdentityConsent(event.target.checked)} className="mt-1 accent-[#387e84]" />
-                <span>I confirm these documents belong to me and allow authorized Globus administrators to review them for internal account verification.</span>
+            <p className="mt-2 text-[9px] leading-4 text-[#8794a2]">Do not upload documents for another person. Upload only government-approved identity documents that belong to you.</p>
+            <form onSubmit={submitForIdentityReview} className="mt-3 border-t border-[#edf0f2] pt-3">
+              <label className="flex items-start gap-2.5 text-[10px] leading-4 text-[#65798e]">
+                <input type="checkbox" required checked={identityConsent} onChange={event => setIdentityConsent(event.target.checked)} className="mt-0.5 accent-[#387e84]" />
+                <span>I confirm these documents belong to me and the details on it match my personal information provided when creating my account.</span>
               </label>
-              <button disabled={!identityConsent || submitIdentityDocuments.isPending || identityUploadPending || !(documentsQuery.data ?? []).some(document => document.status === 'uploaded') || (documentsQuery.data ?? []).some(document => document.status === 'uploading')} className="mt-4 h-11 rounded-xl bg-[#142f51] px-5 text-[11px] font-bold text-white hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-45">
+              <button disabled={!identityConsent || submitIdentityDocuments.isPending || identityUploadPending || !(documentsQuery.data ?? []).some(document => document.status === 'uploaded') || (documentsQuery.data ?? []).some(document => document.status === 'uploading')} className="mt-3 h-10 rounded-lg bg-[#142f51] px-4 text-[10px] font-bold text-white hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-45">
                 {submitIdentityDocuments.isPending ? 'Submitting for review…' : profile?.verificationStatus === 'additional_information_required' ? 'Resubmit for review' : 'Submit for review'}
               </button>
             </form>
@@ -1255,10 +1245,10 @@ export function AdminPage() {
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#718296]">Your admin identity</p>
           <p className="mt-1 text-[12px] font-semibold text-[#304962]">Verification status: {humanize(adminProfile.data?.verificationStatus)}</p>
-          <p className="mt-1 text-[10px] leading-4 text-[#7c8b9a]">Upload your own documents in Settings. You may approve your own review; the decision is recorded in the audit log.</p>
+          <p className="mt-1 text-[10px] leading-4 text-[#7c8b9a]">Upload your own documents in Profile. You may approve your own review; the decision is recorded in the audit log.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link href="/settings#identity-verification" className="rounded-lg border border-[#dfe6eb] px-3 py-2.5 text-[10px] font-bold text-[#3f5c75] hover:bg-[#f5f8f9]">Manage my documents</Link>
+          <Link href="/profile#identity-verification" className="rounded-lg border border-[#dfe6eb] px-3 py-2.5 text-[10px] font-bold text-[#3f5c75] hover:bg-[#f5f8f9]">Manage my documents</Link>
           {adminProfile.data?.verificationStatus === 'pending' && <button type="button" onClick={() => openIdentityReview({
             id: adminProfile.data!.id,
             email: adminProfile.data!.email,
@@ -1697,7 +1687,7 @@ const disclosureCopy: Record<string, { eyebrow: string; title: string; intro: st
   '/about': { eyebrow: 'About Globus', title: 'Clear multi-currency account activity.', intro: 'Globus records multi-currency wallets, routed transfer requests and administrative balance adjustments in its application database.', sections: [['A platform, not a bank', 'Globus is not a licensed bank, payment institution or custodian. It does not accept, hold or send outside funds.'], ['Account balances', 'Wallet balances and transactions are records in Globus. No external bank or payment service processes these operations.'], ['Built for clear review', 'Balances, requests and activity include statuses, references and audit records to make each change traceable.']] },
   '/help': { eyebrow: 'Support', title: 'Help with your Globus account.', intro: 'Understand how account activity and requests are handled.', sections: [['How do deposits work?', 'Choose a bank-card or bank-transfer request. An administrator must approve it before your Globus wallet balance changes. Globus does not charge a card or receive an outside deposit.'], ['How do withdrawals work?', 'A pending withdrawal reserves the requested amount. Approval records the change in Globus; rejection releases the reserve. No outside payout is made.'], ['Can I send someone money?', 'Globus does not support member-to-member transfers. Transfer requests record the details in Globus but do not contact the recipient’s bank or send outside funds.'], ['How do international requests work?', 'Frankfurter reference rates are used to show converted amounts, with Grey available as a rate-only fallback. Rate quotes do not execute transfers; Globus does not contact the destination bank or send outside funds.'], ['Where can I find my Customer ID?', 'Open Customer ID in your account navigation. It identifies your Globus account, not a bank account or payment address.']] },
   '/fees': { eyebrow: 'Fees and rates', title: 'Understand transfer requests and rates.', intro: 'Globus does not process external deposits, payouts, or card payments.', sections: [['Rate quotes', 'Globus uses Frankfurter reference rates, with Grey as a fallback source. Availability depends on currency-pair support; quotes can change and are not confirmation of a payment.'], ['Fees', 'Globus records account requests and does not charge an outside transaction fee through a payment provider.'], ['Currency balances', 'Currency wallets are recorded separately. The rate and converted amount shown on a transfer receipt match the quote used when Globus recorded that request.']] },
-  '/privacy': { eyebrow: 'Privacy notice', title: 'Your information deserves clarity.', intro: 'This page summarizes account information Globus uses to provide its software services.', sections: [['Account details', 'Profile details and account identifiers associate internal records with your account. Authentication is provided through Clerk.'], ['Private identity documents', 'Documents submitted for internal review are stored privately and accessible only to the submitting member and authorized Globus admins. Files are deleted after approval or rejection. The verification status and an audit record of the decision remain. This review is not legal, bank or government identity verification.'], ['Operational records', 'Transactions and requests may include references, status, currency, amount, descriptions and timestamps. For international transfer requests, only the recipient account’s last four characters are retained.'], ['Your choices', 'Use Settings to review your profile and manage identity documents before submitting them. Contact the support team with questions about account information or platform operations.']] },
+  '/privacy': { eyebrow: 'Privacy notice', title: 'Your information deserves clarity.', intro: 'This page summarizes account information Globus uses to provide its software services.', sections: [['Account details', 'Profile details and account identifiers associate internal records with your account. Authentication is provided through Clerk.'], ['Private identity documents', 'Documents submitted for internal review are stored privately and accessible only to the submitting member and authorized Globus admins. Files are deleted after approval or rejection. The verification status and an audit record of the decision remain. This review is not legal, bank or government identity verification.'], ['Operational records', 'Transactions and requests may include references, status, currency, amount, descriptions and timestamps. For international transfer requests, only the recipient account’s last four characters are retained.'], ['Your choices', 'Use your Profile page to review your details and manage identity documents before submitting them. Contact the support team with questions about account information or platform operations.']] },
   '/terms': { eyebrow: 'Terms of use', title: 'Globus account records, not bank deposits.', intro: 'Globus records account activity in its own database and does not move outside funds.', sections: [['No banking service', 'Globus is not a licensed bank and does not accept deposits, provide credit, custody funds or promise payment execution.'], ['Account records', 'Displayed balances and transactions represent entries in Globus. An approved deposit request records a wallet credit; an approved withdrawal records a wallet debit. Neither action moves outside funds.'], ['Use responsibly', 'Do not rely on Globus balances or status labels as proof of funds held by a bank or as a promise of payment.']] },
   '/contact': { eyebrow: 'Contact', title: 'Contact information is not configured yet.', intro: 'A verified support channel has not been configured for Globus.', sections: [['Account help', 'Visit Help for guidance about the software. Do not include passwords, verification codes or sensitive payment details in support requests.'], ['Recorded activity', 'Include the transaction reference when asking about an account record.'], ['Operational disclosure', 'Globus support cannot complete, trace or reverse an external payment through this product.']] },
 };
@@ -1943,7 +1933,7 @@ function StatusLine({ label, value, positive }: { label: string; value: string; 
 }
 
 function ActionTile({ href, icon, label, testId }: { href: string; icon: ReactNode; label: string; testId?: string }) {
-  return <Link href={href} data-testid={testId} className="inline-flex min-h-10 min-w-[112px] shrink-0 items-center gap-2 rounded-lg border border-[#e5ebef] bg-[#fbfcfd] px-2.5 py-2 text-[10px] font-bold text-[#3d556d] transition hover:border-[#bbd7d8] hover:bg-[#f3f9f9] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#43888e]"><span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-[#edf5f6] text-[#478b90]">{icon}</span><span className="whitespace-nowrap">{label}</span></Link>;
+  return <Link href={href} data-testid={testId} className="flex min-h-[58px] min-w-0 flex-col items-center justify-center gap-1 rounded-lg border border-[#e5ebef] bg-[#fbfcfd] px-1.5 py-2 text-center text-[9px] font-bold text-[#3d556d] transition hover:border-[#bbd7d8] hover:bg-[#f3f9f9] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#43888e]"><span className="grid h-6 w-6 place-items-center rounded-md bg-[#edf5f6] text-[#478b90]">{icon}</span><span className="w-full truncate">{label}</span></Link>;
 }
 
 function FeatureBlock({ number, title, copy }: { number: string; title: string; copy: string }) {

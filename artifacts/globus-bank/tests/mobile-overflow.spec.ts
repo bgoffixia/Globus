@@ -109,6 +109,7 @@ test.describe('signed-in member pages at phone widths', () => {
     '/receive',
     '/add-money',
     '/withdraw',
+    '/profile',
     '/settings',
   ];
 
@@ -119,6 +120,27 @@ test.describe('signed-in member pages at phone widths', () => {
         await page.goto(path, { waitUntil: 'domcontentloaded' });
         await expect(page.locator('.app-shell')).toBeVisible();
         await expectNoHorizontalOverflow(page, `Signed-in member page at ${width}px (${path})`);
+        const documentHeight = await page.evaluate(() => ({
+          viewport: window.innerHeight,
+          document: document.documentElement.scrollHeight,
+        }));
+        expect(
+          documentHeight.document,
+          `Member page at ${width}px (${path}) should keep scrolling inside its content panel`,
+        ).toBeLessThanOrEqual(documentHeight.viewport + 1);
+        if (path === '/dashboard') {
+          const toolbar = page.getByTestId('dashboard-bottom-toolbar');
+          const quickActions = page.getByTestId('dashboard-action-toolbar');
+          await expect(toolbar).toBeVisible();
+          await expect(quickActions.locator('[data-testid^="dashboard-quick-"]')).toHaveCount(6);
+          const columnCount = await quickActions.locator('[role="toolbar"]').evaluate(element =>
+            getComputedStyle(element).gridTemplateColumns.split(' ').length,
+          );
+          expect(columnCount, 'Dashboard quick actions should use three columns').toBe(3);
+          await page.getByTestId('link-header-profile').click();
+          await expect(page).toHaveURL(/\/profile$/);
+          await expect(page.getByRole('heading', { name: 'Your profile' })).toBeVisible();
+        }
       }
     });
   }

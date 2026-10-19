@@ -9,8 +9,8 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
-  Settings2,
   ShieldCheck,
+  UserRound,
   WalletCards,
   X,
 } from 'lucide-react';
@@ -24,10 +24,15 @@ import { InstallAppButton } from '@/components/pwa-install-prompt';
 
 const primaryLinks = [
   { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
-  { href: '/wallets', label: 'Wallets', icon: WalletCards },
-  { href: '/customer-id', label: 'Customer ID', icon: Contact },
-  { href: '/transactions', label: 'Activity', icon: ArrowLeftRight },
-  { href: '/calculator', label: 'Currency converter', icon: Calculator },
+];
+
+const dashboardTools = [
+  { href: '/dashboard', label: 'Home', ariaLabel: 'Dashboard overview', icon: LayoutDashboard },
+  { href: '/wallets', label: 'Wallets', ariaLabel: 'Manage wallets', icon: WalletCards },
+  { href: '/customer-id', label: 'ID', ariaLabel: 'Customer ID', icon: Contact },
+  { href: '/transactions', label: 'Activity', ariaLabel: 'Transaction activity', icon: ArrowLeftRight },
+  { href: '/calculator', label: 'Convert', ariaLabel: 'Currency converter', icon: Calculator },
+  { href: '/profile', label: 'Profile', ariaLabel: 'Your profile', icon: UserRound },
 ];
 
 const moneyLinks = [
@@ -41,6 +46,8 @@ export function BankShell({ children }: { children: ReactNode }) {
   const [mobileMenu, setMobileMenu] = useState(false);
   const { user } = useUser();
   const { signOut } = useClerk();
+  const isDashboard = location === '/dashboard';
+  const isProfile = location === '/profile' || location === '/settings';
   const adminAccess = useGetAdminAccess({
     query: { queryKey: getGetAdminAccessQueryKey(), retry: false },
   });
@@ -65,13 +72,6 @@ export function BankShell({ children }: { children: ReactNode }) {
           <NavGroup title="Your account" links={primaryLinks} location={location} onNavigate={() => setMobileMenu(false)} />
           <NavGroup title="Move money" links={moneyLinks} location={location} onNavigate={() => setMobileMenu(false)} />
           <div>
-            <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">Manage</p>
-            <Link href="/settings" onClick={() => setMobileMenu(false)} className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] transition ${location === '/settings' ? 'bg-white/10 text-white' : 'text-slate-300 hover:bg-white/[0.07] hover:text-white'}`}>
-              <Settings2 size={17} strokeWidth={1.8} />
-              Settings
-            </Link>
-          </div>
-          <div>
             <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">Resources</p>
             <Link href="/help" onClick={() => setMobileMenu(false)} className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] text-slate-300 transition hover:bg-white/[0.07] hover:text-white">
               <CircleHelp size={17} strokeWidth={1.8} />
@@ -87,14 +87,16 @@ export function BankShell({ children }: { children: ReactNode }) {
         </nav>
         <div className="border-t border-white/10 p-4">
           <InstallAppButton className="mb-3 flex w-full items-center gap-2 rounded-lg border border-white/10 bg-white/[.06] px-3 py-2.5 text-left text-[11px] font-semibold text-slate-200 transition hover:bg-white/10" />
-          <div className="flex items-center gap-3 rounded-xl px-2 py-2">
-            <div className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full bg-[#d6eaf0] text-xs font-bold text-[#163753]">
-              {user?.imageUrl ? <img src={user.imageUrl} alt="" className="h-full w-full object-cover" /> : initials}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-semibold text-white">{user?.fullName ?? 'Globus member'}</p>
-              <p className="truncate text-[10px] text-slate-400">{user?.primaryEmailAddress?.emailAddress}</p>
-            </div>
+          <div className="flex items-center gap-2 rounded-xl px-2 py-2">
+            <Link href="/profile" aria-label="Open your profile" data-testid="link-sidebar-profile" onClick={() => setMobileMenu(false)} className="flex min-w-0 flex-1 items-center gap-3 rounded-lg">
+              <div className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full bg-[#d6eaf0] text-xs font-bold text-[#163753]">
+                {user?.imageUrl ? <img src={user.imageUrl} alt="" className="h-full w-full object-cover" /> : initials}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-xs font-semibold text-white">{user?.fullName ?? 'Globus member'}</p>
+                <p className="truncate text-[10px] text-slate-400">{user?.primaryEmailAddress?.emailAddress}</p>
+              </div>
+            </Link>
             <button aria-label="Sign out" onClick={() => signOut({ redirectUrl: import.meta.env.BASE_URL })} className="rounded-md p-2 text-slate-400 hover:bg-white/10 hover:text-white">
               <LogOut size={16} />
             </button>
@@ -112,13 +114,26 @@ export function BankShell({ children }: { children: ReactNode }) {
           </div>
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
             <InstallAppButton className="hidden items-center gap-1.5 rounded-lg border border-[#d6e8e9] bg-white px-2.5 py-2 text-[10px] font-bold text-[#377d83] hover:bg-[#eff8f8] sm:inline-flex" />
-            <div className="grid h-9 w-9 place-items-center overflow-hidden rounded-full border border-[#dbe3eb] bg-white text-xs font-bold text-[#27445e]">
+            <Link href="/profile" aria-label="Open your profile" data-testid="link-header-profile" className={`grid h-9 w-9 place-items-center overflow-hidden rounded-full border border-[#dbe3eb] bg-white text-xs font-bold text-[#27445e] ${isProfile ? 'ring-2 ring-[#68a3a6] ring-offset-2' : ''}`}>
               {user?.imageUrl ? <img src={user.imageUrl} alt="" className="h-full w-full object-cover" /> : initials}
-            </div>
+            </Link>
           </div>
         </header>
-        <main className="page-enter mx-auto min-w-0 w-full max-w-[1440px] px-4 py-5 sm:px-8 sm:py-7 lg:px-10">{children}</main>
+        <main className={`page-enter mx-auto min-w-0 w-full max-w-[1440px] px-4 lg:px-10 ${isDashboard ? 'pb-24 pt-3 sm:px-8 sm:pb-24 sm:pt-4' : 'py-4 sm:px-8 sm:py-6'} ${isProfile ? 'profile-content-scroll' : ''}`}>{children}</main>
       </div>
+      {isDashboard && (
+        <nav aria-label="Dashboard tools" data-testid="dashboard-bottom-toolbar" className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-6 border-t border-[#dfe7ed] bg-white/95 px-1 pt-1.5 pb-[calc(env(safe-area-inset-bottom)+.35rem)] shadow-[0_-8px_20px_rgba(20,47,81,.06)] backdrop-blur-md lg:left-[252px] lg:px-4">
+          {dashboardTools.map(({ href, label, ariaLabel, icon: Icon }) => {
+            const active = location === href || (href === '/transactions' && location.startsWith('/transactions'));
+            return (
+              <Link key={href} href={href} aria-label={ariaLabel} data-testid={`dashboard-tool-${href.slice(1)}`} className={`flex min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-1 py-1.5 text-center text-[8px] font-bold transition sm:text-[9px] ${active ? 'text-[#277a80]' : 'text-[#718297] hover:bg-[#f2f7f8] hover:text-[#315d6c]'}`}>
+                <Icon size={16} strokeWidth={active ? 2.2 : 1.8} />
+                <span className="max-w-full truncate">{label}</span>
+              </Link>
+            );
+          })}
+        </nav>
+      )}
     </div>
   );
 }
@@ -148,7 +163,8 @@ function pageLabel(path: string) {
     '/customer-id': 'Customer ID',
     '/add-money': 'Deposit request',
     '/withdraw': 'Withdrawal request',
-    '/settings': 'Settings',
+    '/profile': 'Profile',
+    '/settings': 'Profile',
     '/admin': 'Operations',
   };
   return path.startsWith('/admin/users/') ? 'Member management' : labels[path] ?? 'Account';
