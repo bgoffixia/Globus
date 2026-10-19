@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, Search } from 'lucide-react';
+import { Check, ChevronDown, ExternalLink, Search } from 'lucide-react';
 import { banksForCountry } from '@/lib/banks-by-country';
 
 export function BankSelect({
@@ -20,7 +20,7 @@ export function BankSelect({
   const banks = useMemo(() => banksForCountry(countryCode), [countryCode]);
   const matches = useMemo(() => {
     const query = search.trim().toLocaleLowerCase();
-    return banks.filter(bank => !query || bank.toLocaleLowerCase().includes(query));
+    return banks.filter(bank => !query || bank.name.toLocaleLowerCase().includes(query));
   }, [banks, search]);
 
   const close = (returnFocus = true) => {
@@ -103,22 +103,35 @@ export function BankSelect({
           </label>
           <ul id={`${id}-options`} role="listbox" aria-label="Suggested banks" className="max-h-[min(240px,36dvh)] overflow-y-auto overscroll-contain p-1.5">
             {matches.map(bank => (
-              <li key={bank} role="option" aria-selected={value === bank}>
+              <li key={bank.name} role="presentation" className="flex items-center gap-1 rounded-lg pr-1">
                 <button
                   type="button"
+                  role="option"
+                  aria-selected={value === bank.name}
                   onMouseDown={event => event.preventDefault()}
-                  onClick={() => choose(bank)}
+                  onClick={() => choose(bank.name)}
                   className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-3 text-left text-[11px] text-[#3e566e] hover:bg-[#f2f7f8]"
                 >
                   <span className="flex min-w-0 items-center gap-2.5">
-                    <span aria-hidden="true" className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-[#dce7ec] bg-[#f3f7f8] text-[9px] font-extrabold tracking-tight text-[#315773]">{bankInitials(bank)}</span>
-                    <span className="truncate">{bank}</span>
+                    <span aria-hidden="true" className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-[#dce7ec] bg-[#f3f7f8] text-[9px] font-extrabold tracking-tight text-[#315773]">{bankInitials(bank.name)}</span>
+                    <span className="truncate">{bank.name}</span>
                   </span>
-                  {value === bank && <Check size={14} aria-hidden="true" className="shrink-0 text-[#408589]" />}
+                  {value === bank.name && <Check size={14} aria-hidden="true" className="shrink-0 text-[#408589]" />}
                 </button>
+                <a
+                  href={bank.logoLookupUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label={`Search images for ${bank.name} logo`}
+                  title="Search for this bank’s logo"
+                  onMouseDown={event => event.preventDefault()}
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-[#718697] hover:bg-[#edf4f5] hover:text-[#315773]"
+                >
+                  <ExternalLink size={14} aria-hidden="true" />
+                </a>
               </li>
             ))}
-            {search.trim() && !banks.some(bank => bank.toLocaleLowerCase() === search.trim().toLocaleLowerCase()) && (
+            {search.trim() && !banks.some(bank => bank.name.toLocaleLowerCase() === search.trim().toLocaleLowerCase()) && (
               <li role="option">
                 <button
                   type="button"

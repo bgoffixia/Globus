@@ -27,6 +27,7 @@ export function CountrySelect({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const listId = useId();
+  const selectedCountry = countries.find(country => country.name === value);
   const filtered = useMemo(() => {
     const q = search.trim().toLocaleLowerCase();
     return countries.filter(c => !q || c.name.toLocaleLowerCase().includes(q) || c.code.toLocaleLowerCase() === q);
@@ -83,10 +84,13 @@ export function CountrySelect({
         className={`flex h-11 w-full items-center justify-between gap-3 rounded-xl border bg-white px-3.5 text-left text-[12px] text-[#344b64] outline-none transition hover:border-[#9ab9bd] focus-visible:border-[#77aeb0] focus-visible:ring-2 focus-visible:ring-[#77aeb0]/20 disabled:opacity-60 ${open ? 'border-[#77aeb0] ring-2 ring-[#77aeb0]/15' : 'border-[#dfe6eb]'}`}
       >
         <span className={`flex min-w-0 items-center gap-2 ${value ? '' : 'text-[#a0acb7]'}`}>
-          {value && <span aria-hidden="true" className="shrink-0 text-base leading-none">{flagForCountry(countries.find(c => c.name === value)?.code ?? '')}</span>}
+          {value && selectedCountry && <FlagIcon country={selectedCountry} />}
           <span className="truncate">{value || 'Choose a country'}</span>
         </span>
-        <ChevronDown size={15} className={`shrink-0 text-[#7d8d9d] transition-transform ${open ? 'rotate-180' : ''}`} />
+        <span className="flex shrink-0 items-center gap-2">
+          {selectedCountry && <span className="rounded-md bg-[#f1f6f7] px-2 py-1 font-mono text-[10px] font-semibold text-[#56717e]">{selectedCountry.currency}</span>}
+          <ChevronDown size={15} className={`text-[#7d8d9d] transition-transform ${open ? 'rotate-180' : ''}`} />
+        </span>
       </button>
       {open && (
         <div data-testid={`${testId}-drawer`} className="country-drawer absolute left-0 right-0 top-[calc(100%+6px)] z-[60] overflow-hidden rounded-xl border border-[#d9e4e8] bg-white shadow-[0_18px_40px_rgba(20,45,75,.16)]">
@@ -121,10 +125,10 @@ export function CountrySelect({
                 className={`flex min-h-10 cursor-pointer items-center justify-between gap-3 rounded-lg px-3 text-[12px] text-[#3a516a] ${i === active ? 'bg-[#eaf4f5]' : ''}`}
               >
                 <span className="flex min-w-0 items-center gap-2">
-                  <span aria-hidden="true" className="shrink-0 text-base leading-none">{flagForCountry(c.code)}</span>
+                  <FlagIcon country={c} />
                   <span className="truncate">{c.name}</span>
                 </span>
-                <span className="flex items-center gap-2 font-mono text-[10px] text-[#8b98a5]">{c.code}{value === c.name && <Check size={14} className="text-[#408589]" />}</span>
+                <span className="flex items-center gap-2 font-mono text-[10px] text-[#8b98a5]">{c.currency}{value === c.name && <Check size={14} className="text-[#408589]" />}</span>
               </li>
             ))}
             {!filtered.length && <li className="px-3 py-6 text-center text-[12px] text-[#8794a2]">No country matches that search.</li>}
@@ -139,4 +143,24 @@ function flagForCountry(code: string) {
   const letters = code.toUpperCase();
   if (!/^[A-Z]{2}$/.test(letters)) return '';
   return String.fromCodePoint(...[...letters].map(letter => 127397 + letter.charCodeAt(0)));
+}
+
+function FlagIcon({ country }: { country: (typeof countries)[number] }) {
+  const [imageAvailable, setImageAvailable] = useState(!!country.flagUrl);
+  useEffect(() => setImageAvailable(!!country.flagUrl), [country.flagUrl]);
+
+  if (imageAvailable && country.flagUrl) {
+    return (
+      <img
+        src={country.flagUrl}
+        alt=""
+        aria-hidden="true"
+        loading="lazy"
+        className="h-[16px] w-[23px] shrink-0 rounded-[3px] border border-black/5 object-cover"
+        onError={() => setImageAvailable(false)}
+      />
+    );
+  }
+
+  return <span aria-hidden="true" className="shrink-0 text-base leading-none">{country.flag || flagForCountry(country.code) || '🌐'}</span>;
 }

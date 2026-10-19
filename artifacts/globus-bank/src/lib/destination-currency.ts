@@ -1,3 +1,5 @@
+import { internationalBankingDirectory } from './international-banking-directory';
+
 // Country defaults are suggestions; a recipient may hold an account in another currency.
 const currencyRegions: Record<string, string> = {
   EUR: 'AD AT AX BE BG BL CY DE EE ES FI FR GF GP GR HR IE IT LT LU LV MC ME MF MQ MT NL PM PT RE SI SK SM TF VA XK YT',
@@ -35,13 +37,16 @@ const countryCurrencies = new Map(
   Object.entries(currencyRegions).flatMap(([currency, regions]) =>
     regions.split(' ').map(region => [region, currency] as const)),
 );
+for (const country of internationalBankingDirectory) {
+  countryCurrencies.set(country.code, country.currency);
+}
 
 export function destinationCurrencyForCountry(countryCode: string): string | undefined {
   return countryCurrencies.get(countryCode.toUpperCase());
 }
 
 // Stable ISO catalogue rather than the five currencies in which Globus offers source wallets.
-export const destinationCurrencies = `
+const standardDestinationCurrencies = `
 AED AFN ALL AMD ANG AOA ARS AUD AWG AZN BAM BBD BDT BGN BHD BIF BMD BND
 BOB BOV BRL BSD BTN BWP BYN BZD CAD CDF CHE CHF CHW CLF CLP CNY COP COU
 CRC CUC CUP CVE CZK DJF DKK DOP DZD EGP ERN ETB EUR FJD FKP GBP GEL GHS GIP
@@ -52,7 +57,12 @@ OMR PAB PEN PGK PHP PKR PLN PYG QAR RON RSD RUB RWF SAR SBD SCR SDG SEK
 SGD SHP SLE SLL SOS SRD SSP STN SVC SYP SZL THB TJS TMT TND TOP TRY TTD
 TWD TZS UAH UGX USD USN UYI UYU UYW UZS VED VES VND VUV WST XAF XAG XAU
 XBA XBB XBC XBD XCD XCG XDR XOF XPD XPF XPT XSU XUA YER ZAR ZMW ZWG ZWL
-`.trim().split(/\s+/).sort();
+`.trim().split(/\s+/);
+
+export const destinationCurrencies = [...new Set([
+  ...standardDestinationCurrencies,
+  ...internationalBankingDirectory.map(country => country.currency),
+])].sort();
 
 const currencyNames = new Intl.DisplayNames(['en'], { type: 'currency' });
 export function currencyLabel(code: string): string {
