@@ -19,6 +19,7 @@ import {
   ProfilePage,
   TransactionsPage,
   WalletsPage,
+  WalletDetailsPage,
 } from '@/pages/bank-pages';
 import { CurrencyCalculatorPage } from '@/pages/currency-calculator-page';
 import { AdminWorkspace } from '@/pages/admin-workspace';
@@ -58,7 +59,7 @@ const clerkAppearance = {
   options: {
     logoPlacement: 'inside' as const,
     logoLinkUrl: basePath || '/',
-    logoImageUrl: `${window.location.origin}${basePath}/globus-wordmark.png`,
+    logoImageUrl: `${window.location.origin}${basePath}/globus-wordmark-transparent.png`,
   },
   variables: {
     colorPrimary: '#173b62',
@@ -231,6 +232,7 @@ function ClerkRoutes() {
         <Route path="/sign-up/*?" component={SignUpPage} />
         <Route path="/dashboard"><ProtectedPage><DashboardPage /></ProtectedPage></Route>
         <Route path="/wallets"><ProtectedPage><WalletsPage /></ProtectedPage></Route>
+        <Route path="/wallets/:walletId"><ProtectedPage><WalletDetailsPage /></ProtectedPage></Route>
         <Route path="/transactions"><ProtectedPage><TransactionsPage /></ProtectedPage></Route>
         <Route path="/calculator"><ProtectedPage><CurrencyCalculatorPage /></ProtectedPage></Route>
         <Route path="/send"><Redirect to="/transfer" /></Route>

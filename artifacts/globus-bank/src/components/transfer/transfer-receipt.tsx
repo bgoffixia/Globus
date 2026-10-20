@@ -111,7 +111,7 @@ export function TransferReceiptModal({ transaction, onClose, title }: { transact
         convertedAmount: conversion ? formatAmount(conversion.destinationAmount, conversion.destinationCurrency) : undefined,
         recipient: transaction.recipient?.name,
         route: transaction.recipient?.route,
-      }, `${import.meta.env.BASE_URL}globus-wordmark.png`);
+      }, `${import.meta.env.BASE_URL}globus-wordmark-transparent.png`);
     } catch (error) {
       setDownloadError(error instanceof Error ? error.message : 'The PDF receipt could not be downloaded.');
     } finally {

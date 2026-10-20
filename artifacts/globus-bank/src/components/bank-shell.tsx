@@ -58,7 +58,7 @@ export function BankShell({ children }: { children: ReactNode }) {
       <aside className={`bank-sidebar fixed inset-y-0 left-0 z-40 flex w-[min(252px,84vw)] flex-col transition-transform duration-200 lg:translate-x-0 ${mobileMenu ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="flex h-[78px] items-center justify-between gap-2 px-4 sm:px-7">
           <Link href="/dashboard" aria-label="Globus Bank dashboard" className="bank-brand flex min-w-0 items-center gap-2 text-white sm:gap-3">
-            <img src={`${import.meta.env.BASE_URL}globus-mark.png`} alt="" className="h-9 w-11 shrink-0 rounded-lg bg-white object-contain" />
+            <img src={`${import.meta.env.BASE_URL}globus-mark-transparent.png`} alt="" className="h-10 w-12 shrink-0 object-contain" />
             <span className="flex min-w-0 flex-col leading-none">
               <span className="text-[16px] font-extrabold tracking-tight">GLOBUS</span>
               <span className="mt-1 text-[8px] font-bold tracking-[0.3em] text-[#d1b05f]">BANK</span>
@@ -170,5 +170,7 @@ function pageLabel(path: string) {
     '/settings': 'Profile',
     '/admin': 'Operations',
   };
-  return path.startsWith('/admin/users/') ? 'Member management' : labels[path] ?? 'Account';
+  if (path.startsWith('/admin/users/')) return 'Member management';
+  if (path.startsWith('/wallets/')) return 'Wallet details';
+  return labels[path] ?? 'Account';
 }

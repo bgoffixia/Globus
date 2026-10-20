@@ -1,4 +1,7 @@
 .globus-loader {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   display: flex;
   min-height: 280px;
   flex-direction: column;
@@ -6,15 +9,36 @@
   justify-content: center;
   gap: 12px;
   padding: 32px 16px;
-  color: #173451;
+  border-radius: 20px;
+  color: #effbfc;
+  background:
+    radial-gradient(ellipse at 50% 42%, rgb(90 197 202 / 24%) 0, transparent 44%),
+    linear-gradient(140deg, #176b7d 0%, #10556d 47%, #123e5d 100%);
 }
 
 .globus-loader--fullscreen {
   min-height: 100dvh;
   background:
-    radial-gradient(ellipse at 50% 44%, rgb(255 255 255 / 96%) 0, rgb(249 251 251 / 92%) 34%, transparent 68%),
-    linear-gradient(145deg, #f6f8fa 0%, #edf2f5 100%);
+    radial-gradient(ellipse at 50% 42%, rgb(83 196 202 / 28%) 0, transparent 42%),
+    radial-gradient(ellipse at 13% 12%, rgb(87 177 190 / 13%), transparent 32%),
+    linear-gradient(145deg, #0e647a 0%, #104f6c 48%, #102f50 100%);
+  border-radius: 0;
 }
+
+.globus-loader--fullscreen::before,
+.globus-loader--fullscreen::after {
+  position: absolute;
+  z-index: -1;
+  width: min(78vw, 680px);
+  aspect-ratio: 1;
+  border: 1px solid rgb(203 238 237 / 9%);
+  border-radius: 50%;
+  content: "";
+  pointer-events: none;
+}
+
+.globus-loader--fullscreen::before { transform: scale(.74); }
+.globus-loader--fullscreen::after { box-shadow: 0 0 0 54px rgb(203 238 237 / 3%), 0 0 0 110px rgb(203 238 237 / 2%); }
 
 .globus-loader__stage {
   position: relative;
@@ -37,27 +61,27 @@
 }
 
 .globus-loader__stage::before {
-  width: 96px;
-  height: 96px;
-  border: 1px solid rgb(31 77 121 / 9%);
-  background: radial-gradient(circle, rgb(255 255 255 / 94%) 0%, rgb(240 246 248 / 78%) 66%, rgb(229 237 242 / 35%) 100%);
-  box-shadow: 0 14px 38px rgb(23 52 81 / 8%), inset 0 1px 0 rgb(255 255 255 / 95%);
+  width: 108px;
+  height: 108px;
+  border: 1px solid rgb(218 251 249 / 42%);
+  background: radial-gradient(circle, rgb(237 255 252 / 92%) 0%, rgb(154 225 225 / 76%) 45%, rgb(68 164 178 / 10%) 78%, transparent 100%);
+  box-shadow: 0 0 44px rgb(96 221 218 / 22%), inset 0 1px 0 rgb(255 255 255 / 65%);
 }
 
 .globus-loader__stage::after {
   width: 128px;
   height: 128px;
-  border: 1px dashed rgb(37 91 137 / 16%);
+  border: 1px dashed rgb(207 244 241 / 28%);
   animation: globus-loader-pulse 2.8s ease-in-out infinite;
 }
 
 .globus-loader__mark {
   position: relative;
   z-index: 1;
-  width: 70px;
-  height: 70px;
+  width: 78px;
+  height: 68px;
   object-fit: contain;
-  filter: drop-shadow(0 5px 10px rgb(20 47 81 / 15%));
+  filter: drop-shadow(0 0 13px rgb(236 255 252 / 35%));
 }
 
 .globus-loader__orbit {
@@ -67,7 +91,7 @@
   left: 50%;
   width: 138px;
   height: 54px;
-  border: 1.5px solid rgb(193 146 42 / 72%);
+  border: 1.5px solid rgb(223 188 99 / 86%);
   border-radius: 50%;
   animation: globus-orbit-spin 2.2s linear infinite;
   will-change: rotate;
@@ -80,7 +104,7 @@
 .globus-loader__orbit--blue {
   width: 122px;
   height: 43px;
-  border-color: rgb(35 99 159 / 64%);
+  border-color: rgb(161 233 233 / 74%);
   animation-direction: reverse;
   animation-duration: 3.4s;
   transform: translate(-50%, -50%) rotate(56deg);
@@ -93,21 +117,21 @@
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: #c79b37;
-  box-shadow: 0 0 0 3px rgb(199 155 55 / 13%), 0 0 14px rgb(199 155 55 / 48%);
+  background: #e1bf68;
+  box-shadow: 0 0 0 3px rgb(225 191 104 / 18%), 0 0 14px rgb(225 191 104 / 56%);
   transform: translateY(-50%);
 }
 
 .globus-loader__orbit--blue i {
   width: 7px;
   height: 7px;
-  background: #286da5;
-  box-shadow: 0 0 0 3px rgb(40 109 165 / 12%), 0 0 12px rgb(40 109 165 / 42%);
+  background: #9ce5e5;
+  box-shadow: 0 0 0 3px rgb(156 229 229 / 16%), 0 0 12px rgb(156 229 229 / 48%);
 }
 
 .globus-loader__label {
   margin: 0;
-  color: #5e7183;
+  color: #e6f7f7;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.12em;

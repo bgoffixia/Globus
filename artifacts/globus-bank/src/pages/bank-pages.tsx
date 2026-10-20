@@ -136,7 +136,7 @@ export function HomePage() {
     <div className="public-viewport-scroll bg-[#f6f8fa] text-[#192e49]">
       <header className="relative z-10 mx-auto flex max-w-[1320px] items-center justify-between gap-2 px-4 pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-5 sm:gap-3 sm:px-6 sm:py-6 lg:px-12">
           <Link href={isSignedIn ? '/home' : '/'} aria-label="Globus Bank home" className="flex shrink-0 items-center">
-          <img src={`${import.meta.env.BASE_URL}globus-wordmark.png`} alt="Globus Bank — Your world. Our priority." className="h-auto w-[108px] sm:w-[156px]" />
+          <img src={`${import.meta.env.BASE_URL}globus-wordmark-transparent.png`} alt="Globus Bank — Your world. Our priority." className="h-auto w-[108px] sm:w-[156px]" />
         </Link>
         <nav className="hidden items-center gap-8 text-[13px] font-medium text-[#607187] md:flex">
           <Link href="/fees" className="hover:text-[#142d4d]">Fees</Link>
@@ -361,7 +361,6 @@ export function DashboardPage() {
 
 export function WalletsPage() {
   const query = useListBankWallets({ query: { queryKey: getListBankWalletsQueryKey() } });
-  const profile = useGetBankProfile({ query: { queryKey: getGetBankProfileQueryKey() } });
   if (query.isLoading) return <PageSkeleton />;
   if (query.isError) return <Failure title="Wallets could not be loaded" retry={() => query.refetch()} />;
   return (
@@ -369,28 +368,122 @@ export function WalletsPage() {
       <PageHeading eyebrow="Currencies" title="Your wallets" subtitle="Available, pending and reserved amounts, shown separately." />
       <div className="mt-7 flex items-center gap-3 rounded-2xl border border-[#dce9ea] bg-[#eef7f7] px-4 py-4 text-[12px] leading-5 text-[#467b80]"><Globe2 size={17} className="shrink-0" /> Balances show activity recorded in your Globus account. No outside bank or payment service holds or moves funds.</div>
       <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {(query.data ?? []).map((wallet) => <div key={wallet.id} className="min-w-0"><WalletCard wallet={wallet} /><WalletReference customerId={profile.data?.customerId ?? ''} wallet={wallet} /></div>)}
+        {(query.data ?? []).map((wallet) => (
+          <Link key={wallet.id} href={`/wallets/${encodeURIComponent(wallet.id)}`} aria-label={`View ${wallet.currency} wallet details`} className="group block min-w-0 rounded-[20px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#65a4a7] focus-visible:ring-offset-2">
+            <WalletCard wallet={wallet} />
+            <span className="mt-2 inline-flex items-center gap-1 px-1 text-[9px] font-bold text-[#397d83] group-hover:text-[#245e66]">View wallet details <ArrowRight size={12} /></span>
+          </Link>
+        ))}
       </div>
       {!query.data?.length && <EmptyState title="No currency wallets yet" text="Wallets will appear here when they are provisioned for your account." />}
     </>
   );
 }
 
-function WalletReference({ customerId, wallet }: { customerId: string; wallet: Wallet }) {
-  const reference = walletReferenceValue(customerId, wallet);
+export function WalletDetailsPage() {
+  const [, routeParams] = useRoute('/wallets/:walletId');
+  const walletId = routeParams?.walletId ?? '';
+  const walletsQuery = useListBankWallets({ query: { queryKey: getListBankWalletsQueryKey() } });
+  const profileQuery = useGetBankProfile({ query: { queryKey: getGetBankProfileQueryKey() } });
+  const [copied, setCopied] = useState(false);
+  if (walletsQuery.isLoading || profileQuery.isLoading) return <PageSkeleton />;
+  if (walletsQuery.isError) return <Failure title="Wallet details could not be loaded" retry={() => walletsQuery.refetch()} />;
+  if (profileQuery.isError || !profileQuery.data) return <Failure title="Account details could not be loaded" retry={() => profileQuery.refetch()} />;
+  const wallet = walletsQuery.data?.find(item => item.id === walletId);
+  if (!wallet) {
+    return (
+      <>
+        <PageHeading eyebrow="Wallets" title="Wallet not found" subtitle="This wallet is not available in your account." />
+        <Link href="/wallets" className="mt-5 inline-flex items-center gap-2 text-[11px] font-bold text-[#397d83]"><ArrowLeft size={14} /> Back to wallets</Link>
+      </>
+    );
+  }
+  const profile = profileQuery.data;
+  const reference = walletReferenceValue(profile.customerId, wallet);
+  const accountHolder = [profile.firstName, profile.lastName].filter(Boolean).join(' ') || 'Globus member';
+  const copyReference = async () => {
+    try {
+      await navigator.clipboard.writeText(reference);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      setCopied(false);
+    }
+  };
   return (
-    <div className="mt-2 min-w-0 rounded-xl border border-[#e0e8ed] bg-white px-4 py-3">
-      <p className="text-[9px] font-bold uppercase tracking-[.12em] text-[#7c8c99]">Globus wallet reference</p>
-      <p className="mt-1 break-all font-mono text-[11px] font-semibold text-[#294763]">{reference}</p>
-      <p className="mt-1 text-[9px] leading-4 text-[#8794a1]">Identifies this Globus wallet only. It is not a bank account, routing number, or payment destination.</p>
-    </div>
+    <>
+      <Link href="/wallets" className="inline-flex items-center gap-2 text-[10px] font-bold text-[#397d83] hover:text-[#245e66]"><ArrowLeft size={13} /> Back to wallets</Link>
+      <PageHeading eyebrow={`${wallet.currency} wallet`} title={`${currencyNames[wallet.currency]} wallet details`} subtitle="View the unique account reference and current wallet information." />
+      <div className="mt-5 grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(320px,.8fr)]">
+        <section className="relative isolate aspect-[1.65] min-h-[190px] overflow-hidden rounded-[22px] border border-[#d4e4e5] bg-[linear-gradient(130deg,#e4f4f3_0%,#c5e4e3_52%,#f1f5ec_100%)] p-5 text-[#173b58] shadow-[0_16px_38px_rgba(28,73,88,.12)] sm:p-7">
+          <div aria-hidden="true" className="absolute -right-8 -top-16 h-52 w-52 rounded-full border border-white/55 shadow-[0_0_0_24px_rgba(255,255,255,.12),0_0_0_54px_rgba(255,255,255,.08)]" />
+          <div aria-hidden="true" className="absolute -bottom-28 -left-10 h-56 w-56 rounded-full border border-[#d0ac58]/25" />
+          <div className="relative flex h-full flex-col justify-between">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2.5">
+                <img src={`${import.meta.env.BASE_URL}globus-mark-transparent.png`} alt="" className="h-10 w-12 object-contain" />
+                <span className="text-[10px] font-extrabold tracking-[.13em]">GLOBUS<br /><span className="text-[8px] tracking-[.3em] text-[#a47b25]">BANK</span></span>
+              </div>
+              <span className="rounded-full border border-white/70 bg-white/45 px-2.5 py-1 text-[9px] font-bold uppercase tracking-[.1em]">{humanize(wallet.status)}</span>
+            </div>
+            <div>
+              <p className="text-[8px] font-bold uppercase tracking-[.18em] text-[#62828c]">Globus wallet · {wallet.currency}</p>
+              <p className="bank-display mt-1 text-[23px] font-semibold tracking-[-.04em] sm:text-[30px]">{currencyNames[wallet.currency]}</p>
+              <p className="mt-3 text-[9px] font-bold uppercase tracking-[.16em] text-[#62828c]">Account holder</p>
+              <p className="mt-1 truncate text-[13px] font-semibold">{accountHolder}</p>
+            </div>
+          </div>
+        </section>
+        <section className="min-w-0 rounded-[20px] border border-[#e1e8ee] bg-white p-4 sm:p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div><p className="text-[9px] font-bold uppercase tracking-[.15em] text-[#548d92]">Wallet account details</p><h2 className="mt-1 text-[14px] font-bold text-[#27405a]">{wallet.currency} account</h2></div>
+            <span className="rounded-full bg-[#eef6f6] px-2.5 py-1 text-[9px] font-bold text-[#477b81]">{humanize(wallet.status)}</span>
+          </div>
+          <dl className="mt-4 divide-y divide-[#edf0f2]">
+            <div className="flex justify-between gap-3 py-2.5 text-[10px]"><dt className="text-[#8291a0]">Account holder</dt><dd className="min-w-0 break-words text-right font-semibold text-[#3b5169]">{accountHolder}</dd></div>
+            <div className="flex justify-between gap-3 py-2.5 text-[10px]"><dt className="text-[#8291a0]">Customer ID</dt><dd className="font-mono font-semibold text-[#3b5169]">{profile.customerId}</dd></div>
+            <div className="flex justify-between gap-3 py-2.5 text-[10px]"><dt className="text-[#8291a0]">Currency</dt><dd className="font-semibold text-[#3b5169]">{wallet.currency} · {currencyNames[wallet.currency]}</dd></div>
+            <div className="py-2.5 text-[10px]">
+              <dt className="text-[#8291a0]">Unique Globus wallet reference</dt>
+              <dd data-testid="wallet-account-reference" className="mt-1 break-all font-mono font-semibold leading-5 text-[#294763]">{reference}</dd>
+            </div>
+          </dl>
+          <button type="button" onClick={copyReference} data-testid="button-copy-wallet-reference" className="mt-2 inline-flex h-9 items-center gap-2 rounded-lg border border-[#dfe6eb] px-3 text-[9px] font-bold text-[#355570] hover:bg-[#f5f8f9]"><Copy size={13} />{copied ? 'Copied' : 'Copy reference'}</button>
+          <p className="mt-3 rounded-lg bg-[#f5f8f8] px-3 py-2 text-[9px] leading-4 text-[#71858b]">This unique reference identifies your wallet inside Globus. It is not a bank account or a destination for outside payments.</p>
+        </section>
+        <section className="rounded-[20px] border border-[#e1e8ee] bg-white p-4 sm:p-5 xl:col-span-2">
+          <p className="text-[9px] font-bold uppercase tracking-[.15em] text-[#548d92]">Current balances</p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            <WalletBalanceDetail label="Available" amount={wallet.available} currency={wallet.currency} />
+            <WalletBalanceDetail label="Pending" amount={wallet.pending} currency={wallet.currency} />
+            <WalletBalanceDetail label="Reserved" amount={wallet.reserved} currency={wallet.currency} />
+          </div>
+        </section>
+      </div>
+    </>
   );
 }
 
 function walletReferenceValue(customerId: string, wallet: Wallet) {
+  const uniqueWalletId = wallet.id.replace(/-/g, '').toUpperCase();
   return customerId
-    ? `GB-${customerId}-${wallet.currency}-${wallet.id.replace(/-/g, '').slice(0, 8).toUpperCase()}`
-    : `GB-${wallet.currency}-${wallet.id.replace(/-/g, '').slice(0, 12).toUpperCase()}`;
+    ? `GB-${customerId}-${wallet.currency}-${uniqueWalletId}`
+    : `GB-${wallet.currency}-${uniqueWalletId}`;
+}
+
+function WalletReference({ customerId, wallet }: { customerId: string; wallet: Wallet }) {
+  const reference = walletReferenceValue(customerId, wallet);
+  return (
+    <div className="min-w-0 rounded-xl border border-[#e0e8ed] bg-white px-3 py-2.5">
+      <p className="text-[8px] font-bold uppercase tracking-[.12em] text-[#7c8c99]">Globus wallet reference</p>
+      <p className="mt-1 break-all font-mono text-[9px] font-semibold leading-4 text-[#294763]">{reference}</p>
+      <p className="mt-1 text-[8px] leading-3.5 text-[#8794a1]">This identifies the wallet inside Globus; it is not a bank account or payment destination.</p>
+    </div>
+  );
+}
+
+function WalletBalanceDetail({ label, amount, currency }: { label: string; amount: string; currency: string }) {
+  return <div className="rounded-xl bg-[#f6f8fa] px-3.5 py-3"><p className="text-[9px] text-[#8492a0]">{label}</p><p className="mt-1 text-[13px] font-bold text-[#29435d]">{formatMoney(Number(amount), currency)}</p></div>;
 }
 
 export function TransactionsPage() {
@@ -1946,7 +2039,7 @@ export function DisclosurePage({ path }: { path: string }) {
   if (!data) return null;
   return (
     <div className="public-viewport-scroll bg-[#f5f8fa]">
-      <header className="mx-auto flex max-w-[1200px] items-center justify-between gap-4 px-4 py-6 sm:px-6"><Link href="/" aria-label="Globus Bank home" className="flex shrink-0 items-center"><img src={`${import.meta.env.BASE_URL}globus-wordmark.png`} alt="Globus Bank — Your world. Our priority." className="h-auto w-[128px] sm:w-[156px]" /></Link><Link href="/" className="text-[12px] font-semibold text-[#456077] hover:text-[#347e83]">Back to home</Link></header>
+      <header className="mx-auto flex max-w-[1200px] items-center justify-between gap-4 px-4 py-6 sm:px-6"><Link href="/" aria-label="Globus Bank home" className="flex shrink-0 items-center"><img src={`${import.meta.env.BASE_URL}globus-wordmark-transparent.png`} alt="Globus Bank — Your world. Our priority." className="h-auto w-[128px] sm:w-[156px]" /></Link><Link href="/" className="text-[12px] font-semibold text-[#456077] hover:text-[#347e83]">Back to home</Link></header>
       <main className="mx-auto max-w-[1020px] px-6 pb-20 pt-10 sm:pt-16">
         <p className="text-[10px] font-bold uppercase tracking-[.17em] text-[#4b8b90]">{data.eyebrow}</p>
         <h1 className="bank-display mt-4 max-w-[760px] text-[clamp(2.6rem,7vw,5.2rem)] font-semibold leading-[1.02] text-[#16304f]">{data.title}</h1>
