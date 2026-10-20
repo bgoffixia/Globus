@@ -364,9 +364,7 @@ export function WalletsPage() {
 }
 
 function WalletReference({ customerId, wallet }: { customerId: string; wallet: Wallet }) {
-  const reference = customerId
-    ? `GB-${customerId}-${wallet.currency}-${wallet.id.replace(/-/g, '').slice(0, 8).toUpperCase()}`
-    : `GB-${wallet.currency}-${wallet.id.replace(/-/g, '').slice(0, 12).toUpperCase()}`;
+  const reference = walletReferenceValue(customerId, wallet);
   return (
     <div className="mt-2 min-w-0 rounded-xl border border-[#e0e8ed] bg-white px-4 py-3">
       <p className="text-[9px] font-bold uppercase tracking-[.12em] text-[#7c8c99]">Globus wallet reference</p>
@@ -374,6 +372,12 @@ function WalletReference({ customerId, wallet }: { customerId: string; wallet: W
       <p className="mt-1 text-[9px] leading-4 text-[#8794a1]">Identifies this Globus wallet only. It is not a bank account, routing number, or payment destination.</p>
     </div>
   );
+}
+
+function walletReferenceValue(customerId: string, wallet: Wallet) {
+  return customerId
+    ? `GB-${customerId}-${wallet.currency}-${wallet.id.replace(/-/g, '').slice(0, 8).toUpperCase()}`
+    : `GB-${wallet.currency}-${wallet.id.replace(/-/g, '').slice(0, 12).toUpperCase()}`;
 }
 
 export function TransactionsPage() {
@@ -485,12 +489,14 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
   const profileQuery = useGetBankProfile({ query: { queryKey: getGetBankProfileQueryKey() } });
   const walletsQuery = useListBankWallets({ query: { queryKey: getListBankWalletsQueryKey() } });
   const mutation = useCreateLedgerRequest();
-  const [currency, setCurrency] = useState<Currency>(() => preferredCurrencyFromQuery());
+  const [currency, setCurrency] = useState<Currency | null>(() => type === 'deposit' ? currencyFromQuery() : preferredCurrencyFromQuery());
+  const [depositWalletSelected, setDepositWalletSelected] = useState(() => type !== 'deposit' || currencyFromQuery() !== null);
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [depositMethod, setDepositMethod] = useState<'bank_card' | 'bank_transfer'>('bank_transfer');
   const [sourceReference, setSourceReference] = useState('');
   const [transactionPin, setTransactionPin] = useState('');
+  const [copiedWalletReference, setCopiedWalletReference] = useState(false);
   const [result, setResult] = useState<{ reference: string; message: string; status: string } | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
   const selectedWallet = walletsQuery.data?.find(wallet => wallet.currency === currency);
@@ -506,7 +512,7 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
     const requestDescription = type === 'deposit'
       ? `${depositMethod === 'bank_card' ? 'Bank card' : 'Bank transfer'} deposit request${sourceReference.trim() ? ` · Reference: ${sourceReference.trim()}` : ''}${description.trim() ? ` · Note: ${description.trim()}` : ''}`.slice(0, 140)
       : description.trim();
-    mutation.mutate({ data: { type, currency, amount, ...(requestDescription ? { description: requestDescription } : {}), transactionPin, idempotencyKey: crypto.randomUUID() } }, {
+    mutation.mutate({ data: { type, currency: currency ?? preferredCurrencyFromQuery(), amount, ...(requestDescription ? { description: requestDescription } : {}), transactionPin, idempotencyKey: crypto.randomUUID() } }, {
       onSuccess: request => {
         setResult(request);
         setAmount('');
@@ -520,6 +526,106 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
       onError: error => setErrorMessage(error instanceof Error ? error.message : 'Request could not be recorded. Please try again.'),
     });
   };
+  if (type === 'deposit') {
+    const accountHolder = [profileQuery.data?.firstName, profileQuery.data?.lastName].filter(Boolean).join(' ') || 'Globus member';
+    const walletReference = selectedWallet ? walletReferenceValue(profileQuery.data?.customerId ?? '', selectedWallet) : '';
+    const copyWalletReference = async () => {
+      if (!walletReference) return;
+      try {
+        await navigator.clipboard.writeText(walletReference);
+        setCopiedWalletReference(true);
+        window.setTimeout(() => setCopiedWalletReference(false), 1800);
+      } catch {
+        setCopiedWalletReference(false);
+      }
+    };
+
+    return (
+      <div className="mx-auto min-w-0 max-w-[1100px]" data-testid="deposit-workflow">
+        <header className="flex min-w-0 items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[9px] font-bold uppercase tracking-[.16em] text-[#4d858a]">Wallet services</p>
+            <h1 className="bank-display mt-0.5 truncate text-[22px] font-semibold leading-tight text-[#213a55] sm:text-[26px]">Deposit</h1>
+          </div>
+          {depositWalletSelected && selectedWallet && (
+            <button type="button" onClick={() => { setDepositWalletSelected(false); setResult(null); }} className="shrink-0 rounded-lg border border-[#dce6e9] bg-white px-3 py-2 text-[10px] font-bold text-[#3c7278] hover:bg-[#f3f8f8]" data-testid="button-change-deposit-wallet">
+              Change wallet
+            </button>
+          )}
+        </header>
+
+        {walletsQuery.isLoading ? (
+          <div className="mt-4 rounded-2xl border border-[#e1e8ee] bg-white p-5"><ListSkeleton /></div>
+        ) : walletsQuery.isError ? (
+          <div className="mt-4 rounded-2xl border border-[#e1e8ee] bg-white p-5"><InlineError text="Wallets could not be loaded." retry={() => walletsQuery.refetch()} /></div>
+        ) : !depositWalletSelected || !selectedWallet ? (
+          <section className="mt-4 rounded-2xl border border-[#e1e8ee] bg-white p-4 sm:p-5">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div><h2 className="text-[12px] font-bold text-[#2c425c]">Choose a wallet</h2><p className="mt-0.5 text-[10px] text-[#8391a0]">Select the wallet for this deposit request.</p></div>
+              <WalletCards size={18} className="shrink-0 text-[#4d858a]" />
+            </div>
+            {walletsQuery.data?.length ? (
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                {walletsQuery.data.map(wallet => (
+                  <button key={wallet.id} type="button" onClick={() => { setCurrency(wallet.currency as Currency); setDepositWalletSelected(true); setResult(null); setErrorMessage(''); }} className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-[#e1e8ed] bg-[#fbfcfd] px-3.5 py-3 text-left transition hover:border-[#71a8aa] hover:bg-[#f3f9f9]" data-testid={`button-select-deposit-wallet-${wallet.currency.toLowerCase()}`}>
+                    <span className="flex min-w-0 items-center gap-2.5"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[#eaf4f4] text-[10px] font-extrabold text-[#397b80]">{wallet.currency}</span><span className="min-w-0"><b className="block truncate text-[10px] text-[#344b64]">{currencyNames[wallet.currency] ?? wallet.currency}</b><small className="mt-0.5 block text-[9px] text-[#8492a1]">{humanize(wallet.status)}</small></span></span>
+                    <span className="shrink-0 text-[10px] font-bold text-[#344b64]">{formatMoney(Number(wallet.available), wallet.currency)}</span>
+                  </button>
+                ))}
+              </div>
+            ) : <EmptyState title="No wallets available" text="There are no wallets to select for a deposit request." />}
+          </section>
+        ) : (
+          <div className="mt-3 grid min-w-0 items-start gap-3 lg:grid-cols-[minmax(0,.9fr)_minmax(0,1.1fr)]">
+            <section className="min-w-0 rounded-2xl border border-[#e1e8ee] bg-white p-3.5 sm:p-4" data-testid="deposit-wallet-details">
+              <div className="relative isolate min-h-[174px] overflow-hidden rounded-[18px] bg-gradient-to-br from-[#18375d] via-[#15506c] to-[#147078] p-4 text-white shadow-[0_12px_28px_rgba(20,47,81,.18)] sm:min-h-[184px] sm:p-5">
+                <div aria-hidden="true" className="pointer-events-none absolute -right-8 -top-12 h-44 w-44 rounded-full border border-white/10 before:absolute before:inset-4 before:rounded-full before:border before:border-[#dfc477]/35 after:absolute after:inset-10 after:rounded-full after:border after:border-white/10" />
+                <div className="relative flex items-start justify-between gap-4">
+                  <div><p className="text-[12px] font-extrabold tracking-[.12em]">GLOBUS</p><p className="mt-0.5 text-[7px] font-bold tracking-[.32em] text-[#e0c77d]">BANK</p></div>
+                  <div className="text-right"><p className="text-[8px] font-bold uppercase tracking-[.14em] text-white/75">Wallet card</p><p className="mt-1 text-[11px] font-bold">{selectedWallet.currency} wallet</p></div>
+                </div>
+                <div className="relative mt-5 flex items-center gap-2.5">
+                  <div aria-hidden="true" className="h-6 w-8 rounded-md border border-[#f3d78f]/65 bg-gradient-to-br from-[#f4e2ae] via-[#c8a959] to-[#f2d98d] shadow-inner" />
+                  <span className="font-mono text-[11px] font-semibold tracking-[.14em] text-white/95">•••• •••• •••• {walletReference.slice(-4)}</span>
+                </div>
+                <div className="relative mt-5 flex items-end justify-between gap-3">
+                  <div className="min-w-0"><p className="text-[7px] uppercase tracking-[.13em] text-white/60">Account holder</p><p className="mt-1 truncate text-[10px] font-semibold">{accountHolder}</p></div>
+                  <p className="shrink-0 text-[9px] font-bold tracking-[.12em] text-[#e4ce8e]">{selectedWallet.currency}</p>
+                </div>
+              </div>
+              <div className="mt-3">
+                <h2 className="text-[11px] font-bold text-[#2d435c]">Account details</h2>
+                <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 rounded-xl bg-[#f7f9fa] px-3.5 py-3">
+                  <div className="min-w-0"><dt className="text-[8px] font-semibold uppercase tracking-[.1em] text-[#8593a1]">Account holder</dt><dd className="mt-0.5 truncate text-[9px] font-semibold text-[#40576f]">{accountHolder}</dd></div>
+                  <div><dt className="text-[8px] font-semibold uppercase tracking-[.1em] text-[#8593a1]">Currency</dt><dd className="mt-0.5 text-[9px] font-semibold text-[#40576f]">{selectedWallet.currency}</dd></div>
+                  <div><dt className="text-[8px] font-semibold uppercase tracking-[.1em] text-[#8593a1]">Available</dt><dd className="mt-0.5 text-[9px] font-semibold text-[#40576f]">{formatMoney(Number(selectedWallet.available), selectedWallet.currency)}</dd></div>
+                  <div className="min-w-0"><dt className="text-[8px] font-semibold uppercase tracking-[.1em] text-[#8593a1]">Wallet reference</dt><dd className="mt-0.5 flex min-w-0 items-center gap-1"><span className="min-w-0 break-all font-mono text-[8px] font-semibold leading-3 text-[#40576f]" title={walletReference}>{walletReference}</span><button type="button" onClick={() => void copyWalletReference()} aria-label="Copy wallet reference" data-testid="button-copy-wallet-reference" className="shrink-0 rounded p-1 text-[#4a8588] hover:bg-white">{copiedWalletReference ? <Check size={12} /> : <Copy size={12} />}</button></dd></div>
+                </dl>
+              </div>
+            </section>
+
+            <form onSubmit={submit} className="min-w-0 rounded-2xl border border-[#e1e8ee] bg-white p-3.5 sm:p-4" data-testid="deposit-request-form">
+              <div className="mb-3 flex items-center justify-between gap-3"><div><h2 className="text-[12px] font-bold text-[#2c425c]">Request a deposit</h2><p className="mt-0.5 text-[9px] text-[#8391a0]">Selected wallet · {selectedWallet.currency}</p></div><span className="rounded-lg bg-[#eef7f7] px-2.5 py-1.5 text-[9px] font-bold text-[#377b82]">{selectedWallet.currency}</span></div>
+              <div className="grid grid-cols-2 gap-2" role="group" aria-label="Deposit request method">
+                <button type="button" onClick={() => setDepositMethod('bank_card')} aria-pressed={depositMethod === 'bank_card'} data-testid="button-deposit-bank-card" className={`rounded-lg border px-3 py-2.5 text-left text-[9px] font-bold transition ${depositMethod === 'bank_card' ? 'border-[#4e8c91] bg-[#f1f8f8] text-[#315c67]' : 'border-[#e1e8ed] bg-white text-[#718195]'}`}>Bank card</button>
+                <button type="button" onClick={() => setDepositMethod('bank_transfer')} aria-pressed={depositMethod === 'bank_transfer'} data-testid="button-deposit-bank-transfer" className={`rounded-lg border px-3 py-2.5 text-left text-[9px] font-bold transition ${depositMethod === 'bank_transfer' ? 'border-[#4e8c91] bg-[#f1f8f8] text-[#315c67]' : 'border-[#e1e8ed] bg-white text-[#718195]'}`}>Bank transfer</button>
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <Field label="Amount"><input required inputMode="decimal" pattern="[0-9]+(\.[0-9]{1,2})?" min="0.01" max="1000000" value={amount} onChange={event => setAmount(event.target.value)} placeholder={`0.00 ${selectedWallet.currency}`} className={inputClass} data-testid="input-deposit-amount" /><span className="mt-1 block text-[8px] text-[#8492a1]">Maximum 1,000,000.00</span></Field>
+                <Field label="Payment reference (optional)"><input maxLength={70} value={sourceReference} onChange={event => setSourceReference(event.target.value)} placeholder="Reference or sender bank" className={inputClass} data-testid="input-deposit-reference" /></Field>
+              </div>
+              <div className="mt-2"><Field label="Note (optional)"><input maxLength={80} value={description} onChange={event => setDescription(event.target.value)} placeholder="Add a note" className={inputClass} data-testid="input-deposit-note" /></Field></div>
+              <div className="mt-2"><Field label="6-digit transaction PIN"><input required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="off" value={transactionPin} onChange={event => setTransactionPin(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="Enter your PIN" className={inputClass} data-testid="input-deposit-pin" /></Field></div>
+              {profileQuery.data?.transactionPinConfigured === false && <p className="mt-2 rounded-lg border border-[#eadfbe] bg-[#fbf7eb] px-3 py-2 text-[9px] leading-4 text-[#806b3d]">Set up your transaction PIN in <Link href="/profile" className="font-bold underline">Profile</Link> before submitting.</p>}
+              {(errorMessage || mutation.isError) && <p role="alert" className="mt-2 rounded-lg bg-[#fff1ef] px-3 py-2 text-[9px] text-[#a24940]" data-testid="status-deposit-error">{errorMessage || 'The request could not be recorded.'}</p>}
+              {result && <div role="status" className="mt-2 rounded-lg border border-[#d6e6e5] bg-[#f2f8f7] px-3 py-2 text-[9px] text-[#426e70]" data-testid="status-deposit-result"><p className="font-bold">Request recorded · {humanize(result.status)}</p><p className="mt-0.5">{result.message} · Ref {result.reference}</p></div>}
+              <button type="submit" disabled={mutation.isPending || transactionPin.length !== 6 || !amount || Number(amount) <= 0} className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-[#142f51] text-[10px] font-bold text-white transition hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50" data-testid="button-submit-deposit">{mutation.isPending ? 'Sending…' : 'Submit deposit request'} <ArrowRight size={13} /></button>
+            </form>
+          </div>
+        )}
+      </div>
+    );
+  }
   return (
     <>
       <PageHeading eyebrow={type === 'deposit' ? 'Deposit request' : 'Withdrawal request'} title={heading} subtitle={sub} />
