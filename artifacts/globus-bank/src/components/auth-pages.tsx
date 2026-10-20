@@ -72,8 +72,57 @@ export function ClerkSignInForm() {
   const [email, setEmail] = useState('');
   const [useEmail, setUseEmail] = useState(false);
   const [password, setPassword] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
+  const [verificationFactor, setVerificationFactor] = useState<
+    'first_email_code' | 'email_code' | 'phone_code' | 'totp' | 'backup_code' | null
+  >(null);
   const [error, setError] = useState('');
   const busy = fetchStatus === 'fetching' || lookupCustomerId.isPending;
+
+  const finishSignIn = async () => {
+    const finalized = await signIn.finalize({ navigate: () => undefined });
+    if (finalized.error) {
+      setError('Sign-in could not be completed. Please try again.');
+      return;
+    }
+    setLocation('/dashboard');
+  };
+
+  const startAdditionalVerification = async (): Promise<boolean> => {
+    let factor: typeof verificationFactor = null;
+    if (signIn.status === 'needs_second_factor') {
+      const available = new Set(signIn.supportedSecondFactors.map(item => item.strategy));
+      factor = (['email_code', 'phone_code', 'totp', 'backup_code'] as const)
+        .find(strategy => available.has(strategy)) ?? null;
+    } else if (
+      signIn.status === 'needs_first_factor' &&
+      signIn.supportedFirstFactors.some(item => item.strategy === 'email_code')
+    ) {
+      factor = 'first_email_code';
+    }
+
+    if (!factor) return false;
+
+    let result: { error: unknown | null };
+    if (factor === 'first_email_code') {
+      result = await signIn.emailCode.sendCode();
+    } else if (factor === 'email_code') {
+      result = await signIn.mfa.sendEmailCode();
+    } else if (factor === 'phone_code') {
+      result = await signIn.mfa.sendPhoneCode();
+    } else {
+      result = { error: null };
+    }
+    if (result.error) {
+      setError('We could not send a verification code. Try again or use password recovery.');
+      return true;
+    }
+
+    setVerificationCode('');
+    setVerificationFactor(factor);
+    setError('');
+    return true;
+  };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -88,18 +137,59 @@ export function ClerkSignInForm() {
         identifier,
         password,
       });
-      if (result.error || signIn.status !== 'complete') {
-        setError('Your sign-in details could not be verified. Check them and try again.');
+      if (signIn.status === 'needs_second_factor' || signIn.status === 'needs_first_factor') {
+        const verificationStarted = await startAdditionalVerification();
+        if (!verificationStarted) {
+          setError('Your account requires an additional sign-in method that this page cannot complete. Contact Globus support.');
+        }
         return;
       }
-      const finalized = await signIn.finalize({ navigate: () => undefined });
-      if (finalized.error) {
-        setError('Sign-in could not be completed. Please try again.');
+      if (result.error) {
+        setError('The Customer ID/email or password was not accepted. Check your details or use Forgot password.');
         return;
       }
-      setLocation('/dashboard');
+      if (signIn.status === 'needs_new_password') {
+        setError('This account needs a password update. Use Forgot password to choose a new password.');
+        return;
+      }
+      if (signIn.status !== 'complete') {
+        setError('Sign-in needs another verification step. Please use Forgot password or contact Globus support.');
+        return;
+      }
+      await finishSignIn();
     } catch {
-      setError('Your sign-in details could not be verified. Check them and try again.');
+      setError('Your sign-in could not be completed. Check your details and try again.');
+    }
+  };
+
+  const submitVerificationCode = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!verificationFactor || !verificationCode.trim()) return;
+    setError('');
+    try {
+      let result: { error: unknown | null };
+      if (verificationFactor === 'first_email_code') {
+        result = await signIn.emailCode.verifyCode({ code: verificationCode.trim() });
+      } else if (verificationFactor === 'email_code') {
+        result = await signIn.mfa.verifyEmailCode({ code: verificationCode.trim() });
+      } else if (verificationFactor === 'phone_code') {
+        result = await signIn.mfa.verifyPhoneCode({ code: verificationCode.trim() });
+      } else if (verificationFactor === 'totp') {
+        result = await signIn.mfa.verifyTOTP({ code: verificationCode.trim() });
+      } else {
+        result = await signIn.mfa.verifyBackupCode({ code: verificationCode.trim() });
+      }
+      if (result.error) {
+        setError('That verification code could not be accepted. Check it and try again.');
+        return;
+      }
+      if (signIn.status === 'complete') {
+        await finishSignIn();
+      } else {
+        setError('Additional verification is still required. Try another available sign-in method or contact Globus support.');
+      }
+    } catch {
+      setError('That verification code could not be accepted. Check it and try again.');
     }
   };
 
@@ -110,42 +200,84 @@ export function ClerkSignInForm() {
         <h1>Welcome back</h1>
         <p>{useEmail ? 'Sign in with your email address and password.' : 'Use your Globus Customer ID to access your account.'}</p>
       </div>
-      <form className="gb-auth-form" onSubmit={submit}>
-        <label className="gb-field-label" htmlFor={useEmail ? 'gb-signin-email' : 'gb-customer-id'}>
-          {useEmail ? 'Email address' : 'Customer ID'}
-        </label>
-        <input
-          id={useEmail ? 'gb-signin-email' : 'gb-customer-id'}
-          className={`gb-input ${useEmail ? '' : 'gb-customer-id-input'}`}
-          type={useEmail ? 'email' : 'text'}
-          autoComplete={useEmail ? 'email' : 'username'}
-          autoCapitalize={useEmail ? 'none' : 'characters'}
-          inputMode={useEmail ? 'email' : 'text'}
-          minLength={useEmail ? undefined : 7}
-          maxLength={useEmail ? 254 : 7}
-          pattern={useEmail ? undefined : '[A-Za-z0-9]{7}'}
-          value={useEmail ? email : customerId}
-          onChange={event => useEmail
-            ? setEmail(event.target.value)
-            : setCustomerId(event.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 7))}
-          required
-        />
-        <label className="gb-field-label gb-signin-spaced-label" htmlFor="gb-customer-password">Password</label>
-        <input
-          id="gb-customer-password"
-          className="gb-input"
-          type="password"
-          autoComplete="current-password"
-          value={password}
-          onChange={event => setPassword(event.target.value)}
-          required
-        />
-        {error && <p role="alert" className="gb-auth-error">{error}</p>}
-        <button className="gb-primary-button" type="submit" disabled={busy || (useEmail ? !email.trim() : customerId.length !== 7) || !password}>
-          <span>{busy ? 'Securely signing in…' : 'Sign in'}</span>
-          <span aria-hidden="true">→</span>
-        </button>
-      </form>
+      {verificationFactor ? (
+        <form className="gb-auth-form" onSubmit={submitVerificationCode}>
+          <p className="gb-switch-copy">
+            {verificationFactor === 'first_email_code' || verificationFactor === 'email_code'
+              ? 'Enter the verification code sent to your email.'
+              : verificationFactor === 'phone_code'
+                ? 'Enter the verification code sent to your phone.'
+                : verificationFactor === 'totp'
+                  ? 'Enter the code from your authenticator app.'
+                  : 'Enter one of your backup codes.'}
+          </p>
+          <label className="gb-field-label" htmlFor="gb-signin-verification-code">Verification code</label>
+          <input
+            id="gb-signin-verification-code"
+            className="gb-input"
+            type="text"
+            autoComplete="one-time-code"
+            inputMode="numeric"
+            value={verificationCode}
+            onChange={event => setVerificationCode(event.target.value)}
+            required
+          />
+          {error && <p role="alert" className="gb-auth-error">{error}</p>}
+          <button className="gb-primary-button" type="submit" disabled={busy || !verificationCode.trim()}>
+            <span>{busy ? 'Verifying…' : 'Verify & sign in'}</span>
+            <span aria-hidden="true">→</span>
+          </button>
+          <button
+            className="gb-login-recovery-action mt-3"
+            type="button"
+            onClick={() => {
+              void signIn.reset().catch(() => undefined);
+              setVerificationFactor(null);
+              setVerificationCode('');
+              setError('');
+            }}
+          >
+            Back to sign in
+          </button>
+        </form>
+      ) : (
+        <form className="gb-auth-form" onSubmit={submit}>
+          <label className="gb-field-label" htmlFor={useEmail ? 'gb-signin-email' : 'gb-customer-id'}>
+            {useEmail ? 'Email address' : 'Customer ID'}
+          </label>
+          <input
+            id={useEmail ? 'gb-signin-email' : 'gb-customer-id'}
+            className={`gb-input ${useEmail ? '' : 'gb-customer-id-input'}`}
+            type={useEmail ? 'email' : 'text'}
+            autoComplete={useEmail ? 'email' : 'username'}
+            autoCapitalize={useEmail ? 'none' : 'characters'}
+            inputMode={useEmail ? 'email' : 'text'}
+            minLength={useEmail ? undefined : 7}
+            maxLength={useEmail ? 254 : 7}
+            pattern={useEmail ? undefined : '[A-Za-z0-9]{7}'}
+            value={useEmail ? email : customerId}
+            onChange={event => useEmail
+              ? setEmail(event.target.value)
+              : setCustomerId(event.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 7))}
+            required
+          />
+          <label className="gb-field-label gb-signin-spaced-label" htmlFor="gb-customer-password">Password</label>
+          <input
+            id="gb-customer-password"
+            className="gb-input"
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={event => setPassword(event.target.value)}
+            required
+          />
+          {error && <p role="alert" className="gb-auth-error">{error}</p>}
+          <button className="gb-primary-button" type="submit" disabled={busy || (useEmail ? !email.trim() : customerId.length !== 7) || !password}>
+            <span>{busy ? 'Securely signing in…' : 'Sign in'}</span>
+            <span aria-hidden="true">→</span>
+          </button>
+        </form>
+      )}
       <div className="gb-login-recovery-actions">
         <button
           type="button"
