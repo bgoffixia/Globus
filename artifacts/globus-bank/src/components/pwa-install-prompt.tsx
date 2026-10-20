@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Download, Share2 } from "lucide-react";
+import { useLocation } from "wouter";
 import {
   Dialog,
   DialogContent,
@@ -43,11 +44,17 @@ function markPromptShown() {
 }
 
 export function PwaInstallPrompt() {
+  const [location] = useLocation();
   const installPrompt = useRef<InstallPromptEvent | null>(null);
   const [open, setOpen] = useState(false);
   const [isIos, setIsIos] = useState(false);
   const [canInstall, setCanInstall] = useState(false);
   const [installError, setInstallError] = useState("");
+  const isAuthPage =
+    location === "/sign-in" ||
+    location.startsWith("/sign-in/") ||
+    location === "/sign-up" ||
+    location.startsWith("/sign-up/");
 
   useEffect(() => {
     if (isAppInstalled()) return;
@@ -59,7 +66,7 @@ export function PwaInstallPrompt() {
     );
 
     const openIfEligible = () => {
-      if (isAppInstalled()) return;
+      if (isAuthPage || isAppInstalled()) return;
       let lastShown = 0;
       try {
         lastShown = Number(localStorage.getItem(PROMPT_SHOWN_KEY) ?? 0);
@@ -72,7 +79,7 @@ export function PwaInstallPrompt() {
     };
     const showTimer = window.setTimeout(openIfEligible, 900);
     const handleManualOpen = () => {
-      if (isAppInstalled()) return;
+      if (isAuthPage || isAppInstalled()) return;
       markPromptShown();
       setInstallError("");
       setOpen(true);
@@ -104,7 +111,11 @@ export function PwaInstallPrompt() {
       window.removeEventListener("appinstalled", handleInstalled);
       window.removeEventListener(OPEN_PROMPT_EVENT, handleManualOpen);
     };
-  }, []);
+  }, [isAuthPage]);
+
+  useEffect(() => {
+    if (isAuthPage) setOpen(false);
+  }, [isAuthPage]);
 
   const install = async () => {
     setInstallError("");
