@@ -148,6 +148,10 @@ test.describe('signed-in member pages at phone widths', () => {
             await expect(page.getByTestId('deposit-wallet-details')).toBeVisible();
             await expect(page.getByRole('heading', { name: 'Account details' })).toBeVisible();
             await expect(page.getByTestId('deposit-request-form')).toBeVisible();
+            await expect(page.getByTestId('input-deposit-reference')).toHaveCount(0);
+            await expect(page.getByTestId('input-deposit-note')).toHaveCount(0);
+            await expect(page.getByTestId('input-deposit-amount')).toBeVisible();
+            await expect(page.getByTestId('input-deposit-pin')).toBeVisible();
             await page.getByTestId('button-deposit-bank-card').click();
             await expect(page.getByTestId('deposit-card-options')).toBeVisible();
             await expect(page.getByTestId('deposit-card-form')).toBeVisible();

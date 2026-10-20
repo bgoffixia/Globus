@@ -521,7 +521,6 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
   const [accountHolder, setAccountHolder] = useState('');
   const [bankCountry, setBankCountry] = useState('');
   const [accountLastFour, setAccountLastFour] = useState('');
-  const [sourceReference, setSourceReference] = useState('');
   const [transactionPin, setTransactionPin] = useState('');
   const [copiedWalletReference, setCopiedWalletReference] = useState(false);
   const [result, setResult] = useState<{ reference: string; message: string; status: string } | null>(null);
@@ -557,14 +556,13 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
       return;
     }
     const requestDescription = type === 'deposit'
-      ? `${depositMethod === 'bank_card' ? 'Bank card' : 'Bank transfer'} deposit request${sourceReference.trim() ? ` · Reference: ${sourceReference.trim()}` : ''}${description.trim() ? ` · Note: ${description.trim()}` : ''}`.slice(0, 140)
+      ? `${depositMethod === 'bank_card' ? 'Bank card' : 'Bank transfer'} deposit request`
       : description.trim();
     mutation.mutate({ data: { type, currency: currency ?? preferredCurrencyFromQuery(), amount, ...(requestDescription ? { description: requestDescription } : {}), ...(requiresSavedMethod && selectedDestination ? { savedPaymentMethodId: selectedDestination.id, paymentMethod: currentPaymentMethod } : {}), transactionPin, idempotencyKey: crypto.randomUUID() } }, {
       onSuccess: request => {
         setResult(request);
         setAmount('');
         setDescription('');
-        setSourceReference('');
         setTransactionPin('');
         queryClient.invalidateQueries({ queryKey: getGetBankDashboardQueryKey() });
         queryClient.invalidateQueries({ queryKey: getListBankTransactionsQueryKey() });
@@ -724,11 +722,9 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
                   {!shouldShowDestinationForm && destinationsForMethod.length > 0 && <p className="mt-2 text-[8px] text-[#758596]">Select a saved card or add a new card reference.</p>}
                 </section>
               )}
-              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <div className="mt-3">
                 <Field label="Amount"><input required inputMode="decimal" pattern="[0-9]+(\.[0-9]{1,2})?" min="0.01" max="1000000" value={amount} onChange={event => setAmount(event.target.value)} placeholder={`0.00 ${selectedWallet.currency}`} className={inputClass} data-testid="input-deposit-amount" /><span className="mt-1 block text-[8px] text-[#8492a1]">Maximum 1,000,000.00</span></Field>
-                <Field label="Payment reference (optional)"><input maxLength={70} value={sourceReference} onChange={event => setSourceReference(event.target.value)} placeholder="Reference or sender bank" className={inputClass} data-testid="input-deposit-reference" /></Field>
               </div>
-              <div className="mt-2"><Field label="Note (optional)"><input maxLength={80} value={description} onChange={event => setDescription(event.target.value)} placeholder="Add a note" className={inputClass} data-testid="input-deposit-note" /></Field></div>
               <div className="mt-2"><Field label="6-digit transaction PIN"><input required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="off" value={transactionPin} onChange={event => setTransactionPin(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="Enter your PIN" className={inputClass} data-testid="input-deposit-pin" /></Field></div>
               {profileQuery.data?.transactionPinConfigured === false && <p className="mt-2 rounded-lg border border-[#eadfbe] bg-[#fbf7eb] px-3 py-2 text-[9px] leading-4 text-[#806b3d]">Set up your transaction PIN in <Link href="/profile" className="font-bold underline">Profile</Link> before submitting.</p>}
               {(errorMessage || mutation.isError) && <p role="alert" className="mt-2 rounded-lg bg-[#fff1ef] px-3 py-2 text-[9px] text-[#a24940]" data-testid="status-deposit-error">{errorMessage || 'The request could not be recorded.'}</p>}
