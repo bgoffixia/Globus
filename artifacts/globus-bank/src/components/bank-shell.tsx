@@ -4,7 +4,6 @@ import {
   ArrowLeftRight,
   Calculator,
   CircleHelp,
-  Contact,
   CreditCard,
   House,
   LayoutDashboard,
@@ -30,7 +29,6 @@ const primaryLinks = [
 const dashboardTools = [
   { href: '/dashboard', label: 'Home', ariaLabel: 'Dashboard overview', icon: LayoutDashboard },
   { href: '/wallets', label: 'Wallets', ariaLabel: 'Manage wallets', icon: WalletCards },
-  { href: '/customer-id', label: 'ID', ariaLabel: 'Customer ID', icon: Contact },
   { href: '/transactions', label: 'Activity', ariaLabel: 'Transaction activity', icon: ArrowLeftRight },
   { href: '/calculator', label: 'Convert', ariaLabel: 'Currency converter', icon: Calculator },
   { href: '/profile', label: 'Profile', ariaLabel: 'Your profile', icon: UserRound },
@@ -128,7 +126,7 @@ export function BankShell({ children }: { children: ReactNode }) {
         <main className={`page-enter mx-auto min-w-0 w-full max-w-[1440px] px-4 lg:px-10 ${isSingleViewportPage ? 'h-[calc(100dvh-64px)] overflow-y-auto overscroll-contain py-3 sm:h-[calc(100dvh-72px)] sm:px-8 sm:py-4' : isDashboard ? 'pb-24 pt-3 sm:px-8 sm:pb-24 sm:pt-4' : 'py-4 sm:px-8 sm:py-6'} ${isProfile ? 'profile-content-scroll' : ''}`}>{children}</main>
       </div>
       {isDashboard && (
-        <nav aria-label="Dashboard tools" data-testid="dashboard-bottom-toolbar" className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-6 border-t border-[#dfe7ed] bg-white/95 px-1 pt-1.5 pb-[calc(env(safe-area-inset-bottom)+.35rem)] shadow-[0_-8px_20px_rgba(20,47,81,.06)] backdrop-blur-md lg:left-[252px] lg:px-4">
+        <nav aria-label="Dashboard tools" data-testid="dashboard-bottom-toolbar" className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 border-t border-[#dfe7ed] bg-white/95 px-1 pt-1.5 pb-[calc(env(safe-area-inset-bottom)+.35rem)] shadow-[0_-8px_20px_rgba(20,47,81,.06)] backdrop-blur-md lg:left-[252px] lg:px-4">
           {dashboardTools.map(({ href, label, ariaLabel, icon: Icon }) => {
             const active = location === href || (href === '/transactions' && location.startsWith('/transactions'));
             return (
@@ -166,7 +164,6 @@ function pageLabel(path: string) {
     '/calculator': 'Currency converter',
     '/international-transfer': 'Transfer',
     '/transfer': 'Transfer',
-    '/customer-id': 'Customer ID',
     '/add-money': 'Deposit request',
     '/withdraw': 'Withdrawal request',
     '/profile': 'Profile',

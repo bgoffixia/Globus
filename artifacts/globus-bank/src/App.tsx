@@ -16,7 +16,6 @@ import {
   HomePage,
   InternationalTransferPage,
   ProviderRequestPage,
-  CustomerIdPage,
   ProfilePage,
   TransactionsPage,
   WalletsPage,
@@ -239,8 +238,8 @@ function ClerkRoutes() {
         <Route path="/international-transfer"><ProtectedPage><InternationalTransferPage /></ProtectedPage></Route>
         <Route path="/add-money"><ProtectedPage><ProviderRequestPage type="deposit" /></ProtectedPage></Route>
         <Route path="/withdraw"><ProtectedPage><ProviderRequestPage type="withdrawal" /></ProtectedPage></Route>
-        <Route path="/customer-id"><ProtectedPage><CustomerIdPage /></ProtectedPage></Route>
-        <Route path="/receive"><Redirect to="/customer-id" /></Route>
+        <Route path="/customer-id"><Redirect to="/profile" /></Route>
+        <Route path="/receive"><Redirect to="/profile" /></Route>
         <Route path="/profile"><ProtectedPage><ProfilePage /></ProtectedPage></Route>
         <Route path="/settings"><Redirect to="/profile" /></Route>
         <Route path="/admin/users/:userId"><ProtectedAdminPage /></Route>
@@ -256,7 +255,6 @@ function ClerkRoutes() {
         <Route path="/admin"><ProtectedAdminPage /></Route>
         <Route path="/help"><DisclosurePage path="/help" /></Route>
         <Route path="/fees"><DisclosurePage path="/fees" /></Route>
-        <Route path="/privacy"><DisclosurePage path="/privacy" /></Route>
         <Route path="/contact"><DisclosurePage path="/contact" /></Route>
         <Route component={NotFound} />
       </Switch>

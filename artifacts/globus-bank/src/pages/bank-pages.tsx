@@ -10,7 +10,6 @@ import {
   ChevronRight,
   CircleHelp,
   Clock3,
-  Contact,
   Copy,
   Calculator,
   Building2,
@@ -26,6 +25,7 @@ import {
   Search,
   ShieldCheck,
   Sparkles,
+  UserRound,
   WalletCards,
   Trash2,
   X,
@@ -250,7 +250,7 @@ export function HomePage() {
       <footer className="border-t border-[#e1e7ec] bg-white">
         <div className="mx-auto flex max-w-[1320px] flex-col gap-5 px-6 py-8 text-[11px] text-[#76869a] sm:flex-row sm:items-center sm:justify-between lg:px-12">
           <p>© {new Date().getFullYear()} Globus. A multi-currency software platform.</p>
-          <div className="flex flex-wrap gap-x-5 gap-y-2"><Link href="/fees">Fees</Link><Link href="/privacy">Privacy</Link><Link href="/contact">Contact</Link></div>
+          <div className="flex flex-wrap gap-x-5 gap-y-2"><Link href="/fees">Fees</Link><Link href="/contact">Contact</Link></div>
         </div>
       </footer>
       <div className="sr-only" aria-live="polite">{health.isError ? 'Service status unavailable' : health.data?.status ?? 'Checking service status'}</div>
@@ -325,7 +325,7 @@ export function DashboardPage() {
             {selectedWallet && <span className="shrink-0 rounded-full bg-[#eff5f6] px-2 py-1 text-[8px] font-bold text-[#456c73]">{selectedWallet.currency} wallet</span>}
           </div>
           <nav role="toolbar" aria-label="Dashboard actions" className="grid min-w-0 grid-cols-3 gap-2">
-            <ActionTile href="/customer-id" icon={<Contact size={16} />} label="Customer ID" testId="dashboard-quick-customer-id" />
+            <ActionTile href="/profile" icon={<UserRound size={16} />} label="Profile" testId="dashboard-quick-profile" />
             <ActionTile href={currencyActionHref('/add-money', actionCurrency)} icon={<WalletCards size={16} />} label="Deposit" testId="dashboard-quick-deposit" />
             <ActionTile href={currencyActionHref('/withdraw', actionCurrency)} icon={<ArrowUpRight size={16} />} label="Withdraw" testId="dashboard-quick-withdraw" />
             <ActionTile href={currencyActionHref('/transfer', actionCurrency)} icon={<ArrowLeftRight size={16} />} label="Transfer" testId="dashboard-quick-transfer" />
@@ -857,50 +857,6 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
   );
 }
 
-export function CustomerIdPage() {
-  const profile = useGetBankProfile({ query: { queryKey: getGetBankProfileQueryKey() } });
-  const walletsQuery = useListBankWallets({ query: { queryKey: getListBankWalletsQueryKey() } });
-  const [copied, setCopied] = useState(false);
-  const identifier = profile.data?.customerId ?? '';
-  const copyIdentifier = async () => {
-    try {
-      await navigator.clipboard.writeText(identifier);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1800);
-    } catch {
-      setCopied(false);
-    }
-  };
-  return (
-    <>
-      <PageHeading eyebrow="Member access" title="Your Customer ID" subtitle="Use this unique seven-character ID with your password to sign in." />
-      {profile.isLoading ? <PageSkeleton /> : profile.isError ? <Failure title="Your account ID isn’t available" retry={() => profile.refetch()} /> : (
-        <div className="mt-8 grid gap-6 xl:grid-cols-[1fr_.78fr]">
-          <section className="balance-panel rounded-[22px] p-6 text-white sm:p-9">
-            <span className="grid h-12 w-12 place-items-center rounded-2xl bg-white/10 text-[#a5d8d8]"><WalletCards size={22} /></span>
-            <p className="mt-8 text-[11px] font-semibold uppercase tracking-[.16em] text-[#bfd0dd]">Globus Customer ID</p>
-            <p className="mt-3 break-all font-mono text-[19px] font-semibold tracking-wide sm:text-[24px]">{identifier}</p>
-            <button onClick={copyIdentifier} className="mt-6 inline-flex items-center gap-2 rounded-lg bg-white px-4 py-3 text-[11px] font-bold text-[#17314f] hover:bg-[#ecf3f5]"><Copy size={14} />{copied ? 'Copied' : 'Copy Customer ID'}</button>
-            <p className="mt-7 max-w-lg text-[11px] leading-5 text-[#c1d0db]">Keep this ID for sign-in. It identifies your Globus account and is not a bank account or payment address.</p>
-          </section>
-          <section className="rounded-[22px] border border-[#e1e8ee] bg-white p-6 sm:p-8">
-            <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#518c91]">Account access</p>
-            <h2 className="mt-3 text-[15px] font-bold text-[#2c425c]">Use your Customer ID to sign in</h2>
-            <p className="mt-3 text-[11px] leading-5 text-[#7d8b9b]">Enter this seven-character ID and your password on the Globus sign-in page. Keep it private; it is not a bank account number or payment address.</p>
-          </section>
-        </div>
-      )}
-      <section className="mt-8 rounded-[22px] border border-[#e1e8ee] bg-white p-6">
-        <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#518c91]">Your wallets</p>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {walletsQuery.isLoading ? <ListSkeleton /> : walletsQuery.isError ? <InlineError text="Wallet balances are unavailable." retry={() => walletsQuery.refetch()} /> : (walletsQuery.data ?? []).map(wallet => <WalletMini key={wallet.id} wallet={wallet} />)}
-        </div>
-        <Link href="/add-money" className="mt-6 inline-flex items-center gap-2 text-[11px] font-bold text-[#367b82]">Request a deposit <ArrowRight size={14} /></Link>
-      </section>
-    </>
-  );
-}
-
 export function ProfilePage() {
   const queryClient = useQueryClient();
   const query = useGetBankProfile({ query: { queryKey: getGetBankProfileQueryKey() } });
@@ -1144,7 +1100,7 @@ export function ProfilePage() {
             <Field label="Date of birth"><input type="date" value={dateOfBirth} onChange={event => setDateOfBirth(event.target.value)} className={inputClass} /></Field>
             <Field label="Email address"><input disabled value={profile?.email ?? ''} className={`${inputClass} bg-[#f4f7f9] text-[#8190a0]`} /></Field>
           </div>
-          <label className="mt-3 flex items-start gap-2.5 text-[10px] leading-4 text-[#728296]"><input type="checkbox" checked={accepted} onChange={event => setAccepted(event.target.checked)} className="mt-0.5 accent-[#387e84]" /><span>I confirm these profile details are accurate and accept the Globus account terms and privacy notice.</span></label>
+          <label className="mt-3 flex items-start gap-2.5 text-[10px] leading-4 text-[#728296]"><input type="checkbox" checked={accepted} onChange={event => setAccepted(event.target.checked)} className="mt-0.5 accent-[#387e84]" /><span>I confirm these profile details are accurate and accept the Globus account terms.</span></label>
           {note && <p role="status" className={`mt-3 rounded-lg px-3 py-2 text-[10px] ${note.startsWith('Profile saved') ? 'bg-[#f0f8f4] text-[#41755f]' : 'bg-[#fff1ef] text-[#a24940]'}`}>{note}</p>}
           <button disabled={!accepted || update.isPending} className="mt-3 h-10 rounded-lg bg-[#142f51] px-4 text-[10px] font-bold text-white hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-45">{update.isPending ? 'Saving profile…' : 'Save profile'}</button>
         </form>
@@ -1980,9 +1936,8 @@ export function AdminUserManagementPage() {
 }
 
 const disclosureCopy: Record<string, { eyebrow: string; title: string; intro: string; sections: [string, string][] }> = {
-  '/help': { eyebrow: 'Support', title: 'Help with your Globus account.', intro: 'Understand how account activity and requests are handled.', sections: [['How do deposits work?', 'Choose a bank-card or bank-transfer request. An administrator must approve it before your Globus wallet balance changes. Globus does not charge a card or receive an outside deposit.'], ['How do withdrawals work?', 'A pending withdrawal reserves the requested amount. Approval records the change in Globus; rejection releases the reserve. No outside payout is made.'], ['Can I send someone money?', 'Globus does not support member-to-member transfers. Transfer requests record the details in Globus but do not contact the recipient’s bank or send outside funds.'], ['How do international requests work?', 'Frankfurter reference rates are used to show converted amounts, with Grey available as a rate-only fallback. Rate quotes do not execute transfers; Globus does not contact the destination bank or send outside funds.'], ['Where can I find my Customer ID?', 'Open Customer ID in your account navigation. It identifies your Globus account, not a bank account or payment address.']] },
+  '/help': { eyebrow: 'Support', title: 'Help with your Globus account.', intro: 'Understand how account activity and requests are handled.', sections: [['How do deposits work?', 'Choose a bank-card or bank-transfer request. An administrator must approve it before your Globus wallet balance changes. Globus does not charge a card or receive an outside deposit.'], ['How do withdrawals work?', 'A pending withdrawal reserves the requested amount. Approval records the change in Globus; rejection releases the reserve. No outside payout is made.'], ['Can I send someone money?', 'Globus does not support member-to-member transfers. Transfer requests record the details in Globus but do not contact the recipient’s bank or send outside funds.'], ['How do international requests work?', 'Frankfurter reference rates are used to show converted amounts, with Grey available as a rate-only fallback. Rate quotes do not execute transfers; Globus does not contact the destination bank or send outside funds.'], ['Where can I find my Customer ID?', 'Open your Profile page to view or copy your Customer ID. It identifies your Globus account, not a bank account or payment address.']] },
   '/fees': { eyebrow: 'Fees and rates', title: 'Understand transfer requests and rates.', intro: 'Globus does not process external deposits, payouts, or card payments.', sections: [['Rate quotes', 'Globus uses Frankfurter reference rates, with Grey as a fallback source. Availability depends on currency-pair support; quotes can change and are not confirmation of a payment.'], ['Fees', 'Globus records account requests and does not charge an outside transaction fee through a payment provider.'], ['Currency balances', 'Currency wallets are recorded separately. The rate and converted amount shown on a transfer receipt match the quote used when Globus recorded that request.']] },
-  '/privacy': { eyebrow: 'Privacy notice', title: 'Your information deserves clarity.', intro: 'This page summarizes account information Globus uses to provide its software services.', sections: [['Account details', 'Profile details and account identifiers associate internal records with your account. Authentication is provided through Clerk.'], ['Private identity documents', 'Documents submitted for internal review are stored privately and accessible only to the submitting member and authorized Globus admins. Files are deleted after approval or rejection. The verification status and an audit record of the decision remain. This review is not legal, bank or government identity verification.'], ['Operational records', 'Transactions and requests may include references, status, currency, amount, descriptions and timestamps. For international transfer requests, only the recipient account’s last four characters are retained.'], ['Your choices', 'Use your Profile page to review your details and manage identity documents before submitting them. Contact the support team with questions about account information or platform operations.']] },
   '/contact': { eyebrow: 'Contact', title: 'Contact information is not configured yet.', intro: 'A verified support channel has not been configured for Globus.', sections: [['Account help', 'Visit Help for guidance about the software. Do not include passwords, verification codes or sensitive payment details in support requests.'], ['Recorded activity', 'Include the transaction reference when asking about an account record.'], ['Operational disclosure', 'Globus support cannot complete, trace or reverse an external payment through this product.']] },
 };
 

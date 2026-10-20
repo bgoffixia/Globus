@@ -293,10 +293,10 @@ export function EmailRecoverySignInForm() {
               <output id="gb-recovered-customer-id" className="gb-input gb-recovered-customer-id">{customerId}</output>
             </>
           ) : (
-            <p className="gb-switch-copy">Your password is reset. Sign in to view your Customer ID in Settings.</p>
+            <p className="gb-switch-copy">Your password is reset. Sign in to view your Customer ID on your Profile page.</p>
           )}
-          <button className="gb-primary-button" type="button" onClick={() => setLocation(customerId ? '/dashboard' : '/settings')}>
-            <span>{customerId ? 'Continue to your account' : 'Open Settings'}</span>
+          <button className="gb-primary-button" type="button" onClick={() => setLocation(customerId ? '/dashboard' : '/profile')}>
+            <span>{customerId ? 'Continue to your account' : 'Open Profile'}</span>
             <span aria-hidden="true">→</span>
           </button>
         </div>
@@ -375,7 +375,7 @@ export function ClerkSignUpForm() {
       return;
     }
     if (!acceptedTerms) {
-      setError('Accept the Globus account terms and privacy notice to continue.');
+      setError('Accept the Globus account terms to continue.');
       return;
     }
 
@@ -489,7 +489,7 @@ export function ClerkSignUpForm() {
               <input type="checkbox" checked={acceptedTerms} onChange={event => setAcceptedTerms(event.target.checked)} required />
               <span>
                 I confirm my profile details are accurate and accept the Globus{' '}
-                account terms and <Link href="/privacy">privacy notice</Link>.
+                account terms.
               </span>
             </label>
 
