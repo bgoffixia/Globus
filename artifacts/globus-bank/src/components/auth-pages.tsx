@@ -307,26 +307,37 @@ export function EmailRecoverySignInForm() {
   const [notice, setNotice] = useState('');
   const busy = fetchStatus === 'fetching';
 
-  const sendRecoveryCode = async () => {
+  const sendRecoveryCode = async (startNewAttempt: boolean) => {
     setError('');
     setNotice('');
+    setVerificationCode('');
     try {
-      await signIn.create({ identifier: email.trim() });
-      await signIn.resetPasswordEmailCode.sendCode();
+      if (startNewAttempt) {
+        const created = await signIn.create({ identifier: email.trim() });
+        if (created.error) {
+          setNotice('If an account can be recovered using that address, a verification code has been sent. Use only the newest code; an earlier code may no longer work.');
+          return;
+        }
+      }
+      const sent = await signIn.resetPasswordEmailCode.sendCode();
+      if (sent.error) {
+        setNotice('If an account can be recovered using that address, a verification code has been sent. Use only the newest code; an earlier code may no longer work.');
+        return;
+      }
     } catch {
       // Keep the same response for unknown addresses and other recovery failures.
     }
-    setNotice('If an account can be recovered using that address, a verification code has been sent.');
+    setNotice('If an account can be recovered using that address, a verification code has been sent. Use only the newest code; an earlier code may no longer work.');
   };
 
   const requestCode = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    await sendRecoveryCode();
+    await sendRecoveryCode(true);
     setStage('code');
   };
 
   const resendCode = async () => {
-    await sendRecoveryCode();
+    await sendRecoveryCode(false);
   };
 
   const changeRecoveryEmail = async () => {
@@ -345,13 +356,13 @@ export function EmailRecoverySignInForm() {
         code: verificationCode.trim(),
       });
       if (verified.error || signIn.status !== 'needs_new_password') {
-        setError('We could not verify those recovery details. Check the code and try again.');
+        setError('That code was not accepted. It may have expired or been replaced by a newer request. Send another code and use the newest email.');
         return;
       }
       setStage('password');
       setNotice('');
     } catch {
-      setError('We could not verify those recovery details. Check the code and try again.');
+      setError('That code was not accepted. It may have expired or been replaced by a newer request. Send another code and use the newest email.');
     }
   };
 
