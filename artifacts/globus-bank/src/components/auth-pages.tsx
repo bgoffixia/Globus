@@ -118,7 +118,6 @@ export function ClerkSignInForm() {
           minLength={7}
           maxLength={7}
           pattern="[A-Za-z0-9]{7}"
-          placeholder="7-character ID"
           value={customerId}
           onChange={event => setCustomerId(event.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 7))}
           required

@@ -4,81 +4,114 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 14px;
+  gap: 12px;
   padding: 32px 16px;
+  color: #173451;
 }
 
 .globus-loader--fullscreen {
   min-height: 100dvh;
-  background: #f5f8fa;
+  background:
+    radial-gradient(ellipse at 50% 44%, rgb(255 255 255 / 96%) 0, rgb(249 251 251 / 92%) 34%, transparent 68%),
+    linear-gradient(145deg, #f6f8fa 0%, #edf2f5 100%);
 }
 
 .globus-loader__stage {
   position: relative;
   display: grid;
-  width: 112px;
-  height: 112px;
+  width: 148px;
+  height: 148px;
   place-items: center;
+  isolation: isolate;
+}
+
+.globus-loader__stage::before,
+.globus-loader__stage::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  content: "";
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.globus-loader__stage::before {
+  width: 96px;
+  height: 96px;
+  border: 1px solid rgb(31 77 121 / 9%);
+  background: radial-gradient(circle, rgb(255 255 255 / 94%) 0%, rgb(240 246 248 / 78%) 66%, rgb(229 237 242 / 35%) 100%);
+  box-shadow: 0 14px 38px rgb(23 52 81 / 8%), inset 0 1px 0 rgb(255 255 255 / 95%);
+}
+
+.globus-loader__stage::after {
+  width: 128px;
+  height: 128px;
+  border: 1px dashed rgb(37 91 137 / 16%);
+  animation: globus-loader-pulse 2.8s ease-in-out infinite;
 }
 
 .globus-loader__mark {
   position: relative;
   z-index: 1;
-  width: 76px;
-  height: 58px;
+  width: 70px;
+  height: 70px;
   object-fit: contain;
-  filter: drop-shadow(0 5px 10px rgb(20 47 81 / 12%));
+  filter: drop-shadow(0 5px 10px rgb(20 47 81 / 15%));
 }
 
 .globus-loader__orbit {
   position: absolute;
+  z-index: 2;
   top: 50%;
   left: 50%;
-  width: 104px;
-  height: 45px;
-  border: 1.5px solid rgb(214 164 47 / 65%);
+  width: 138px;
+  height: 54px;
+  border: 1.5px solid rgb(193 146 42 / 72%);
   border-radius: 50%;
-  animation: globus-orbit-spin 2.4s linear infinite;
+  animation: globus-orbit-spin 2.2s linear infinite;
+  will-change: rotate;
 }
 
 .globus-loader__orbit--gold {
-  transform: translate(-50%, -50%) rotate(-28deg);
+  transform: translate(-50%, -50%) rotate(-32deg);
 }
 
 .globus-loader__orbit--blue {
-  width: 90px;
-  height: 34px;
-  border-color: rgb(45 114 180 / 62%);
+  width: 122px;
+  height: 43px;
+  border-color: rgb(35 99 159 / 64%);
   animation-direction: reverse;
-  animation-duration: 3.2s;
-  transform: translate(-50%, -50%) rotate(48deg);
+  animation-duration: 3.4s;
+  transform: translate(-50%, -50%) rotate(56deg);
 }
 
 .globus-loader__orbit i {
   position: absolute;
   top: 50%;
-  right: 7px;
-  width: 8px;
-  height: 8px;
+  right: 10px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
-  background: #d6a42f;
-  box-shadow: 0 0 12px rgb(214 164 47 / 55%);
+  background: #c79b37;
+  box-shadow: 0 0 0 3px rgb(199 155 55 / 13%), 0 0 14px rgb(199 155 55 / 48%);
   transform: translateY(-50%);
 }
 
 .globus-loader__orbit--blue i {
-  width: 6px;
-  height: 6px;
-  background: #2d72b4;
-  box-shadow: 0 0 10px rgb(45 114 180 / 48%);
+  width: 7px;
+  height: 7px;
+  background: #286da5;
+  box-shadow: 0 0 0 3px rgb(40 109 165 / 12%), 0 0 12px rgb(40 109 165 / 42%);
 }
 
 .globus-loader__label {
   margin: 0;
-  color: #718296;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  color: #5e7183;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 @keyframes globus-orbit-spin {
@@ -87,8 +120,16 @@
   }
 }
 
+@keyframes globus-loader-pulse {
+  50% {
+    opacity: 0.4;
+    scale: 0.96;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .globus-loader__orbit {
+  .globus-loader__orbit,
+  .globus-loader__stage::after {
     animation: none;
   }
 }

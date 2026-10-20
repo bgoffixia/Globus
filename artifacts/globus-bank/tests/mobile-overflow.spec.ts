@@ -78,6 +78,10 @@ async function openAndCheck(page: Page, path: string, width: number, context: st
   } else {
     await expect(page.locator('.gb-auth-shell')).toBeVisible();
   }
+  if (path === '/sign-in') {
+    await expect(page.locator('#gb-customer-id')).toHaveCount(1);
+    expect(await page.locator('#gb-customer-id').getAttribute('placeholder')).toBeNull();
+  }
   await expectNoHorizontalOverflow(page, `${context} at ${width}px (${path})`);
 }
 
@@ -108,6 +112,7 @@ test.describe('signed-in member pages at phone widths', () => {
     '/send',
     '/receive',
     '/add-money',
+    '/calculator',
     '/withdraw',
     '/profile',
     '/settings',
@@ -128,6 +133,24 @@ test.describe('signed-in member pages at phone widths', () => {
           documentHeight.document,
           `Member page at ${width}px (${path}) should keep scrolling inside its content panel`,
         ).toBeLessThanOrEqual(documentHeight.viewport + 1);
+        if (path === '/add-money') {
+          await expect(page.getByTestId('deposit-workflow')).toBeVisible();
+          await expect(page.getByText('Administrator review required')).toHaveCount(0);
+          await expect(page.getByText('Account activity is recorded in Globus. A deposit request does not transfer outside funds.')).toHaveCount(0);
+          const firstWallet = page.locator('[data-testid^="button-select-deposit-wallet-"]').first();
+          if (await firstWallet.count()) {
+            await firstWallet.click();
+            await expect(page.getByTestId('deposit-wallet-details')).toBeVisible();
+            await expect(page.getByRole('heading', { name: 'Account details' })).toBeVisible();
+            await expect(page.getByTestId('deposit-request-form')).toBeVisible();
+          }
+        }
+        if (path === '/calculator') {
+          await expect(page.getByTestId('currency-calculator')).toBeVisible();
+          await expect(page.getByTestId('select-source-currency')).toBeVisible();
+          await expect(page.getByTestId('select-destination-currency')).toBeVisible();
+          await expect(page.getByTestId('input-conversion-amount')).toBeVisible();
+        }
         if (path === '/dashboard') {
           const toolbar = page.getByTestId('dashboard-bottom-toolbar');
           const quickActions = page.getByTestId('dashboard-action-toolbar');

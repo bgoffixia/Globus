@@ -628,34 +628,22 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
   }
   return (
     <>
-      <PageHeading eyebrow={type === 'deposit' ? 'Deposit request' : 'Withdrawal request'} title={heading} subtitle={sub} />
+      <PageHeading eyebrow="Withdrawal request" title={heading} subtitle={sub} />
       <div className="mt-7 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <form onSubmit={submit} className="rounded-[22px] border border-[#e1e8ee] bg-white p-5 sm:p-8">
-          {type === 'deposit' ? (
-            <div className="mb-6 rounded-xl border border-[#eadfbe] bg-[#fbf7eb] p-4">
-              <div className="flex gap-3"><Clock3 size={17} className="mt-0.5 shrink-0 text-[#a17e36]" /><div><p className="text-[12px] font-bold text-[#715b2c]">Administrator review required</p><p className="mt-1 text-[11px] leading-5 text-[#89784f]">These options submit a request only. Globus does not charge a card or provide bank-payment instructions.</p></div></div>
-              <div className="mt-4 grid gap-2 sm:grid-cols-2" role="group" aria-label="Deposit request method">
-                <button type="button" onClick={() => setDepositMethod('bank_card')} aria-pressed={depositMethod === 'bank_card'} className={`rounded-lg border px-3 py-3 text-left text-[11px] font-bold transition ${depositMethod === 'bank_card' ? 'border-[#4e8c91] bg-white text-[#315c67]' : 'border-[#eadfbe] bg-transparent text-[#826f48]'}`}>Bank card request</button>
-                <button type="button" onClick={() => setDepositMethod('bank_transfer')} aria-pressed={depositMethod === 'bank_transfer'} className={`rounded-lg border px-3 py-3 text-left text-[11px] font-bold transition ${depositMethod === 'bank_transfer' ? 'border-[#4e8c91] bg-white text-[#315c67]' : 'border-[#eadfbe] bg-transparent text-[#826f48]'}`}>Bank transfer request</button>
-              </div>
-              <p className="mt-3 text-[10px] leading-5 text-[#89784f]">Do not enter card numbers, expiry dates, security codes, or online banking credentials. A Globus wallet reference is not a receiving bank account.</p>
-              <div className="mt-4"><Field label="Optional payment reference or sender-bank name"><input maxLength={70} value={sourceReference} onChange={event => setSourceReference(event.target.value)} placeholder="Reference only — no card or account credentials" className={inputClass} /></Field></div>
-            </div>
-          ) : (
-            <div className="mb-7 rounded-xl border border-[#eadfbe] bg-[#fbf7eb] p-4">
-              <div className="flex gap-3"><Clock3 size={17} className="mt-0.5 shrink-0 text-[#a17e36]" /><div><p className="text-[12px] font-bold text-[#715b2c]">Administrator review required</p><p className="mt-1 text-[11px] leading-5 text-[#89784f]">The requested amount remains reserved while pending. Approval records the withdrawal in Globus; no outside payout is made.</p></div></div>
-            </div>
-          )}
+          <div className="mb-7 rounded-xl border border-[#eadfbe] bg-[#fbf7eb] p-4">
+            <div className="flex gap-3"><Clock3 size={17} className="mt-0.5 shrink-0 text-[#a17e36]" /><div><p className="text-[12px] font-bold text-[#715b2c]">Administrator review required</p><p className="mt-1 text-[11px] leading-5 text-[#89784f]">The requested amount remains reserved while pending. Approval records the withdrawal in Globus; no outside payout is made.</p></div></div>
+          </div>
           <div className="grid gap-5 sm:grid-cols-2">
-            <Field label="Wallet currency"><select value={currency} onChange={event => setCurrency(event.target.value as Currency)} className={inputClass}>{currencies.map(item => <option key={item} value={item}>{item} · {currencyNames[item]}</option>)}</select></Field>
-            <Field label="Amount"><input required inputMode="decimal" pattern="[0-9]+(\.[0-9]{1,2})?" min="0.01" max={type === 'withdrawal' ? available : 1000000} value={amount} onChange={event => setAmount(event.target.value)} placeholder="0.00" className={inputClass} /><span className="mt-1.5 block text-[10px] text-[#8391a0]">{type === 'withdrawal' ? `Available to withdraw: ${formatMoney(available, currency)}` : 'Maximum request: 1,000,000.00'}</span></Field>
+            <Field label="Wallet currency"><select value={currency ?? 'USD'} onChange={event => setCurrency(event.target.value as Currency)} className={inputClass}>{currencies.map(item => <option key={item} value={item}>{item} · {currencyNames[item]}</option>)}</select></Field>
+            <Field label="Amount"><input required inputMode="decimal" pattern="[0-9]+(\.[0-9]{1,2})?" min="0.01" max={available} value={amount} onChange={event => setAmount(event.target.value)} placeholder="0.00" className={inputClass} /><span className="mt-1.5 block text-[10px] text-[#8391a0]">{`Available to withdraw: ${formatMoney(available, currency ?? 'USD')}`}</span></Field>
           </div>
           <div className="mt-5"><Field label="Note for the administrator (optional)"><input maxLength={80} value={description} onChange={event => setDescription(event.target.value)} placeholder="Add context for your request" className={inputClass} /></Field></div>
           <div className="mt-5"><Field label="6-digit transaction PIN"><input required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="off" value={transactionPin} onChange={event => setTransactionPin(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="Enter your PIN" className={inputClass} /></Field></div>
           {profileQuery.data?.transactionPinConfigured === false && <p className="mt-4 rounded-lg border border-[#eadfbe] bg-[#fbf7eb] px-4 py-3 text-[10px] leading-5 text-[#806b3d]">Set up your transaction PIN in <Link href="/profile" className="font-bold underline">Profile</Link> before submitting this request.</p>}
           {(errorMessage || mutation.isError) && <p role="alert" className="mt-5 rounded-lg bg-[#fff1ef] px-4 py-3 text-[11px] text-[#a24940]">{errorMessage || 'The request could not be recorded.'}</p>}
           {result && <div role="status" className="mt-5 rounded-xl border border-[#d6e6e5] bg-[#f2f8f7] p-4 text-[12px] text-[#426e70]"><p className="font-bold">Request recorded · {humanize(result.status)}</p><p className="mt-1">{result.message}</p><p className="mt-2 font-mono text-[10px]">Reference {result.reference}</p></div>}
-          <button disabled={mutation.isPending || transactionPin.length !== 6 || !amount || Number(amount) <= 0 || (type === 'withdrawal' && Number(amount) > available)} className="mt-7 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#142f51] text-[12px] font-bold text-white transition hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">{mutation.isPending ? 'Sending for review…' : 'Submit request'} <ArrowRight size={15} /></button>
+          <button disabled={mutation.isPending || transactionPin.length !== 6 || !amount || Number(amount) <= 0 || Number(amount) > available} className="mt-7 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#142f51] text-[12px] font-bold text-white transition hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">{mutation.isPending ? 'Sending for review…' : 'Submit request'} <ArrowRight size={15} /></button>
           <p className="mt-3 text-center text-[10px] text-[#8794a1]">The request and review result are saved to your Globus activity.</p>
         </form>
         <div className="rounded-[22px] border border-[#e1e8ee] bg-white p-6">
