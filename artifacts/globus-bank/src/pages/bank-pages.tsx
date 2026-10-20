@@ -139,7 +139,6 @@ export function HomePage() {
           <img src={`${import.meta.env.BASE_URL}globus-wordmark.png`} alt="Globus Bank — Your world. Our priority." className="h-auto w-[108px] sm:w-[156px]" />
         </Link>
         <nav className="hidden items-center gap-8 text-[13px] font-medium text-[#607187] md:flex">
-          <Link href="/about" className="hover:text-[#142d4d]">About</Link>
           <Link href="/fees" className="hover:text-[#142d4d]">Fees</Link>
           <Link href="/help" className="hover:text-[#142d4d]">Help</Link>
         </nav>
@@ -176,7 +175,6 @@ export function HomePage() {
             <Link href={isSignedIn ? '/dashboard' : '/sign-up'} className="inline-flex w-full items-center justify-center gap-3 rounded-xl bg-[#152f50] px-5 py-3.5 text-[13px] font-bold text-white shadow-[0_10px_24px_rgba(18,43,75,.16)] transition hover:-translate-y-0.5 hover:bg-[#1b4168] sm:w-auto sm:px-6 sm:py-4">
               {isSignedIn ? 'Go to your dashboard' : 'Get started'} <ArrowRight size={16} />
             </Link>
-            <Link href="/about" className="rounded-xl px-5 py-3.5 text-center text-[13px] font-bold text-[#36506c] hover:bg-[#eaf0f4] sm:py-4">How Globus works</Link>
           </div>
           <div className="mt-8 flex min-w-0 flex-wrap gap-x-5 gap-y-3 text-[10px] font-medium text-[#68798d] sm:mt-11 sm:gap-x-7 sm:text-[11px]">
             <span className="inline-flex items-center gap-2"><ShieldCheck size={15} className="text-[#478b8e]" /> Globus account activity clearly identified</span>
@@ -252,7 +250,7 @@ export function HomePage() {
       <footer className="border-t border-[#e1e7ec] bg-white">
         <div className="mx-auto flex max-w-[1320px] flex-col gap-5 px-6 py-8 text-[11px] text-[#76869a] sm:flex-row sm:items-center sm:justify-between lg:px-12">
           <p>© {new Date().getFullYear()} Globus. A multi-currency software platform.</p>
-          <div className="flex flex-wrap gap-x-5 gap-y-2"><Link href="/about">About</Link><Link href="/fees">Fees</Link><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link><Link href="/contact">Contact</Link></div>
+          <div className="flex flex-wrap gap-x-5 gap-y-2"><Link href="/fees">Fees</Link><Link href="/privacy">Privacy</Link><Link href="/contact">Contact</Link></div>
         </div>
       </footer>
       <div className="sr-only" aria-live="polite">{health.isError ? 'Service status unavailable' : health.data?.status ?? 'Checking service status'}</div>
@@ -1982,16 +1980,15 @@ export function AdminUserManagementPage() {
 }
 
 const disclosureCopy: Record<string, { eyebrow: string; title: string; intro: string; sections: [string, string][] }> = {
-  '/about': { eyebrow: 'About Globus', title: 'Clear multi-currency account activity.', intro: 'Globus records multi-currency wallets, routed transfer requests and administrative balance adjustments in its application database.', sections: [['A platform, not a bank', 'Globus is not a licensed bank, payment institution or custodian. It does not accept, hold or send outside funds.'], ['Account balances', 'Wallet balances and transactions are records in Globus. No external bank or payment service processes these operations.'], ['Built for clear review', 'Balances, requests and activity include statuses, references and audit records to make each change traceable.']] },
   '/help': { eyebrow: 'Support', title: 'Help with your Globus account.', intro: 'Understand how account activity and requests are handled.', sections: [['How do deposits work?', 'Choose a bank-card or bank-transfer request. An administrator must approve it before your Globus wallet balance changes. Globus does not charge a card or receive an outside deposit.'], ['How do withdrawals work?', 'A pending withdrawal reserves the requested amount. Approval records the change in Globus; rejection releases the reserve. No outside payout is made.'], ['Can I send someone money?', 'Globus does not support member-to-member transfers. Transfer requests record the details in Globus but do not contact the recipient’s bank or send outside funds.'], ['How do international requests work?', 'Frankfurter reference rates are used to show converted amounts, with Grey available as a rate-only fallback. Rate quotes do not execute transfers; Globus does not contact the destination bank or send outside funds.'], ['Where can I find my Customer ID?', 'Open Customer ID in your account navigation. It identifies your Globus account, not a bank account or payment address.']] },
   '/fees': { eyebrow: 'Fees and rates', title: 'Understand transfer requests and rates.', intro: 'Globus does not process external deposits, payouts, or card payments.', sections: [['Rate quotes', 'Globus uses Frankfurter reference rates, with Grey as a fallback source. Availability depends on currency-pair support; quotes can change and are not confirmation of a payment.'], ['Fees', 'Globus records account requests and does not charge an outside transaction fee through a payment provider.'], ['Currency balances', 'Currency wallets are recorded separately. The rate and converted amount shown on a transfer receipt match the quote used when Globus recorded that request.']] },
   '/privacy': { eyebrow: 'Privacy notice', title: 'Your information deserves clarity.', intro: 'This page summarizes account information Globus uses to provide its software services.', sections: [['Account details', 'Profile details and account identifiers associate internal records with your account. Authentication is provided through Clerk.'], ['Private identity documents', 'Documents submitted for internal review are stored privately and accessible only to the submitting member and authorized Globus admins. Files are deleted after approval or rejection. The verification status and an audit record of the decision remain. This review is not legal, bank or government identity verification.'], ['Operational records', 'Transactions and requests may include references, status, currency, amount, descriptions and timestamps. For international transfer requests, only the recipient account’s last four characters are retained.'], ['Your choices', 'Use your Profile page to review your details and manage identity documents before submitting them. Contact the support team with questions about account information or platform operations.']] },
-  '/terms': { eyebrow: 'Terms of use', title: 'Globus account records, not bank deposits.', intro: 'Globus records account activity in its own database and does not move outside funds.', sections: [['No banking service', 'Globus is not a licensed bank and does not accept deposits, provide credit, custody funds or promise payment execution.'], ['Account records', 'Displayed balances and transactions represent entries in Globus. An approved deposit request records a wallet credit; an approved withdrawal records a wallet debit. Neither action moves outside funds.'], ['Use responsibly', 'Do not rely on Globus balances or status labels as proof of funds held by a bank or as a promise of payment.']] },
   '/contact': { eyebrow: 'Contact', title: 'Contact information is not configured yet.', intro: 'A verified support channel has not been configured for Globus.', sections: [['Account help', 'Visit Help for guidance about the software. Do not include passwords, verification codes or sensitive payment details in support requests.'], ['Recorded activity', 'Include the transaction reference when asking about an account record.'], ['Operational disclosure', 'Globus support cannot complete, trace or reverse an external payment through this product.']] },
 };
 
 export function DisclosurePage({ path }: { path: string }) {
-  const data = disclosureCopy[path] ?? disclosureCopy['/about'];
+  const data = disclosureCopy[path];
+  if (!data) return null;
   return (
     <div className="public-viewport-scroll bg-[#f5f8fa]">
       <header className="mx-auto flex max-w-[1200px] items-center justify-between gap-4 px-4 py-6 sm:px-6"><Link href="/" aria-label="Globus Bank home" className="flex shrink-0 items-center"><img src={`${import.meta.env.BASE_URL}globus-wordmark.png`} alt="Globus Bank — Your world. Our priority." className="h-auto w-[128px] sm:w-[156px]" /></Link><Link href="/" className="text-[12px] font-semibold text-[#456077] hover:text-[#347e83]">Back to home</Link></header>

@@ -489,7 +489,7 @@ export function ClerkSignUpForm() {
               <input type="checkbox" checked={acceptedTerms} onChange={event => setAcceptedTerms(event.target.checked)} required />
               <span>
                 I confirm my profile details are accurate and accept the Globus{' '}
-                <Link href="/terms">account terms</Link> and <Link href="/privacy">privacy notice</Link>.
+                account terms and <Link href="/privacy">privacy notice</Link>.
               </span>
             </label>
 
