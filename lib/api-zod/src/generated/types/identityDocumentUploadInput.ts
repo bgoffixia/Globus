@@ -10,7 +10,7 @@ import type { IdentityDocumentContentType } from './identityDocumentContentType'
 export interface IdentityDocumentUploadInput {
   contentType: IdentityDocumentContentType;
   /**
-     * @minimum 1
+     * @minimum 5242880
      * @maximum 10485760
      */
   sizeBytes: number;

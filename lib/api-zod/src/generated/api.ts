@@ -120,6 +120,75 @@ export const ListBankWalletsResponse = zod.array(ListBankWalletsResponseItem)
 
 
 /**
+ * @summary List the authenticated user's saved masked withdrawal destinations
+ */
+export const listBankWithdrawalDestinationsResponseLastFourRegExp = new RegExp('^[A-Za-z0-9]{4}$');
+
+
+export const ListBankWithdrawalDestinationsResponseItem = zod.object({
+  "id": zod.string().uuid(),
+  "method": zod.enum(['bank_card', 'bank_transfer']),
+  "cardBrand": zod.enum(['visa', 'mastercard', 'amex', 'discover', 'other']).optional(),
+  "bankName": zod.string().optional(),
+  "accountHolder": zod.string().optional(),
+  "country": zod.string().optional(),
+  "lastFour": zod.string().regex(listBankWithdrawalDestinationsResponseLastFourRegExp),
+  "createdAt": zod.coerce.date()
+})
+export const ListBankWithdrawalDestinationsResponse = zod.array(ListBankWithdrawalDestinationsResponseItem)
+
+
+/**
+ * @summary Save a masked withdrawal destination for future requests
+ */
+export const createBankWithdrawalDestinationBodyBankNameMax = 120;
+
+export const createBankWithdrawalDestinationBodyAccountHolderMax = 120;
+
+export const createBankWithdrawalDestinationBodyCountryMin = 2;
+export const createBankWithdrawalDestinationBodyCountryMax = 80;
+
+export const createBankWithdrawalDestinationBodyLastFourRegExp = new RegExp('^[A-Za-z0-9]{4}$');
+
+
+export const CreateBankWithdrawalDestinationBody = zod.object({
+  "method": zod.enum(['bank_card', 'bank_transfer']),
+  "cardBrand": zod.enum(['visa', 'mastercard', 'amex', 'discover', 'other']).optional(),
+  "bankName": zod.string().min(1).max(createBankWithdrawalDestinationBodyBankNameMax).optional(),
+  "accountHolder": zod.string().min(1).max(createBankWithdrawalDestinationBodyAccountHolderMax).optional(),
+  "country": zod.string().min(createBankWithdrawalDestinationBodyCountryMin).max(createBankWithdrawalDestinationBodyCountryMax).optional(),
+  "lastFour": zod.string().regex(createBankWithdrawalDestinationBodyLastFourRegExp)
+})
+
+export const createBankWithdrawalDestinationResponseLastFourRegExp = new RegExp('^[A-Za-z0-9]{4}$');
+
+
+export const CreateBankWithdrawalDestinationResponse = zod.object({
+  "id": zod.string().uuid(),
+  "method": zod.enum(['bank_card', 'bank_transfer']),
+  "cardBrand": zod.enum(['visa', 'mastercard', 'amex', 'discover', 'other']).optional(),
+  "bankName": zod.string().optional(),
+  "accountHolder": zod.string().optional(),
+  "country": zod.string().optional(),
+  "lastFour": zod.string().regex(createBankWithdrawalDestinationResponseLastFourRegExp),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Remove a saved withdrawal destination from future use
+ */
+export const DeleteBankWithdrawalDestinationParams = zod.object({
+  "destinationId": zod.coerce.string().uuid()
+})
+
+export const DeleteBankWithdrawalDestinationResponse = zod.object({
+  "id": zod.string().uuid(),
+  "deleted": zod.literal(true)
+})
+
+
+/**
  * @summary Search the authenticated user's transaction history
  */
 export const listBankTransactionsQuerySearchMax = 100;
@@ -237,8 +306,8 @@ export const ListMyIdentityDocumentsResponse = zod.array(ListMyIdentityDocuments
 /**
  * @summary Request a private upload URL for an identity document
  */
-export const createIdentityDocumentUploadUrlBodySizeBytesMax = 10485760;
 export const createIdentityDocumentUploadUrlBodySizeBytesMin = 5242880;
+export const createIdentityDocumentUploadUrlBodySizeBytesMax = 10485760;
 
 
 
@@ -603,7 +672,9 @@ export const CreateLedgerRequestBody = zod.object({
   "amount": zod.string().regex(createLedgerRequestBodyAmountRegExp),
   "description": zod.string().max(createLedgerRequestBodyDescriptionMax).optional(),
   "idempotencyKey": zod.string().min(createLedgerRequestBodyIdempotencyKeyMin).max(createLedgerRequestBodyIdempotencyKeyMax),
-  "transactionPin": zod.string().regex(createLedgerRequestBodyTransactionPinRegExp)
+  "transactionPin": zod.string().regex(createLedgerRequestBodyTransactionPinRegExp),
+  "withdrawalDestinationId": zod.string().uuid().optional(),
+  "withdrawalMethod": zod.enum(['bank_card', 'bank_transfer']).optional()
 })
 
 export const CreateLedgerRequestResponse = zod.object({
@@ -963,6 +1034,8 @@ export const ListAdminLedgerRequestsResponseItem = zod.object({
   "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
   "amount": zod.string(),
   "description": zod.string(),
+  "withdrawalMethod": zod.enum(['bank_card', 'bank_transfer']).optional(),
+  "withdrawalDestinationSummary": zod.string().optional(),
   "status": zod.enum(['pending_review', 'pending_provider_setup', 'approved', 'rejected']),
   "createdAt": zod.coerce.date()
 })
@@ -1002,6 +1075,8 @@ export const ReviewAdminLedgerRequestResponse = zod.object({
   "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
   "amount": zod.string(),
   "description": zod.string(),
+  "withdrawalMethod": zod.enum(['bank_card', 'bank_transfer']).optional(),
+  "withdrawalDestinationSummary": zod.string().optional(),
   "status": zod.enum(['pending_review', 'pending_provider_setup', 'approved', 'rejected']),
   "createdAt": zod.coerce.date()
 })

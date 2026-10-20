@@ -13,17 +13,21 @@ import {
   Contact,
   Copy,
   Calculator,
+  Building2,
+  CreditCard,
   Download,
   FileText,
   Globe2,
   History,
   LockKeyhole,
   Printer,
+  Plus,
   RefreshCw,
   Search,
   ShieldCheck,
   Sparkles,
   WalletCards,
+  Trash2,
   X,
 } from 'lucide-react';
 import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
@@ -47,10 +51,12 @@ import {
   getListMyIdentityDocumentsQueryKey,
   getListBankTransactionsQueryKey,
   getListBankWalletsQueryKey,
+  getListBankWithdrawalDestinationsQueryKey,
   useCreateAdminFunding,
   useCreateIdentityDocumentUploadUrl,
   useCompleteIdentityDocumentUpload,
   useCreateBankTransfer,
+  useCreateBankWithdrawalDestination,
   useCreateInternationalTransferRequest,
   useCreateLedgerRequest,
   useGetAdminAccess,
@@ -67,6 +73,7 @@ import {
   useListMyIdentityDocuments,
   useListBankTransactions,
   useListBankWallets,
+  useListBankWithdrawalDestinations,
   useListBankExchangeRates,
   useListInternationalTransferRequests,
   useUpdateAdminUserStatus,
@@ -78,9 +85,10 @@ import {
   useUpdateBankProfile,
   useUpsertBankExchangeRate,
   useDeleteMyIdentityDocument,
+  useDeleteBankWithdrawalDestination,
   useSubmitIdentityDocuments,
 } from '@workspace/api-client-react';
-import type { AdminLedgerRequest, AdminUser, BankTransaction, IdentityDocument, InternationalTransferRequest, Wallet } from '@workspace/api-client-react';
+import type { AdminLedgerRequest, AdminUser, BankTransaction, IdentityDocument, InternationalTransferRequest, Wallet, WithdrawalDestination } from '@workspace/api-client-react';
 import { GlobusLoader } from '@/components/globus-loader';
 import { BankSelect } from '@/components/bank-select';
 import { CountrySelect } from '@/components/country-select';
@@ -488,12 +496,31 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
   const queryClient = useQueryClient();
   const profileQuery = useGetBankProfile({ query: { queryKey: getGetBankProfileQueryKey() } });
   const walletsQuery = useListBankWallets({ query: { queryKey: getListBankWalletsQueryKey() } });
+  const withdrawalDestinationsQuery = useListBankWithdrawalDestinations({
+    query: {
+      queryKey: getListBankWithdrawalDestinationsQueryKey(),
+      enabled: type === 'withdrawal',
+    },
+  });
   const mutation = useCreateLedgerRequest();
+  const createWithdrawalDestination = useCreateBankWithdrawalDestination();
+  const deleteWithdrawalDestination = useDeleteBankWithdrawalDestination();
   const [currency, setCurrency] = useState<Currency | null>(() => type === 'deposit' ? currencyFromQuery() : preferredCurrencyFromQuery());
-  const [depositWalletSelected, setDepositWalletSelected] = useState(() => type !== 'deposit' || currencyFromQuery() !== null);
+  const [depositWalletSelected, setDepositWalletSelected] = useState(() => type === 'deposit' && currencyFromQuery() !== null);
+  const [withdrawalWalletSelected, setWithdrawalWalletSelected] = useState(false);
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [depositMethod, setDepositMethod] = useState<'bank_card' | 'bank_transfer'>('bank_transfer');
+  const [withdrawalMethod, setWithdrawalMethod] = useState<'bank_card' | 'bank_transfer'>('bank_transfer');
+  const [withdrawalDestinationId, setWithdrawalDestinationId] = useState('');
+  const [showDestinationForm, setShowDestinationForm] = useState(false);
+  const [destinationError, setDestinationError] = useState('');
+  const [cardBrand, setCardBrand] = useState<'visa' | 'mastercard' | 'amex' | 'discover' | 'other'>('visa');
+  const [cardLastFour, setCardLastFour] = useState('');
+  const [bankName, setBankName] = useState('');
+  const [accountHolder, setAccountHolder] = useState('');
+  const [bankCountry, setBankCountry] = useState('');
+  const [accountLastFour, setAccountLastFour] = useState('');
   const [sourceReference, setSourceReference] = useState('');
   const [transactionPin, setTransactionPin] = useState('');
   const [copiedWalletReference, setCopiedWalletReference] = useState(false);
@@ -501,6 +528,15 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
   const [errorMessage, setErrorMessage] = useState('');
   const selectedWallet = walletsQuery.data?.find(wallet => wallet.currency === currency);
   const available = Number(selectedWallet?.available ?? 0);
+  const destinationsForMethod = (withdrawalDestinationsQuery.data ?? []).filter(
+    destination => destination.method === withdrawalMethod,
+  );
+  const selectedDestination = destinationsForMethod.find(
+    destination => destination.id === withdrawalDestinationId,
+  );
+  const shouldShowDestinationForm =
+    showDestinationForm ||
+    (withdrawalDestinationsQuery.isSuccess && destinationsForMethod.length === 0);
   const heading = type === 'deposit' ? 'Request a deposit' : 'Request a withdrawal';
   const sub = type === 'deposit'
     ? 'Choose a request method and ask an administrator to review a credit to your selected wallet.'
@@ -509,10 +545,14 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
     event.preventDefault();
     setResult(null);
     setErrorMessage('');
+    if (type === 'withdrawal' && !selectedDestination) {
+      setErrorMessage('Choose or save a withdrawal destination before continuing.');
+      return;
+    }
     const requestDescription = type === 'deposit'
       ? `${depositMethod === 'bank_card' ? 'Bank card' : 'Bank transfer'} deposit request${sourceReference.trim() ? ` · Reference: ${sourceReference.trim()}` : ''}${description.trim() ? ` · Note: ${description.trim()}` : ''}`.slice(0, 140)
       : description.trim();
-    mutation.mutate({ data: { type, currency: currency ?? preferredCurrencyFromQuery(), amount, ...(requestDescription ? { description: requestDescription } : {}), transactionPin, idempotencyKey: crypto.randomUUID() } }, {
+    mutation.mutate({ data: { type, currency: currency ?? preferredCurrencyFromQuery(), amount, ...(requestDescription ? { description: requestDescription } : {}), ...(type === 'withdrawal' && selectedDestination ? { withdrawalDestinationId: selectedDestination.id, withdrawalMethod } : {}), transactionPin, idempotencyKey: crypto.randomUUID() } }, {
       onSuccess: request => {
         setResult(request);
         setAmount('');

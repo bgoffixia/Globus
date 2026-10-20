@@ -128,6 +128,29 @@ export const bankWalletsTable = pgTable(
   ],
 );
 
+export const bankSavedPaymentMethodsTable = pgTable(
+  "bank_saved_payment_methods",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => bankUsersTable.id, { onDelete: "cascade" }),
+    method: text("method").notNull(),
+    cardBrand: text("card_brand"),
+    bankName: text("bank_name"),
+    accountHolder: text("account_holder"),
+    lastFour: text("last_four").notNull(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("bank_saved_payment_method_user_idx").on(table.userId, table.createdAt),
+    index("bank_saved_payment_method_active_idx").on(table.userId, table.deletedAt),
+  ],
+);
+
 export const bankTransactionsTable = pgTable(
   "bank_transactions",
   {
@@ -206,6 +229,12 @@ export const bankSandboxRequestsTable = pgTable(
     type: bankRequestTypeEnum("type").notNull(),
     currency: bankCurrencyEnum("currency").notNull(),
     destinationCurrency: bankCurrencyEnum("destination_currency"),
+    savedPaymentMethodId: uuid("saved_payment_method_id").references(
+      () => bankSavedPaymentMethodsTable.id,
+      { onDelete: "set null" },
+    ),
+    paymentMethod: text("payment_method"),
+    paymentMethodSummary: text("payment_method_summary"),
     amountMinor: bigint("amount_minor", { mode: "bigint" }).notNull(),
     status: text("status").notNull().default("pending_provider_setup"),
     createdAt: timestamp("created_at", { withTimezone: true })

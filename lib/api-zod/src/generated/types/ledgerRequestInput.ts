@@ -7,6 +7,7 @@
  */
 import type { ActiveCurrencyCode } from './activeCurrencyCode';
 import type { LedgerRequestInputType } from './ledgerRequestInputType';
+import type { LedgerRequestInputWithdrawalMethod } from './ledgerRequestInputWithdrawalMethod';
 
 export interface LedgerRequestInput {
   type: LedgerRequestInputType;
@@ -22,4 +23,6 @@ export interface LedgerRequestInput {
   idempotencyKey: string;
   /** @pattern ^[0-9]{6}$ */
   transactionPin: string;
+  withdrawalDestinationId?: string;
+  withdrawalMethod?: LedgerRequestInputWithdrawalMethod;
 }

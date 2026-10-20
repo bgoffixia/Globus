@@ -95,6 +95,56 @@ paths:
                   $ref: "#/components/schemas/Wallet"
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /bank/saved-payment-methods:
+    get:
+      operationId: listBankSavedPaymentMethods
+      tags: [bank]
+      summary: List the authenticated user's saved masked payment methods
+      responses:
+        "200":
+          description: Saved masked destinations
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/SavedPaymentMethod" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      operationId: createBankSavedPaymentMethod
+      tags: [bank]
+      summary: Save a masked card or bank-account reference for future requests
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SavedPaymentMethodInput" }
+      responses:
+        "201":
+          description: Saved masked destination
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SavedPaymentMethod" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /bank/saved-payment-methods/{paymentMethodId}:
+    delete:
+      operationId: deleteBankSavedPaymentMethod
+      tags: [bank]
+      summary: Remove a saved payment method from future use
+      parameters:
+        - name: paymentMethodId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Saved destination removed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DeleteSavedPaymentMethodResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /bank/transactions:
     get:
       operationId: listBankTransactions
@@ -1502,7 +1552,37 @@ components:
         description: { type: string, maxLength: 140 }
         idempotencyKey: { type: string, minLength: 16, maxLength: 100 }
         transactionPin: { type: string, pattern: "^[0-9]{6}$" }
+        savedPaymentMethodId: { type: string, format: uuid }
+        paymentMethod: { type: string, enum: [bank_card, bank_transfer] }
       required: [type, currency, amount, idempotencyKey, transactionPin]
+    SavedPaymentMethodInput:
+      type: object
+      properties:
+        method: { type: string, enum: [bank_card, bank_transfer] }
+        cardBrand: { type: string, enum: [visa, mastercard, amex, discover, other] }
+        bankName: { type: string, minLength: 1, maxLength: 120 }
+        accountHolder: { type: string, minLength: 1, maxLength: 120 }
+        country: { type: string, minLength: 2, maxLength: 80 }
+        lastFour: { type: string, pattern: "^[A-Za-z0-9]{4}$" }
+      required: [method, lastFour]
+    SavedPaymentMethod:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        method: { type: string, enum: [bank_card, bank_transfer] }
+        cardBrand: { type: string, enum: [visa, mastercard, amex, discover, other] }
+        bankName: { type: string }
+        accountHolder: { type: string }
+        country: { type: string }
+        lastFour: { type: string, pattern: "^[A-Za-z0-9]{4}$" }
+        createdAt: { type: string, format: date-time }
+      required: [id, method, lastFour, createdAt]
+    DeleteSavedPaymentMethodResponse:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        deleted: { type: boolean, enum: [true] }
+      required: [id, deleted]
     LedgerRequest:
       type: object
       properties:
@@ -1528,6 +1608,8 @@ components:
         currency: { $ref: "#/components/schemas/CurrencyCode" }
         amount: { type: string }
         description: { type: string }
+        paymentMethod: { type: string, enum: [bank_card, bank_transfer] }
+        paymentMethodSummary: { type: string }
         status: { type: string, enum: [pending_review, pending_provider_setup, approved, rejected] }
         createdAt: { type: string, format: date-time }
       required: [id, transactionId, reference, userId, memberName, email, type, currency, amount, description, status, createdAt]

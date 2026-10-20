@@ -63,6 +63,7 @@ import type {
   CreateIncomingExternalTransfer410,
   CustomerIdLookupInput,
   CustomerIdLookupResult,
+  DeleteWithdrawalDestinationResponse,
   ExternalTransferInput,
   ForbiddenResponse,
   GetBankExchangeRateQuoteParams,
@@ -89,7 +90,9 @@ import type {
   TransactionPinUpdateResult,
   TransferInput,
   UnauthorizedResponse,
-  Wallet
+  Wallet,
+  WithdrawalDestination,
+  WithdrawalDestinationInput
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -515,6 +518,245 @@ export function useListBankWallets<TData = Awaited<ReturnType<typeof listBankWal
 
 
 
+
+export const getListBankWithdrawalDestinationsUrl = () => {
+
+
+
+
+  return `/api/bank/withdrawal-destinations`
+}
+
+/**
+ * @summary List the authenticated user's saved masked withdrawal destinations
+ */
+export const listBankWithdrawalDestinations = async ( options?: Parameters<typeof customFetch>[1]): Promise<WithdrawalDestination[]> => {
+
+  return customFetch<WithdrawalDestination[]>(getListBankWithdrawalDestinationsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListBankWithdrawalDestinationsQueryKey = () => {
+    return [
+    `/api/bank/withdrawal-destinations`
+    ] as const;
+    }
+
+
+export const getListBankWithdrawalDestinationsQueryOptions = <TData = Awaited<ReturnType<typeof listBankWithdrawalDestinations>>, TError = ErrorType<UnauthorizedResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listBankWithdrawalDestinations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListBankWithdrawalDestinationsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listBankWithdrawalDestinations>>> = ({ signal }) => listBankWithdrawalDestinations({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listBankWithdrawalDestinations>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListBankWithdrawalDestinationsQueryResult = NonNullable<Awaited<ReturnType<typeof listBankWithdrawalDestinations>>>
+export type ListBankWithdrawalDestinationsQueryError = ErrorType<UnauthorizedResponse>
+
+
+/**
+ * @summary List the authenticated user's saved masked withdrawal destinations
+ */
+
+export function useListBankWithdrawalDestinations<TData = Awaited<ReturnType<typeof listBankWithdrawalDestinations>>, TError = ErrorType<UnauthorizedResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listBankWithdrawalDestinations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListBankWithdrawalDestinationsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateBankWithdrawalDestinationUrl = () => {
+
+
+
+
+  return `/api/bank/withdrawal-destinations`
+}
+
+/**
+ * @summary Save a masked withdrawal destination for future requests
+ */
+export const createBankWithdrawalDestination = async (withdrawalDestinationInput: WithdrawalDestinationInput, options?: Parameters<typeof customFetch>[1]): Promise<WithdrawalDestination> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<WithdrawalDestination>(getCreateBankWithdrawalDestinationUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(withdrawalDestinationInput)
+  }
+);}
+
+
+
+
+
+export const getCreateBankWithdrawalDestinationMutationKey = () => ['createBankWithdrawalDestination'] as const;
+
+export const getCreateBankWithdrawalDestinationMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createBankWithdrawalDestination>>, TError,CreateBankWithdrawalDestinationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createBankWithdrawalDestination>>, TError,CreateBankWithdrawalDestinationMutationVariables, TContext> => {
+
+const mutationKey = getCreateBankWithdrawalDestinationMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createBankWithdrawalDestination>>, CreateBankWithdrawalDestinationMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createBankWithdrawalDestination(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateBankWithdrawalDestinationMutationResult = NonNullable<Awaited<ReturnType<typeof createBankWithdrawalDestination>>>
+    export type CreateBankWithdrawalDestinationMutationBody = BodyType<WithdrawalDestinationInput>
+    export type CreateBankWithdrawalDestinationMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ConflictResponse>
+    export type CreateBankWithdrawalDestinationMutationVariables = {data: BodyType<WithdrawalDestinationInput>}
+
+    /**
+ * @summary Save a masked withdrawal destination for future requests
+ */
+export const useCreateBankWithdrawalDestination = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createBankWithdrawalDestination>>, TError,CreateBankWithdrawalDestinationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createBankWithdrawalDestination>>,
+        TError,
+        CreateBankWithdrawalDestinationMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateBankWithdrawalDestinationMutationOptions(options));
+    }
+
+export const getDeleteBankWithdrawalDestinationUrl = (destinationId: string,) => {
+
+
+
+
+  return `/api/bank/withdrawal-destinations/${destinationId}`
+}
+
+/**
+ * @summary Remove a saved withdrawal destination from future use
+ */
+export const deleteBankWithdrawalDestination = async (destinationId: string, options?: Parameters<typeof customFetch>[1]): Promise<DeleteWithdrawalDestinationResponse> => {
+
+  return customFetch<DeleteWithdrawalDestinationResponse>(getDeleteBankWithdrawalDestinationUrl(destinationId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteBankWithdrawalDestinationMutationKey = () => ['deleteBankWithdrawalDestination'] as const;
+
+export const getDeleteBankWithdrawalDestinationMutationOptions = <TError = ErrorType<UnauthorizedResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteBankWithdrawalDestination>>, TError,DeleteBankWithdrawalDestinationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteBankWithdrawalDestination>>, TError,DeleteBankWithdrawalDestinationMutationVariables, TContext> => {
+
+const mutationKey = getDeleteBankWithdrawalDestinationMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteBankWithdrawalDestination>>, DeleteBankWithdrawalDestinationMutationVariables> = (props) => {
+          const {destinationId} = props ?? {};
+
+          return  deleteBankWithdrawalDestination(destinationId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteBankWithdrawalDestinationMutationResult = NonNullable<Awaited<ReturnType<typeof deleteBankWithdrawalDestination>>>
+
+    export type DeleteBankWithdrawalDestinationMutationError = ErrorType<UnauthorizedResponse | NotFoundResponse>
+    export type DeleteBankWithdrawalDestinationMutationVariables = {destinationId: string}
+
+    /**
+ * @summary Remove a saved withdrawal destination from future use
+ */
+export const useDeleteBankWithdrawalDestination = <TError = ErrorType<UnauthorizedResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteBankWithdrawalDestination>>, TError,DeleteBankWithdrawalDestinationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteBankWithdrawalDestination>>,
+        TError,
+        DeleteBankWithdrawalDestinationMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteBankWithdrawalDestinationMutationOptions(options));
+    }
 
 export const getListBankTransactionsUrl = (params?: ListBankTransactionsParams,) => {
   const normalizedParams = new URLSearchParams();

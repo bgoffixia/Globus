@@ -374,7 +374,7 @@ export interface IdentityDocument {
 export interface IdentityDocumentUploadInput {
   contentType: IdentityDocumentContentType;
   /**
-     * @minimum 1
+     * @minimum 5242880
      * @maximum 10485760
      */
   sizeBytes: number;
@@ -501,6 +501,14 @@ export const LedgerRequestInputType = {
   withdrawal: 'withdrawal',
 } as const;
 
+export type LedgerRequestInputWithdrawalMethod = typeof LedgerRequestInputWithdrawalMethod[keyof typeof LedgerRequestInputWithdrawalMethod];
+
+
+export const LedgerRequestInputWithdrawalMethod = {
+  bank_card: 'bank_card',
+  bank_transfer: 'bank_transfer',
+} as const;
+
 export interface LedgerRequestInput {
   type: LedgerRequestInputType;
   currency: ActiveCurrencyCode;
@@ -515,6 +523,85 @@ export interface LedgerRequestInput {
   idempotencyKey: string;
   /** @pattern ^[0-9]{6}$ */
   transactionPin: string;
+  withdrawalDestinationId?: string;
+  withdrawalMethod?: LedgerRequestInputWithdrawalMethod;
+}
+
+export type WithdrawalDestinationInputMethod = typeof WithdrawalDestinationInputMethod[keyof typeof WithdrawalDestinationInputMethod];
+
+
+export const WithdrawalDestinationInputMethod = {
+  bank_card: 'bank_card',
+  bank_transfer: 'bank_transfer',
+} as const;
+
+export type WithdrawalDestinationInputCardBrand = typeof WithdrawalDestinationInputCardBrand[keyof typeof WithdrawalDestinationInputCardBrand];
+
+
+export const WithdrawalDestinationInputCardBrand = {
+  visa: 'visa',
+  mastercard: 'mastercard',
+  amex: 'amex',
+  discover: 'discover',
+  other: 'other',
+} as const;
+
+export interface WithdrawalDestinationInput {
+  method: WithdrawalDestinationInputMethod;
+  cardBrand?: WithdrawalDestinationInputCardBrand;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  bankName?: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  accountHolder?: string;
+  /**
+     * @minLength 2
+     * @maxLength 80
+     */
+  country?: string;
+  /** @pattern ^[A-Za-z0-9]{4}$ */
+  lastFour: string;
+}
+
+export type WithdrawalDestinationMethod = typeof WithdrawalDestinationMethod[keyof typeof WithdrawalDestinationMethod];
+
+
+export const WithdrawalDestinationMethod = {
+  bank_card: 'bank_card',
+  bank_transfer: 'bank_transfer',
+} as const;
+
+export type WithdrawalDestinationCardBrand = typeof WithdrawalDestinationCardBrand[keyof typeof WithdrawalDestinationCardBrand];
+
+
+export const WithdrawalDestinationCardBrand = {
+  visa: 'visa',
+  mastercard: 'mastercard',
+  amex: 'amex',
+  discover: 'discover',
+  other: 'other',
+} as const;
+
+export interface WithdrawalDestination {
+  id: string;
+  method: WithdrawalDestinationMethod;
+  cardBrand?: WithdrawalDestinationCardBrand;
+  bankName?: string;
+  accountHolder?: string;
+  country?: string;
+  /** @pattern ^[A-Za-z0-9]{4}$ */
+  lastFour: string;
+  createdAt: string;
+}
+
+export interface DeleteWithdrawalDestinationResponse {
+  id: string;
+  deleted: true;
 }
 
 export type LedgerRequestType = typeof LedgerRequestType[keyof typeof LedgerRequestType];
@@ -553,6 +640,14 @@ export const AdminLedgerRequestType = {
   withdrawal: 'withdrawal',
 } as const;
 
+export type AdminLedgerRequestWithdrawalMethod = typeof AdminLedgerRequestWithdrawalMethod[keyof typeof AdminLedgerRequestWithdrawalMethod];
+
+
+export const AdminLedgerRequestWithdrawalMethod = {
+  bank_card: 'bank_card',
+  bank_transfer: 'bank_transfer',
+} as const;
+
 export type AdminLedgerRequestStatus = typeof AdminLedgerRequestStatus[keyof typeof AdminLedgerRequestStatus];
 
 
@@ -574,6 +669,8 @@ export interface AdminLedgerRequest {
   currency: CurrencyCode;
   amount: string;
   description: string;
+  withdrawalMethod?: AdminLedgerRequestWithdrawalMethod;
+  withdrawalDestinationSummary?: string;
   status: AdminLedgerRequestStatus;
   createdAt: string;
 }

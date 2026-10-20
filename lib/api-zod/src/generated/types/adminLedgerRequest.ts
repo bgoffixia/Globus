@@ -7,6 +7,7 @@
  */
 import type { AdminLedgerRequestStatus } from './adminLedgerRequestStatus';
 import type { AdminLedgerRequestType } from './adminLedgerRequestType';
+import type { AdminLedgerRequestWithdrawalMethod } from './adminLedgerRequestWithdrawalMethod';
 import type { CurrencyCode } from './currencyCode';
 
 export interface AdminLedgerRequest {
@@ -20,6 +21,8 @@ export interface AdminLedgerRequest {
   currency: CurrencyCode;
   amount: string;
   description: string;
+  withdrawalMethod?: AdminLedgerRequestWithdrawalMethod;
+  withdrawalDestinationSummary?: string;
   status: AdminLedgerRequestStatus;
   createdAt: Date;
 }
