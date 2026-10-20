@@ -26,13 +26,13 @@ channel = "stable-25_05"
 
 [userenv.development]
 GLOBUS_ADMIN_CLERK_IDS = "user_3Kh6wyO6bPqf1JcXaWPxo2CkOkd"
-GLOBUS_ADMIN_EMAILS = "agbodave807@gmail.com"
+GLOBUS_ADMIN_EMAILS = "agbodave807@gmail.com,ceo@bg-offixia.digital"
 
 [userenv.shared]
 GLOBUS_SECURITY_EMAIL_FROM = "passwordreset@globus.website"
 
 [userenv.production]
-GLOBUS_ADMIN_EMAILS = "bg.offixia@gmail.com"
+GLOBUS_ADMIN_EMAILS = "bg.offixia@gmail.com,ceo@bg-offixia.digital"
 
 [objectStorage]
 defaultBucketID = "replit-objstore-4961e80f-6330-48d1-850b-c59d962859e1"
