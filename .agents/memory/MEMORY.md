@@ -1,5 +1,6 @@
 - [Identity-document retention](identity-document-retention.md) — Keep uploads private, delete after final decisions, and audit the allowlisted admin self-approval flow.
 - [Clerk user identity reconciliation](clerk-bank-user-resolution.md) — Resolve cross-environment Clerk IDs to a canonical bank profile using a server-verified primary email.
+- [Authentication diagnostics](authentication-diagnostics.md) — Interpret provider errors before advancing sign-in; diagnose production without exposing credentials or resetting identities.
 - [Internal ledger boundaries](internal-ledger-boundaries.md) — Keep money movement internal; international requests use admin-maintained estimates and never send or reserve funds.
 - [Admin transaction controls](admin-transaction-controls.md) — Status corrections never change postings; restrictions are additive and enforced server-side.
 - [Transaction PIN security](transaction-pin-security.md) — Store only PIN hashes; admins reset member PINs but never view or assign their values.

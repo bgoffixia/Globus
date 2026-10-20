@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'rea
 import { useClerk, useSignIn, useSignUp, useUser } from '@clerk/react';
 import { getGetBankProfileQueryKey, useCompleteRequiredPasswordReset, useGetBankProfile, useLookupCustomerId, useUpdateBankProfile } from '@workspace/api-client-react';
 import { Link, useLocation } from 'wouter';
+import { authFailureMessage, signInNextStep } from '../lib/auth-errors';
 import './auth-pages.css';
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -82,7 +83,7 @@ export function ClerkSignInForm() {
   const finishSignIn = async () => {
     const finalized = await signIn.finalize({ navigate: () => undefined });
     if (finalized.error) {
-      setError('Sign-in could not be completed. Please try again.');
+      setError(authFailureMessage(finalized.error, 'sign-in'));
       return;
     }
     setLocation('/dashboard');
@@ -90,7 +91,7 @@ export function ClerkSignInForm() {
 
   const startAdditionalVerification = async (): Promise<boolean> => {
     let factor: typeof verificationFactor = null;
-    if (signIn.status === 'needs_second_factor') {
+    if (signIn.status === 'needs_second_factor' || signIn.status === 'needs_client_trust') {
       const available = new Set(signIn.supportedSecondFactors.map(item => item.strategy));
       factor = (['email_code', 'phone_code', 'totp', 'backup_code'] as const)
         .find(strategy => available.has(strategy)) ?? null;
@@ -114,7 +115,7 @@ export function ClerkSignInForm() {
       result = { error: null };
     }
     if (result.error) {
-      setError('We could not send a verification code. Try again or use password recovery.');
+      setError(authFailureMessage(result.error, 'verification'));
       return true;
     }
 
@@ -122,6 +123,27 @@ export function ClerkSignInForm() {
     setVerificationFactor(factor);
     setError('');
     return true;
+  };
+
+  const continueSignIn = async (error: unknown, phase: 'sign-in' | 'verification') => {
+    switch (signInNextStep(signIn.status, error)) {
+      case 'error':
+        setError(authFailureMessage(error, phase));
+        return;
+      case 'complete':
+        await finishSignIn();
+        return;
+      case 'password-update':
+        setError('This account needs a password update. Use Forgot password to choose a new password.');
+        return;
+      case 'verification':
+        if (!(await startAdditionalVerification())) {
+          setError('Your account requires an additional sign-in method that this page cannot complete. Contact Globus support.');
+        }
+        return;
+      default:
+        setError('Sign-in needs another verification step. Please contact Globus support.');
+    }
   };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -137,28 +159,9 @@ export function ClerkSignInForm() {
         identifier,
         password,
       });
-      if (signIn.status === 'needs_second_factor' || signIn.status === 'needs_first_factor') {
-        const verificationStarted = await startAdditionalVerification();
-        if (!verificationStarted) {
-          setError('Your account requires an additional sign-in method that this page cannot complete. Contact Globus support.');
-        }
-        return;
-      }
-      if (result.error) {
-        setError('The Customer ID/email or password was not accepted. Check your details or use Forgot password.');
-        return;
-      }
-      if (signIn.status === 'needs_new_password') {
-        setError('This account needs a password update. Use Forgot password to choose a new password.');
-        return;
-      }
-      if (signIn.status !== 'complete') {
-        setError('Sign-in needs another verification step. Please use Forgot password or contact Globus support.');
-        return;
-      }
-      await finishSignIn();
-    } catch {
-      setError('Your sign-in could not be completed. Check your details and try again.');
+      await continueSignIn(result.error, 'sign-in');
+    } catch (error) {
+      setError(authFailureMessage(error, 'sign-in'));
     }
   };
 
@@ -179,17 +182,9 @@ export function ClerkSignInForm() {
       } else {
         result = await signIn.mfa.verifyBackupCode({ code: verificationCode.trim() });
       }
-      if (result.error) {
-        setError('That verification code could not be accepted. Check it and try again.');
-        return;
-      }
-      if (signIn.status === 'complete') {
-        await finishSignIn();
-      } else {
-        setError('Additional verification is still required. Try another available sign-in method or contact Globus support.');
-      }
-    } catch {
-      setError('That verification code could not be accepted. Check it and try again.');
+      await continueSignIn(result.error, 'verification');
+    } catch (error) {
+      setError(authFailureMessage(error, 'verification'));
     }
   };
 
@@ -217,7 +212,7 @@ export function ClerkSignInForm() {
             className="gb-input"
             type="text"
             autoComplete="one-time-code"
-            inputMode="numeric"
+            inputMode={verificationFactor === 'backup_code' ? 'text' : 'numeric'}
             value={verificationCode}
             onChange={event => setVerificationCode(event.target.value)}
             required
@@ -355,14 +350,18 @@ export function EmailRecoverySignInForm() {
       const verified = await signIn.resetPasswordEmailCode.verifyCode({
         code: verificationCode.trim(),
       });
-      if (verified.error || signIn.status !== 'needs_new_password') {
-        setError('That code was not accepted. It may have expired or been replaced by a newer request. Send another code and use the newest email.');
+      if (verified.error) {
+        setError(authFailureMessage(verified.error, 'verification'));
+        return;
+      }
+      if (signIn.status !== 'needs_new_password') {
+        setError('Recovery needs another verification step. Request a fresh code or contact Globus support.');
         return;
       }
       setStage('password');
       setNotice('');
-    } catch {
-      setError('That code was not accepted. It may have expired or been replaced by a newer request. Send another code and use the newest email.');
+    } catch (error) {
+      setError(authFailureMessage(error, 'verification'));
     }
   };
 
@@ -371,20 +370,24 @@ export function EmailRecoverySignInForm() {
     setError('');
     try {
       const reset = await signIn.resetPasswordEmailCode.submitPassword({ password: newPassword });
-      if (reset.error || signIn.status !== 'complete') {
-        setError('We could not complete recovery. Check your password and try again.');
+      if (reset.error) {
+        setError(authFailureMessage(reset.error, 'reset-password'));
+        return;
+      }
+      if (signIn.status !== 'complete') {
+        setError('Your account requires another verification step before recovery can finish. Contact Globus support.');
         return;
       }
       const finalized = await signIn.finalize({ navigate: () => undefined });
       if (finalized.error) {
-        setError('We could not complete recovery. Check your password and try again.');
+        setError(authFailureMessage(finalized.error, 'reset-password'));
         return;
       }
       const memberProfile = await profile.refetch();
       setCustomerId(memberProfile.data?.customerId ?? '');
       setStage('complete');
-    } catch {
-      setError('We could not complete recovery. Check your password and try again.');
+    } catch (error) {
+      setError(authFailureMessage(error, 'reset-password'));
     }
   };
 

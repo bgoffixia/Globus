@@ -161,9 +161,16 @@ function ProtectedAdminPage() {
 
 function SignInPage() {
   return (
-    <AuthFrame mode="sign-in">
-      <ClerkSignInForm />
-    </AuthFrame>
+    <>
+      <Show when="signed-in">
+        <Redirect to="/dashboard" />
+      </Show>
+      <Show when="signed-out">
+        <AuthFrame mode="sign-in">
+          <ClerkSignInForm />
+        </AuthFrame>
+      </Show>
+    </>
   );
 }
 
