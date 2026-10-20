@@ -316,6 +316,35 @@ export const AdminTransactionPinResetResultValue = {
 } as const;
 export type AdminTransactionPinResetResult = typeof AdminTransactionPinResetResultValue;
 
+export interface CompleteRequiredPasswordResetInput {
+  /**
+     * @minLength 8
+     * @maxLength 128
+     */
+  newPassword: string;
+}
+
+export interface CompleteRequiredPasswordResetResult {
+  completed: boolean;
+}
+
+export interface AdminUserPasswordResetInput {
+  /**
+     * @minLength 5
+     * @maxLength 500
+     */
+  reason: string;
+  confirmed: true;
+}
+
+export interface AdminUserPasswordResetResult {
+  resetRequired: true;
+  /** @minimum 0 */
+  sessionsRevoked: number;
+  requestedAt: string;
+  emailSent: false;
+}
+
 export interface BankProfileInput {
   /**
      * @minLength 1

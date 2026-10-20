@@ -73,6 +73,9 @@ import {
   ProcessAdminInternalTransferBody,
   ProcessAdminInternalTransferParams,
   ProcessAdminInternalTransferResponse,
+  ResetAdminUserPasswordBody,
+  ResetAdminUserPasswordParams,
+  ResetAdminUserPasswordResponse,
   RemoveAdminRestrictionBody,
   RemoveAdminRestrictionParams,
   RemoveAdminRestrictionResponse,
@@ -99,6 +102,10 @@ import {
   bankWalletsTable,
   db,
 } from "@workspace/db";
+import {
+  isPasswordResetRequired,
+  setPasswordResetCache,
+} from "../lib/password-reset";
 import {
   balanceForWallet,
   bankOperationRestrictionError,
@@ -244,6 +251,19 @@ const requireAdmin: RequestHandler = async (req, res, next) => {
   const userId = getAuth(req).userId;
   if (!userId) {
     res.status(401).json({ error: "Sign in to access your Globus account." });
+    return;
+  }
+  try {
+    if (await isPasswordResetRequired(userId)) {
+      res.status(423).json({
+        error: "Update your password before accessing administrator tools.",
+      });
+      return;
+    }
+  } catch {
+    res.status(503).json({
+      error: "Account security could not be verified right now.",
+    });
     return;
   }
   let allowed: boolean;
@@ -1809,6 +1829,119 @@ router.post(
       return;
     }
     res.json(ResetAdminUserTransactionPinResponse.parse({ configured: false }));
+  },
+);
+
+router.post(
+  "/bank/admin/users/:userId/password-reset",
+  requireAdmin,
+  async (req, res): Promise<void> => {
+    const params = ResetAdminUserPasswordParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const parsed = ResetAdminUserPasswordBody.safeParse(req.body);
+    if (!parsed.success || parsed.data.confirmed !== true) {
+      res.status(400).json({
+        error: parsed.success ? "Confirm the password reset action." : parsed.error.message,
+      });
+      return;
+    }
+    const authenticatedClerkId = getAuth(req).userId;
+    if (!authenticatedClerkId) {
+      res.status(401).json({ error: "Sign in to access your Globus account." });
+      return;
+    }
+    if (authenticatedClerkId === params.data.userId) {
+      res.status(400).json({
+        error: "Use the customer password recovery flow to reset your own password.",
+      });
+      return;
+    }
+
+    const actorUserId = (await ensureBankUser(authenticatedClerkId)).id;
+    const [target] = await db
+      .select({ id: bankUsersTable.id })
+      .from(bankUsersTable)
+      .where(eq(bankUsersTable.id, params.data.userId))
+      .limit(1);
+    if (!target) {
+      res.status(404).json({ error: "User record not found." });
+      return;
+    }
+
+    const reason = parsed.data.reason.trim();
+    const requestedAt = new Date().toISOString();
+    await db.insert(bankAuditLogsTable).values({
+      actorUserId,
+      targetUserId: target.id,
+      action: "request_password_reset",
+      reason,
+    });
+
+    try {
+      await clerkClient.users.getUser(target.id);
+      await clerkClient.users.updateUserMetadata(target.id, {
+        publicMetadata: {
+          globusPasswordResetRequiredAt: requestedAt,
+        },
+      });
+
+      const sessions = [];
+      let offset = 0;
+      while (true) {
+        const page = await clerkClient.sessions.getSessionList({
+          userId: target.id,
+          status: "active",
+          limit: 500,
+          offset,
+        });
+        sessions.push(...page.data);
+        if (page.data.length < 500) break;
+        offset += page.data.length;
+      }
+
+      let sessionsRevoked = 0;
+      let revokeFailures = 0;
+      for (let index = 0; index < sessions.length; index += 25) {
+        const batch = sessions.slice(index, index + 25);
+        const results = await Promise.allSettled(
+          batch.map((session) => clerkClient.sessions.revokeSession(session.id)),
+        );
+        sessionsRevoked += results.filter((result) => result.status === "fulfilled").length;
+        revokeFailures += results.filter((result) => result.status === "rejected").length;
+      }
+
+      await db.insert(bankAuditLogsTable).values({
+        actorUserId,
+        targetUserId: target.id,
+        action: revokeFailures === 0
+          ? "password_reset_required_sessions_revoked"
+          : "password_reset_required_session_revocation_incomplete",
+        reason,
+      });
+
+      if (revokeFailures > 0) {
+        res.status(503).json({
+          error: "The reset requirement is active, but not all sessions could be ended. Retry the action.",
+        });
+        return;
+      }
+
+      res.json(
+        ResetAdminUserPasswordResponse.parse({
+          resetRequired: true,
+          sessionsRevoked,
+          requestedAt,
+          emailSent: false,
+        }),
+      );
+    } catch {
+      res.status(503).json({
+        error: "The reset requirement could not be fully applied. Retry the action.",
+      });
+    }
   },
 );
 

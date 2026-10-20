@@ -1,6 +1,6 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
-import { useSignIn, useSignUp } from '@clerk/react';
-import { getGetBankProfileQueryKey, useGetBankProfile, useLookupCustomerId, useUpdateBankProfile } from '@workspace/api-client-react';
+import { useClerk, useSignIn, useSignUp } from '@clerk/react';
+import { getGetBankProfileQueryKey, useCompleteRequiredPasswordReset, useGetBankProfile, useLookupCustomerId, useUpdateBankProfile } from '@workspace/api-client-react';
 import { Link, useLocation } from 'wouter';
 import './auth-pages.css';
 
@@ -321,6 +321,93 @@ export function EmailRecoverySignInForm() {
       )}
       <p className="gb-switch-copy"><Link href="/sign-in">Back to sign in</Link></p>
     </div>
+  );
+}
+
+export function RequiredPasswordResetPage() {
+  const { signOut } = useClerk();
+  const completeRequiredReset = useCompleteRequiredPasswordReset();
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const busy = completeRequiredReset.isPending;
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError('');
+    setNotice('');
+    if (newPassword.length < 8) {
+      setError('Choose a password with at least 8 characters.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setError('The passwords do not match.');
+      return;
+    }
+    try {
+      const result = await completeRequiredReset.mutateAsync({ data: { newPassword } });
+      if (!result.completed) {
+        setError('This reset request is no longer active. Sign in again or use Forgot password.');
+        return;
+      }
+      setNotice('Your password is updated. Sign in again with your new password.');
+      await signOut({ redirectUrl: `${basePath}/sign-in` || '/sign-in' });
+    } catch (resetError) {
+      setError(resetError instanceof Error ? resetError.message : 'Password could not be updated. Try another password.');
+    }
+  };
+
+  const openRecovery = async () => {
+    await signOut({ redirectUrl: `${basePath}/sign-in/email` || '/sign-in/email' });
+  };
+
+  return (
+    <AuthFrame mode="sign-in">
+      <div className="gb-signin-form-wrap">
+        <div className="gb-form-heading">
+          <span className="gb-step-label">ACCOUNT SECURITY <i /></span>
+          <h1>Choose a new password</h1>
+          <p>An administrator required a password update. Set a new password to continue; all previous sessions have been ended.</p>
+        </div>
+        <form className="gb-auth-form" onSubmit={submit}>
+          <label className="gb-field-label" htmlFor="gb-required-new-password">New password</label>
+          <input
+            id="gb-required-new-password"
+            className="gb-input"
+            type="password"
+            autoComplete="new-password"
+            minLength={8}
+            maxLength={128}
+            value={newPassword}
+            onChange={event => setNewPassword(event.target.value)}
+            required
+          />
+          <label className="gb-field-label" htmlFor="gb-required-confirm-password">Confirm new password</label>
+          <input
+            id="gb-required-confirm-password"
+            className="gb-input"
+            type="password"
+            autoComplete="new-password"
+            minLength={8}
+            maxLength={128}
+            value={confirmPassword}
+            onChange={event => setConfirmPassword(event.target.value)}
+            required
+          />
+          <p className="gb-password-hint">Use at least 8 characters. Clerk checks any additional password requirements.</p>
+          {error && <p role="alert" className="gb-auth-error">{error}</p>}
+          {notice && <p role="status" className="gb-auth-notice">{notice}</p>}
+          <button className="gb-primary-button" type="submit" disabled={busy || newPassword.length < 8 || confirmPassword.length < 8}>
+            <span>{busy ? 'Updating password…' : 'Update password'}</span>
+            <span aria-hidden="true">→</span>
+          </button>
+          <button className="gb-recovery-secondary" type="button" disabled={busy} onClick={openRecovery}>
+            Forgot your current password? Get a recovery email
+          </button>
+        </form>
+      </div>
+    </AuthFrame>
   );
 }
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react';
-import { ClerkProvider, Show, useClerk } from '@clerk/react';
+import { ClerkProvider, Show, useClerk, useUser } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
@@ -8,7 +8,9 @@ import { BankShell } from '@/components/bank-shell';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { AuthFrame, ClerkSignInForm, ClerkSignUpForm, EmailRecoverySignInForm } from '@/components/auth-pages';
+import { RequiredPasswordResetPage } from '@/components/auth-pages';
 import { PwaInstallPrompt } from '@/components/pwa-install-prompt';
+import { GlobusLoader } from '@/components/globus-loader';
 import NotFound from '@/pages/not-found';
 import {
   DashboardPage,
@@ -117,11 +119,23 @@ function HomeRedirect() {
   );
 }
 
+function PasswordResetGate({ children }: { children: ReactNode }) {
+  const { isLoaded, user } = useUser();
+  if (!isLoaded) return <GlobusLoader fullScreen />;
+  const resetAt = user?.publicMetadata?.globusPasswordResetRequiredAt;
+  if (typeof resetAt === 'string' && Number.isFinite(Date.parse(resetAt))) {
+    return <RequiredPasswordResetPage />;
+  }
+  return <>{children}</>;
+}
+
 function ProtectedPage({ children }: { children: ReactNode }) {
   return (
     <>
       <Show when="signed-in">
-        <BankShell>{children}</BankShell>
+        <PasswordResetGate>
+          <BankShell>{children}</BankShell>
+        </PasswordResetGate>
       </Show>
       <Show when="signed-out">
         <Redirect to="/sign-in" />
@@ -134,7 +148,9 @@ function ProtectedAdminPage() {
   return (
     <>
       <Show when="signed-in">
-        <AdminWorkspace />
+        <PasswordResetGate>
+          <AdminWorkspace />
+        </PasswordResetGate>
       </Show>
       <Show when="signed-out">
         <Redirect to="/sign-in" />

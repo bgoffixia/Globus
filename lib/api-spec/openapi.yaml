@@ -65,6 +65,30 @@ paths:
                 $ref: "#/components/schemas/BankProfile"
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /bank/me/password-reset/complete:
+    post:
+      operationId: completeRequiredPasswordReset
+      tags: [bank]
+      summary: Complete an administrator-required password change
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompleteRequiredPasswordResetInput"
+      responses:
+        "200":
+          description: Required password change completed, if one was pending
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompleteRequiredPasswordResetResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /bank/dashboard:
     get:
       operationId: getBankDashboard
@@ -878,6 +902,41 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+  /bank/admin/users/{userId}/password-reset:
+    post:
+      operationId: resetAdminUserPassword
+      tags: [admin]
+      summary: Require a member to set a new password and revoke active sessions
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminUserPasswordResetInput"
+      responses:
+        "200":
+          description: Password reset requirement set and active sessions revoked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUserPasswordResetResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
   /bank/admin/users/{userId}/status:
     patch:
       operationId: updateAdminUserStatus
@@ -1443,6 +1502,30 @@ components:
       properties:
         configured: { type: boolean, const: false }
       required: [configured]
+    CompleteRequiredPasswordResetInput:
+      type: object
+      properties:
+        newPassword: { type: string, minLength: 8, maxLength: 128 }
+      required: [newPassword]
+    CompleteRequiredPasswordResetResult:
+      type: object
+      properties:
+        completed: { type: boolean }
+      required: [completed]
+    AdminUserPasswordResetInput:
+      type: object
+      properties:
+        reason: { type: string, minLength: 5, maxLength: 500 }
+        confirmed: { type: boolean, const: true }
+      required: [reason, confirmed]
+    AdminUserPasswordResetResult:
+      type: object
+      properties:
+        resetRequired: { type: boolean, const: true }
+        sessionsRevoked: { type: integer, minimum: 0 }
+        requestedAt: { type: string, format: date-time }
+        emailSent: { type: boolean, const: false }
+      required: [resetRequired, sessionsRevoked, requestedAt, emailSent]
     BankProfileInput:
       type: object
       properties:

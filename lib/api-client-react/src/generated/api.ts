@@ -47,6 +47,8 @@ import type {
   AdminUser,
   AdminUserDetail,
   AdminUserPage,
+  AdminUserPasswordResetInput,
+  AdminUserPasswordResetResult,
   AdminUserProfileInput,
   AdminUserStatusInput,
   AdminWalletStatusInput,
@@ -58,6 +60,8 @@ import type {
   BankProfile,
   BankProfileInput,
   BankTransaction,
+  CompleteRequiredPasswordResetInput,
+  CompleteRequiredPasswordResetResult,
   ConflictResponse,
   CreateExternalTransfer410,
   CreateIncomingExternalTransfer410,
@@ -364,6 +368,94 @@ export function useGetBankProfile<TData = Awaited<ReturnType<typeof getBankProfi
 
 
 
+
+export const getCompleteRequiredPasswordResetUrl = () => {
+
+
+
+
+  return `/api/bank/me/password-reset/complete`
+}
+
+/**
+ * @summary Complete an administrator-required password change
+ */
+export const completeRequiredPasswordReset = async (completeRequiredPasswordResetInput: CompleteRequiredPasswordResetInput, options?: Parameters<typeof customFetch>[1]): Promise<CompleteRequiredPasswordResetResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<CompleteRequiredPasswordResetResult>(getCompleteRequiredPasswordResetUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(completeRequiredPasswordResetInput)
+  }
+);}
+
+
+
+
+
+export const getCompleteRequiredPasswordResetMutationKey = () => ['completeRequiredPasswordReset'] as const;
+
+export const getCompleteRequiredPasswordResetMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeRequiredPasswordReset>>, TError,CompleteRequiredPasswordResetMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof completeRequiredPasswordReset>>, TError,CompleteRequiredPasswordResetMutationVariables, TContext> => {
+
+const mutationKey = getCompleteRequiredPasswordResetMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof completeRequiredPasswordReset>>, CompleteRequiredPasswordResetMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  completeRequiredPasswordReset(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CompleteRequiredPasswordResetMutationResult = NonNullable<Awaited<ReturnType<typeof completeRequiredPasswordReset>>>
+    export type CompleteRequiredPasswordResetMutationBody = BodyType<CompleteRequiredPasswordResetInput>
+    export type CompleteRequiredPasswordResetMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | NotFoundResponse>
+    export type CompleteRequiredPasswordResetMutationVariables = {data: BodyType<CompleteRequiredPasswordResetInput>}
+
+    /**
+ * @summary Complete an administrator-required password change
+ */
+export const useCompleteRequiredPasswordReset = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeRequiredPasswordReset>>, TError,CompleteRequiredPasswordResetMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof completeRequiredPasswordReset>>,
+        TError,
+        CompleteRequiredPasswordResetMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCompleteRequiredPasswordResetMutationOptions(options));
+    }
 
 export const getGetBankDashboardUrl = () => {
 
@@ -3443,6 +3535,95 @@ export const useResetAdminUserTransactionPin = <TError = ErrorType<BadRequestRes
         TContext
       > => {
       return useMutation(getResetAdminUserTransactionPinMutationOptions(options));
+    }
+
+export const getResetAdminUserPasswordUrl = (userId: string,) => {
+
+
+
+
+  return `/api/bank/admin/users/${userId}/password-reset`
+}
+
+/**
+ * @summary Require a member to set a new password and revoke active sessions
+ */
+export const resetAdminUserPassword = async (userId: string,
+    adminUserPasswordResetInput: AdminUserPasswordResetInput, options?: Parameters<typeof customFetch>[1]): Promise<AdminUserPasswordResetResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<AdminUserPasswordResetResult>(getResetAdminUserPasswordUrl(userId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(adminUserPasswordResetInput)
+  }
+);}
+
+
+
+
+
+export const getResetAdminUserPasswordMutationKey = () => ['resetAdminUserPassword'] as const;
+
+export const getResetAdminUserPasswordMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ServiceUnavailableResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resetAdminUserPassword>>, TError,ResetAdminUserPasswordMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof resetAdminUserPassword>>, TError,ResetAdminUserPasswordMutationVariables, TContext> => {
+
+const mutationKey = getResetAdminUserPasswordMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof resetAdminUserPassword>>, ResetAdminUserPasswordMutationVariables> = (props) => {
+          const {userId,data} = props ?? {};
+
+          return  resetAdminUserPassword(userId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ResetAdminUserPasswordMutationResult = NonNullable<Awaited<ReturnType<typeof resetAdminUserPassword>>>
+    export type ResetAdminUserPasswordMutationBody = BodyType<AdminUserPasswordResetInput>
+    export type ResetAdminUserPasswordMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ServiceUnavailableResponse>
+    export type ResetAdminUserPasswordMutationVariables = {userId: string;data: BodyType<AdminUserPasswordResetInput>}
+
+    /**
+ * @summary Require a member to set a new password and revoke active sessions
+ */
+export const useResetAdminUserPassword = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ServiceUnavailableResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resetAdminUserPassword>>, TError,ResetAdminUserPasswordMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof resetAdminUserPassword>>,
+        TError,
+        ResetAdminUserPasswordMutationVariables,
+        TContext
+      > => {
+      return useMutation(getResetAdminUserPasswordMutationOptions(options));
     }
 
 export const getUpdateAdminUserStatusUrl = (userId: string,) => {

@@ -59,6 +59,23 @@ export const GetBankProfileResponse = zod.object({
 
 
 /**
+ * @summary Complete an administrator-required password change
+ */
+export const completeRequiredPasswordResetBodyNewPasswordMin = 8;
+export const completeRequiredPasswordResetBodyNewPasswordMax = 128;
+
+
+
+export const CompleteRequiredPasswordResetBody = zod.object({
+  "newPassword": zod.string().min(completeRequiredPasswordResetBodyNewPasswordMin).max(completeRequiredPasswordResetBodyNewPasswordMax)
+})
+
+export const CompleteRequiredPasswordResetResponse = zod.object({
+  "completed": zod.boolean()
+})
+
+
+/**
  * @summary Get the user's simulated balances and recent activity
  */
 export const getBankDashboardResponseProfileCustomerIdRegExp = new RegExp('^[A-Z0-9]{7}$');
@@ -1230,6 +1247,38 @@ export const ResetAdminUserTransactionPinBody = zod.object({
 
 export const ResetAdminUserTransactionPinResponse = zod.object({
   "configured": zod.literal(false)
+})
+
+
+/**
+ * @summary Require a member to set a new password and revoke active sessions
+ */
+
+
+
+export const ResetAdminUserPasswordParams = zod.object({
+  "userId": zod.coerce.string().min(1)
+})
+
+export const resetAdminUserPasswordBodyReasonMin = 5;
+export const resetAdminUserPasswordBodyReasonMax = 500;
+
+
+
+export const ResetAdminUserPasswordBody = zod.object({
+  "reason": zod.string().min(resetAdminUserPasswordBodyReasonMin).max(resetAdminUserPasswordBodyReasonMax),
+  "confirmed": zod.literal(true)
+})
+
+export const resetAdminUserPasswordResponseSessionsRevokedMin = 0;
+
+
+
+export const ResetAdminUserPasswordResponse = zod.object({
+  "resetRequired": zod.literal(true),
+  "sessionsRevoked": zod.number().int().min(resetAdminUserPasswordResponseSessionsRevokedMin),
+  "requestedAt": zod.coerce.date(),
+  "emailSent": zod.literal(false)
 })
 
 

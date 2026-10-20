@@ -1,10 +1,12 @@
 import { Router, type IRouter, type RequestHandler, type Response } from "express";
-import { getAuth } from "@clerk/express";
+import { clerkClient, getAuth } from "@clerk/express";
 import { rateLimit } from "express-rate-limit";
 import { and, asc, count, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
   CreateBankSavedPaymentMethodBody,
   CreateBankSavedPaymentMethodResponse,
+  CompleteRequiredPasswordResetBody,
+  CompleteRequiredPasswordResetResponse,
   CreateIdentityDocumentUploadUrlBody,
   CreateIdentityDocumentUploadUrlResponse,
   CreateExternalTransferBody,
@@ -89,6 +91,10 @@ import {
   encryptBankAccountNumber,
   normalizeBankAccountNumber,
 } from "../lib/sensitive-bank-details";
+import {
+  isPasswordResetRequired,
+  setPasswordResetCache,
+} from "../lib/password-reset";
 
 const router: IRouter = Router();
 const customerIdLookupLimiter = rateLimit({
@@ -104,6 +110,13 @@ const exchangeRateQuoteLimiter = rateLimit({
   standardHeaders: "draft-8",
   legacyHeaders: false,
   message: { error: "Rate quotes are temporarily limited. Please try again shortly." },
+});
+const passwordResetLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { error: "Too many password updates. Try again later." },
 });
 
 type FrankfurterRateReply = {
@@ -273,9 +286,27 @@ function respondWithTransactionPinError(
   res.status(404).json({ error: "The account for this transaction was not found." });
 }
 
-const requireSignedIn: RequestHandler = (req, res, next) => {
-  if (!getAuth(req).userId) {
+const requireSignedIn: RequestHandler = async (req, res, next) => {
+  const userId = getAuth(req).userId;
+  if (!userId) {
     res.status(401).json({ error: "Sign in to access your Globus account." });
+    return;
+  }
+  if (req.originalUrl.split("?")[0] === "/bank/me/password-reset/complete") {
+    next();
+    return;
+  }
+  try {
+    if (await isPasswordResetRequired(userId)) {
+      res.status(423).json({
+        error: "Update your password before accessing your Globus account.",
+      });
+      return;
+    }
+  } catch {
+    res.status(503).json({
+      error: "Account security could not be verified right now.",
+    });
     return;
   }
   next();
@@ -398,6 +429,50 @@ router.post(
 );
 
 router.use("/bank", requireSignedIn);
+
+router.post("/bank/me/password-reset/complete", passwordResetLimiter, async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId;
+  if (!userId) {
+    res.status(401).json({ error: "Sign in to access your Globus account." });
+    return;
+  }
+  const parsed = CompleteRequiredPasswordResetBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  let identity;
+  try {
+    identity = await clerkClient.users.getUser(userId);
+  } catch {
+    res.status(404).json({ error: "The account could not be verified." });
+    return;
+  }
+  const resetRequiredAt = identity.publicMetadata?.globusPasswordResetRequiredAt;
+  if (typeof resetRequiredAt !== "string" || !resetRequiredAt) {
+    res.json(CompleteRequiredPasswordResetResponse.parse({ completed: false }));
+    return;
+  }
+
+  try {
+    await clerkClient.users.updateUser(userId, {
+      password: parsed.data.newPassword,
+      signOutOfOtherSessions: true,
+    });
+    await clerkClient.users.updateUserMetadata(userId, {
+      publicMetadata: { globusPasswordResetRequiredAt: null },
+    });
+    setPasswordResetCache(userId, false);
+  } catch {
+    res.status(400).json({
+      error: "The new password could not be saved. Choose a different password and try again.",
+    });
+    return;
+  }
+
+  res.json(CompleteRequiredPasswordResetResponse.parse({ completed: true }));
+});
 
 router.get("/bank/me", async (req, res): Promise<void> => {
   const userId = getAuth(req).userId;
