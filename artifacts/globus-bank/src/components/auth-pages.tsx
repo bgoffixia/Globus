@@ -69,6 +69,8 @@ export function ClerkSignInForm() {
   const { signIn, fetchStatus } = useSignIn();
   const lookupCustomerId = useLookupCustomerId();
   const [customerId, setCustomerId] = useState('');
+  const [email, setEmail] = useState('');
+  const [useEmail, setUseEmail] = useState(false);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const busy = fetchStatus === 'fetching' || lookupCustomerId.isPending;
@@ -77,15 +79,17 @@ export function ClerkSignInForm() {
     event.preventDefault();
     setError('');
     try {
-      const resolved = await lookupCustomerId.mutateAsync({
-        data: { customerId: customerId.trim().toUpperCase() },
-      });
+      const identifier = useEmail
+        ? email.trim()
+        : (await lookupCustomerId.mutateAsync({
+            data: { customerId: customerId.trim().toUpperCase() },
+          })).email;
       const result = await signIn.password({
-        identifier: resolved.email,
+        identifier,
         password,
       });
       if (result.error || signIn.status !== 'complete') {
-        setError('Customer ID or password could not be verified. Check your details and try again.');
+        setError('Your sign-in details could not be verified. Check them and try again.');
         return;
       }
       const finalized = await signIn.finalize({ navigate: () => undefined });
@@ -95,7 +99,7 @@ export function ClerkSignInForm() {
       }
       setLocation('/dashboard');
     } catch {
-      setError('Customer ID or password could not be verified. Check your details and try again.');
+      setError('Your sign-in details could not be verified. Check them and try again.');
     }
   };
 
@@ -104,22 +108,26 @@ export function ClerkSignInForm() {
       <div className="gb-form-heading">
         <span className="gb-step-label">MEMBER ACCESS <i /></span>
         <h1>Welcome back</h1>
-        <p>Use your Globus Customer ID to access your account.</p>
+        <p>{useEmail ? 'Sign in with your email address and password.' : 'Use your Globus Customer ID to access your account.'}</p>
       </div>
       <form className="gb-auth-form" onSubmit={submit}>
-        <label className="gb-field-label" htmlFor="gb-customer-id">Customer ID</label>
+        <label className="gb-field-label" htmlFor={useEmail ? 'gb-signin-email' : 'gb-customer-id'}>
+          {useEmail ? 'Email address' : 'Customer ID'}
+        </label>
         <input
-          id="gb-customer-id"
-          className="gb-input gb-customer-id-input"
-          type="text"
-          autoComplete="username"
-          autoCapitalize="characters"
-          inputMode="text"
-          minLength={7}
-          maxLength={7}
-          pattern="[A-Za-z0-9]{7}"
-          value={customerId}
-          onChange={event => setCustomerId(event.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 7))}
+          id={useEmail ? 'gb-signin-email' : 'gb-customer-id'}
+          className={`gb-input ${useEmail ? '' : 'gb-customer-id-input'}`}
+          type={useEmail ? 'email' : 'text'}
+          autoComplete={useEmail ? 'email' : 'username'}
+          autoCapitalize={useEmail ? 'none' : 'characters'}
+          inputMode={useEmail ? 'email' : 'text'}
+          minLength={useEmail ? undefined : 7}
+          maxLength={useEmail ? 254 : 7}
+          pattern={useEmail ? undefined : '[A-Za-z0-9]{7}'}
+          value={useEmail ? email : customerId}
+          onChange={event => useEmail
+            ? setEmail(event.target.value)
+            : setCustomerId(event.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 7))}
           required
         />
         <label className="gb-field-label gb-signin-spaced-label" htmlFor="gb-customer-password">Password</label>
@@ -133,12 +141,22 @@ export function ClerkSignInForm() {
           required
         />
         {error && <p role="alert" className="gb-auth-error">{error}</p>}
-        <button className="gb-primary-button" type="submit" disabled={busy || customerId.length !== 7 || !password}>
+        <button className="gb-primary-button" type="submit" disabled={busy || (useEmail ? !email.trim() : customerId.length !== 7) || !password}>
           <span>{busy ? 'Securely signing in…' : 'Sign in'}</span>
           <span aria-hidden="true">→</span>
         </button>
       </form>
-      <p className="gb-switch-copy gb-recovery-link"><Link href="/sign-in/email">Forgot your Customer ID or password?</Link></p>
+      <div className="gb-login-recovery-actions">
+        <button
+          type="button"
+          className="gb-login-recovery-action"
+          onClick={() => { setUseEmail(current => !current); setError(''); }}
+          aria-label={useEmail ? 'Use Customer ID to sign in' : 'Forgot your ID? Sign in with email instead'}
+        >
+          {useEmail ? 'Use Customer ID' : 'Forgot your ID?'}
+        </button>
+        <Link className="gb-login-recovery-action" href="/sign-in/email">Forgot password</Link>
+      </div>
       <p className="gb-switch-copy">New to Globus? <Link href="/sign-up">Create an account <span aria-hidden="true">→</span></Link></p>
     </div>
   );
@@ -230,7 +248,7 @@ export function EmailRecoverySignInForm() {
   return (
     <div className="gb-signin-form-wrap">
       <div className="gb-form-heading">
-        <span className="gb-step-label">CUSTOMER ID RECOVERY <i /></span>
+        <span className="gb-step-label">PASSWORD RESET <i /></span>
         <h1>
           {stage === 'email' && 'Recover your account'}
           {stage === 'code' && 'Check your email'}
@@ -238,7 +256,7 @@ export function EmailRecoverySignInForm() {
           {stage === 'complete' && 'Recovery complete'}
         </h1>
         <p>
-          {stage === 'email' && 'Verify your email to reset your password and retrieve your Customer ID.'}
+          {stage === 'email' && 'Enter the email address on your account to reset your password.'}
           {stage === 'code' && 'Enter the recovery code if one was sent to you.'}
           {stage === 'password' && 'Set a new password for your Globus account.'}
           {stage === 'complete' && 'Your password has been reset.'}
@@ -301,7 +319,7 @@ export function EmailRecoverySignInForm() {
           </button>
         </div>
       )}
-      <p className="gb-switch-copy"><Link href="/sign-in">Back to Customer ID sign-in</Link></p>
+      <p className="gb-switch-copy"><Link href="/sign-in">Back to sign in</Link></p>
     </div>
   );
 }

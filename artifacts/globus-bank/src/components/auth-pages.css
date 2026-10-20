@@ -274,6 +274,20 @@
 .gb-signin-form-wrap { width: 100%; }
 .gb-signin-spaced-label { margin-top: 20px; }
 .gb-customer-id-input { font-family: "IBM Plex Mono", monospace; font-size: 15px; font-weight: 650; letter-spacing: .15em; }
+.gb-login-recovery-actions { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 13px; }
+.gb-login-recovery-action {
+  padding: 3px 0;
+  border: 0;
+  background: transparent;
+  color: #367781;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+.gb-login-recovery-action:hover { color: #173b62; text-decoration: underline; text-underline-offset: 2px; }
+.gb-login-recovery-action:focus-visible { outline: 3px solid rgba(55, 125, 131, .32); outline-offset: 3px; border-radius: 2px; }
 .gb-recovery-link { margin-top: 15px; text-align: right; }
 .gb-recovery-link a { color: #367781; font-weight: 700; text-decoration: none; }
 .gb-recovery-link a:hover { text-decoration: underline; text-underline-offset: 2px; }
@@ -304,6 +318,7 @@
   .gb-form-heading h1 { font-size: 34px; }
   .gb-signup-content { padding-bottom: 12px; }
   .gb-signup-form .gb-input { height: 45px; }
+  .gb-login-recovery-actions { gap: 10px; }
 }
 @media (max-width: 390px) {
   .gb-form-side { padding-right: 20px; padding-left: 20px; }
