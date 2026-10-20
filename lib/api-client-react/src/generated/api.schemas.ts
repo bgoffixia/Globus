@@ -277,6 +277,8 @@ export interface BankProfile {
   /** @nullable */
   verificationNote: string | null;
   accountStatus: BankProfileAccountStatus;
+  depositAllowed: boolean;
+  withdrawalAllowed: boolean;
   createdAt: string;
 }
 
@@ -560,12 +562,17 @@ export interface SavedPaymentMethodInput {
      */
   accountHolder?: string;
   /**
+     * @minLength 5
+     * @maxLength 64
+     */
+  bankAccountNumber?: string;
+  /**
      * @minLength 2
      * @maxLength 80
      */
   country?: string;
   /** @pattern ^[A-Za-z0-9]{4}$ */
-  lastFour: string;
+  lastFour?: string;
 }
 
 export type SavedPaymentMethodMethod = typeof SavedPaymentMethodMethod[keyof typeof SavedPaymentMethodMethod];

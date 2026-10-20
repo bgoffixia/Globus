@@ -52,6 +52,8 @@ export const GetBankProfileResponse = zod.object({
   "verificationStatus": zod.enum(['not_started', 'pending', 'approved', 'rejected', 'additional_information_required']),
   "verificationNote": zod.string().nullable(),
   "accountStatus": zod.enum(['active', 'restricted', 'suspended']),
+  "depositAllowed": zod.boolean(),
+  "withdrawalAllowed": zod.boolean(),
   "createdAt": zod.coerce.date()
 })
 
@@ -77,6 +79,8 @@ export const GetBankDashboardResponse = zod.object({
   "verificationStatus": zod.enum(['not_started', 'pending', 'approved', 'rejected', 'additional_information_required']),
   "verificationNote": zod.string().nullable(),
   "accountStatus": zod.enum(['active', 'restricted', 'suspended']),
+  "depositAllowed": zod.boolean(),
+  "withdrawalAllowed": zod.boolean(),
   "createdAt": zod.coerce.date()
 }),
   "wallets": zod.array(zod.object({
@@ -145,6 +149,9 @@ export const createBankSavedPaymentMethodBodyBankNameMax = 120;
 
 export const createBankSavedPaymentMethodBodyAccountHolderMax = 120;
 
+export const createBankSavedPaymentMethodBodyBankAccountNumberMin = 5;
+export const createBankSavedPaymentMethodBodyBankAccountNumberMax = 64;
+
 export const createBankSavedPaymentMethodBodyCountryMin = 2;
 export const createBankSavedPaymentMethodBodyCountryMax = 80;
 
@@ -156,8 +163,9 @@ export const CreateBankSavedPaymentMethodBody = zod.object({
   "cardBrand": zod.enum(['visa', 'mastercard', 'amex', 'discover', 'other']).optional(),
   "bankName": zod.string().min(1).max(createBankSavedPaymentMethodBodyBankNameMax).optional(),
   "accountHolder": zod.string().min(1).max(createBankSavedPaymentMethodBodyAccountHolderMax).optional(),
+  "bankAccountNumber": zod.string().min(createBankSavedPaymentMethodBodyBankAccountNumberMin).max(createBankSavedPaymentMethodBodyBankAccountNumberMax).optional(),
   "country": zod.string().min(createBankSavedPaymentMethodBodyCountryMin).max(createBankSavedPaymentMethodBodyCountryMax).optional(),
-  "lastFour": zod.string().regex(createBankSavedPaymentMethodBodyLastFourRegExp)
+  "lastFour": zod.string().regex(createBankSavedPaymentMethodBodyLastFourRegExp).optional()
 })
 
 export const createBankSavedPaymentMethodResponseLastFourRegExp = new RegExp('^[A-Za-z0-9]{4}$');
@@ -264,6 +272,8 @@ export const UpdateBankProfileResponse = zod.object({
   "verificationStatus": zod.enum(['not_started', 'pending', 'approved', 'rejected', 'additional_information_required']),
   "verificationNote": zod.string().nullable(),
   "accountStatus": zod.enum(['active', 'restricted', 'suspended']),
+  "depositAllowed": zod.boolean(),
+  "withdrawalAllowed": zod.boolean(),
   "createdAt": zod.coerce.date()
 })
 
@@ -377,6 +387,8 @@ export const SubmitIdentityDocumentsResponse = zod.object({
   "verificationStatus": zod.enum(['not_started', 'pending', 'approved', 'rejected', 'additional_information_required']),
   "verificationNote": zod.string().nullable(),
   "accountStatus": zod.enum(['active', 'restricted', 'suspended']),
+  "depositAllowed": zod.boolean(),
+  "withdrawalAllowed": zod.boolean(),
   "createdAt": zod.coerce.date()
 })
 

@@ -31,5 +31,7 @@ export interface BankProfile {
   /** @nullable */
   verificationNote: string | null;
   accountStatus: BankProfileAccountStatus;
+  depositAllowed: boolean;
+  withdrawalAllowed: boolean;
   createdAt: Date;
 }

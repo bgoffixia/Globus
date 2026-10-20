@@ -35,13 +35,22 @@ export async function bankOperationRestrictionError(
   },
 ): Promise<string | null> {
   const [user] = await executor
-    .select({ accountStatus: bankUsersTable.accountStatus })
+    .select({
+      accountStatus: bankUsersTable.accountStatus,
+      verificationStatus: bankUsersTable.verificationStatus,
+    })
     .from(bankUsersTable)
     .where(eq(bankUsersTable.id, input.userId))
     .for("update");
   if (!user) return "The customer account is unavailable.";
   if (user.accountStatus !== "active") {
     return "This account is currently restricted from financial operations.";
+  }
+  if (
+    (input.operation === "deposit" || input.operation === "withdrawal") &&
+    user.verificationStatus !== "approved"
+  ) {
+    return "Complete identity verification before requesting deposits or withdrawals.";
   }
 
   const now = new Date();
@@ -103,6 +112,46 @@ export async function bankOperationRestrictionError(
     return "This wallet is frozen and cannot send funds.";
   }
   return null;
+}
+
+export async function getBankOperationEligibility(
+  userId: string,
+  accountStatus: "active" | "restricted" | "suspended",
+  verificationStatus: string,
+): Promise<{ depositAllowed: boolean; withdrawalAllowed: boolean }> {
+  if (accountStatus !== "active" || verificationStatus !== "approved") {
+    return { depositAllowed: false, withdrawalAllowed: false };
+  }
+
+  const now = new Date();
+  const restrictions = await db
+    .select({ type: bankRestrictionsTable.type })
+    .from(bankRestrictionsTable)
+    .where(
+      and(
+        eq(bankRestrictionsTable.userId, userId),
+        eq(bankRestrictionsTable.status, "active"),
+        isNull(bankRestrictionsTable.walletId),
+        lte(bankRestrictionsTable.effectiveAt, now),
+        or(
+          isNull(bankRestrictionsTable.expiresAt),
+          gt(bankRestrictionsTable.expiresAt, now),
+        ),
+      ),
+    );
+  const types = new Set(restrictions.map((restriction) => restriction.type));
+  const commonRestriction =
+    types.has("suspend_user") ||
+    types.has("under_review") ||
+    types.has("read_only");
+
+  return {
+    depositAllowed: !commonRestriction && !types.has("restrict_deposits"),
+    withdrawalAllowed:
+      !commonRestriction &&
+      !types.has("restrict_withdrawals") &&
+      !types.has("freeze_wallet"),
+  };
 }
 
 export const currencies = ["USD", "EUR", "GBP", "CAD", "AUD"] as const;

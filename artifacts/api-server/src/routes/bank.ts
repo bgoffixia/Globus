@@ -63,6 +63,7 @@ import {
   formatMinorAmount,
   conversionRatesMatch,
   getEffectiveBankAccountStatus,
+  getBankOperationEligibility,
   getRecentTransactions,
   getWalletsForUser,
   listUserTransactions,
@@ -83,6 +84,11 @@ import {
   verifyTransactionPin,
   type TransactionPinResult,
 } from "../lib/transaction-pin";
+import {
+  BankDetailsEncryptionUnavailableError,
+  encryptBankAccountNumber,
+  normalizeBankAccountNumber,
+} from "../lib/sensitive-bank-details";
 
 const router: IRouter = Router();
 const customerIdLookupLimiter = rateLimit({
@@ -401,10 +407,17 @@ router.get("/bank/me", async (req, res): Promise<void> => {
   }
 
   const user = await getOrCreateBankUser(userId);
-  const accountStatus = await getEffectiveBankAccountStatus(
-    user.id,
-    user.accountStatus as "active" | "restricted" | "suspended",
-  );
+  const [accountStatus, operationEligibility] = await Promise.all([
+    getEffectiveBankAccountStatus(
+      user.id,
+      user.accountStatus as "active" | "restricted" | "suspended",
+    ),
+    getBankOperationEligibility(
+      user.id,
+      user.accountStatus as "active" | "restricted" | "suspended",
+      user.verificationStatus,
+    ),
+  ]);
   res.json(
     GetBankProfileResponse.parse({
       id: user.id,
@@ -419,6 +432,7 @@ router.get("/bank/me", async (req, res): Promise<void> => {
       verificationStatus: user.verificationStatus,
       verificationNote: user.verificationNote,
       accountStatus,
+      ...operationEligibility,
       createdAt: user.createdAt.toISOString(),
     }),
   );
@@ -432,12 +446,17 @@ router.get("/bank/dashboard", async (req, res): Promise<void> => {
   }
 
   const profile = await getOrCreateBankUser(authUserId);
-  const [wallets, recentTransactions, accountStatus] = await Promise.all([
+  const [wallets, recentTransactions, accountStatus, operationEligibility] = await Promise.all([
     getWalletsForUser(profile.id),
     getRecentTransactions(profile.id),
     getEffectiveBankAccountStatus(
       profile.id,
       profile.accountStatus as "active" | "restricted" | "suspended",
+    ),
+    getBankOperationEligibility(
+      profile.id,
+      profile.accountStatus as "active" | "restricted" | "suspended",
+      profile.verificationStatus,
     ),
   ]);
 
@@ -456,6 +475,7 @@ router.get("/bank/dashboard", async (req, res): Promise<void> => {
         verificationStatus: profile.verificationStatus,
         verificationNote: profile.verificationNote,
         accountStatus,
+        ...operationEligibility,
         createdAt: profile.createdAt.toISOString(),
       },
       wallets,
@@ -531,28 +551,67 @@ router.post(
       res.status(409).json({ error: "Complete account setup before saving a payment method." });
       return;
     }
+    if (user.verificationStatus !== "approved") {
+      res.status(403).json({ error: "Complete identity verification before saving payment methods." });
+      return;
+    }
 
-    const lastFour = parsed.data.lastFour.trim().toUpperCase();
     const method = parsed.data.method;
+    let lastFour = "";
+    let accountNumberEncrypted: string | null = null;
     if (
       method === "bank_card" &&
-      (!parsed.data.cardBrand || !/^[0-9]{4}$/.test(lastFour))
+      (!parsed.data.cardBrand ||
+        !parsed.data.lastFour ||
+        !/^[0-9]{4}$/.test(parsed.data.lastFour.trim()))
     ) {
       res.status(400).json({
         error: "Choose a card brand and enter only the card's last four digits.",
       });
       return;
     }
-    if (
-      method === "bank_transfer" &&
-      (!parsed.data.bankName?.trim() ||
+    if (method === "bank_card") {
+      lastFour = parsed.data.lastFour!.trim();
+    } else {
+      if (
+        !parsed.data.bankName?.trim() ||
         !parsed.data.accountHolder?.trim() ||
-        !/^[A-Z0-9]{4}$/.test(lastFour))
-    ) {
-      res.status(400).json({
-        error: "Enter the bank, account holder, and last four account characters.",
-      });
-      return;
+        !parsed.data.bankAccountNumber?.trim()
+      ) {
+        res.status(400).json({
+          error: "Enter the bank, account holder, and full account number or IBAN.",
+        });
+        return;
+      }
+      let normalizedAccountNumber: string;
+      try {
+        normalizedAccountNumber = normalizeBankAccountNumber(
+          parsed.data.bankAccountNumber,
+        );
+      } catch (error) {
+        res.status(400).json({
+          error:
+            error instanceof Error
+              ? error.message
+              : "Enter a valid full bank account number or IBAN.",
+        });
+        return;
+      }
+      try {
+        accountNumberEncrypted = encryptBankAccountNumber(
+          normalizedAccountNumber,
+        );
+      } catch (error) {
+        if (error instanceof BankDetailsEncryptionUnavailableError) {
+          req.log.error({ error: error.message }, "Bank account encryption is unavailable");
+          res.status(503).json({
+            error: "Secure bank-account storage is temporarily unavailable.",
+          });
+          return;
+        }
+        throw error;
+      }
+      lastFour = normalizedAccountNumber.slice(-4);
     }
     const saved = await db.transaction(async (tx) => {
       await tx.execute(
@@ -581,6 +640,7 @@ router.post(
             method === "bank_transfer"
               ? parsed.data.accountHolder?.trim() ?? null
               : null,
+          accountNumberEncrypted,
           country:
             method === "bank_transfer" ? parsed.data.country?.trim() || null : null,
           lastFour,
@@ -593,7 +653,7 @@ router.post(
         reason:
           method === "bank_card"
             ? `Member saved a masked card reference ending ${lastFour}.`
-            : `Member saved a masked bank-account reference ending ${lastFour}.`,
+            : `Member saved an encrypted bank-account reference ending ${lastFour}.`,
       });
       return row;
     });

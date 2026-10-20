@@ -18,7 +18,6 @@ import {
   Download,
   FileText,
   Globe2,
-  House,
   History,
   LockKeyhole,
   Printer,
@@ -528,7 +527,7 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
   const [bankName, setBankName] = useState('');
   const [accountHolder, setAccountHolder] = useState('');
   const [bankCountry, setBankCountry] = useState('');
-  const [accountLastFour, setAccountLastFour] = useState('');
+  const [bankAccountNumber, setBankAccountNumber] = useState('');
   const [transactionPin, setTransactionPin] = useState('');
   const [copiedWalletReference, setCopiedWalletReference] = useState(false);
   const [result, setResult] = useState<{ reference: string; message: string; status: string } | null>(null);
@@ -589,7 +588,7 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
             bankName: bankName.trim(),
             accountHolder: accountHolder.trim(),
             country: bankCountry.trim() || undefined,
-            lastFour: accountLastFour.trim(),
+            bankAccountNumber: bankAccountNumber.trim(),
           };
       const saved = await createSavedPaymentMethod.mutateAsync({ data });
       await queryClient.invalidateQueries({ queryKey: getListBankSavedPaymentMethodsQueryKey() });
@@ -599,7 +598,7 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
       setBankName('');
       setAccountHolder('');
       setBankCountry('');
-      setAccountLastFour('');
+      setBankAccountNumber('');
     } catch (error) {
       setDestinationError(error instanceof Error ? error.message : 'The payment method could not be saved.');
     }
@@ -615,6 +614,37 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
       setDestinationError(error instanceof Error ? error.message : 'The payment method could not be removed.');
     }
   };
+  if (profileQuery.isLoading) {
+    return <div className="mx-auto min-w-0 max-w-[920px] rounded-2xl border border-[#e1e8ee] bg-white p-5"><ListSkeleton /></div>;
+  }
+  if (profileQuery.isError || !profileQuery.data) {
+    return <div className="mx-auto min-w-0 max-w-[920px] rounded-2xl border border-[#e1e8ee] bg-white p-5"><InlineError text="Your account eligibility could not be checked." retry={() => profileQuery.refetch()} /></div>;
+  }
+  const operationAllowed = type === 'deposit'
+    ? profileQuery.data.depositAllowed
+    : profileQuery.data.withdrawalAllowed;
+  if (!operationAllowed) {
+    const needsVerification = profileQuery.data.verificationStatus !== 'approved';
+    return (
+      <div className="mx-auto min-w-0 max-w-[920px]" data-testid="financial-access-gate">
+        <header>
+          <p className="text-[9px] font-bold uppercase tracking-[.16em] text-[#4d858a]">Wallet services</p>
+          <h1 className="bank-display mt-0.5 text-[22px] font-semibold leading-tight text-[#213a55] sm:text-[26px]">{type === 'deposit' ? 'Deposit' : 'Withdrawal'}</h1>
+        </header>
+        <section className="mt-4 rounded-2xl border border-[#e6dfc8] bg-[#fbf8ee] p-4 sm:p-5">
+          <h2 className="text-[13px] font-bold text-[#6f5d35]">{needsVerification ? 'Identity verification required' : `${type === 'deposit' ? 'Deposit' : 'Withdrawal'} access is restricted`}</h2>
+          <p className="mt-2 max-w-[620px] text-[10px] leading-5 text-[#827653]">
+            {needsVerification
+              ? 'Your identity verification must be approved before you can submit this request.'
+              : 'An account restriction currently blocks this operation. Deposit and withdrawal permissions are checked separately.'}
+          </p>
+          <Link href="/profile" className="mt-3 inline-flex h-9 items-center justify-center rounded-lg bg-[#173653] px-4 text-[10px] font-bold text-white hover:bg-[#21496a]">
+            Review profile and verification
+          </Link>
+        </section>
+      </div>
+    );
+  }
   if (type === 'deposit') {
     const accountHolder = [profileQuery.data?.firstName, profileQuery.data?.lastName].filter(Boolean).join(' ') || 'Globus member';
     const walletReference = selectedWallet ? walletReferenceValue(profileQuery.data?.customerId ?? '', selectedWallet) : '';
@@ -804,11 +834,11 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
                     <Field label="Bank name"><input value={bankName} onChange={event => setBankName(event.target.value)} maxLength={80} placeholder="Bank name" className={inputClass} /></Field>
                     <Field label="Account holder"><input value={accountHolder} onChange={event => setAccountHolder(event.target.value)} maxLength={100} placeholder="Name on account" className={inputClass} /></Field>
                     <Field label="Country (optional)"><input value={bankCountry} onChange={event => setBankCountry(event.target.value)} maxLength={60} placeholder="Country" className={inputClass} /></Field>
-                    <Field label="Last 4 account characters"><input autoComplete="off" pattern="[A-Za-z0-9]{4}" maxLength={4} value={accountLastFour} onChange={event => setAccountLastFour(event.target.value.replace(/[^a-z0-9]/gi, '').slice(0, 4))} placeholder="1234" className={inputClass} /></Field>
+                    <Field label="Bank account number or IBAN"><input autoComplete="off" inputMode="text" maxLength={64} minLength={5} value={bankAccountNumber} onChange={event => setBankAccountNumber(event.target.value)} placeholder="Enter full account number or IBAN" className={inputClass} data-testid="input-bank-account-number" /></Field>
                   </div>}
-                  <p className="mt-2 text-[8px] leading-4 text-[#758596]">Only the card brand or bank details and last four are saved. Full card numbers, security codes, and full account numbers are not collected.</p>
+                  <p className="mt-2 text-[8px] leading-4 text-[#758596]">Full bank account numbers are encrypted and only the last four are shown in review lists. Card references keep the brand and last four only; never enter a security code.</p>
                   {destinationError && <p role="alert" className="mt-2 text-[8px] text-[#a24940]">{destinationError}</p>}
-                  <button type="button" disabled={createSavedPaymentMethod.isPending || (withdrawalMethod === 'bank_card' ? cardLastFour.length !== 4 : !bankName.trim() || !accountHolder.trim() || accountLastFour.length !== 4)} onClick={() => void savePaymentMethod()} className="mt-2 inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-lg bg-[#eaf4f4] text-[8px] font-bold text-[#34747b] disabled:opacity-50">{createSavedPaymentMethod.isPending ? 'Saving…' : 'Save masked details'} <ArrowRight size={11} /></button>
+                  <button type="button" disabled={createSavedPaymentMethod.isPending || (withdrawalMethod === 'bank_card' ? cardLastFour.length !== 4 : !bankName.trim() || !accountHolder.trim() || bankAccountNumber.replace(/[\s-]/g, '').length < 5)} onClick={() => void savePaymentMethod()} className="mt-2 inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-lg bg-[#eaf4f4] text-[8px] font-bold text-[#34747b] disabled:opacity-50">{createSavedPaymentMethod.isPending ? 'Saving…' : 'Save destination'} <ArrowRight size={11} /></button>
                 </div>
               )}
               {!shouldShowDestinationForm && destinationsForMethod.length > 0 && <p className="mt-2 text-[8px] text-[#758596]">Select a saved destination or add a new one.</p>}

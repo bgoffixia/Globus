@@ -1408,8 +1408,10 @@ components:
         verificationStatus: { type: string, enum: [not_started, pending, approved, rejected, additional_information_required] }
         verificationNote: { type: ["string", "null"] }
         accountStatus: { type: string, enum: [active, restricted, suspended] }
+        depositAllowed: { type: boolean }
+        withdrawalAllowed: { type: boolean }
         createdAt: { type: string, format: date-time }
-      required: [id, email, customerId, firstName, lastName, phone, country, dateOfBirth, transactionPinConfigured, verificationStatus, verificationNote, accountStatus, createdAt]
+      required: [id, email, customerId, firstName, lastName, phone, country, dateOfBirth, transactionPinConfigured, verificationStatus, verificationNote, accountStatus, depositAllowed, withdrawalAllowed, createdAt]
     CustomerIdLookupInput:
       type: object
       properties:
@@ -1562,9 +1564,10 @@ components:
         cardBrand: { type: string, enum: [visa, mastercard, amex, discover, other] }
         bankName: { type: string, minLength: 1, maxLength: 120 }
         accountHolder: { type: string, minLength: 1, maxLength: 120 }
+        bankAccountNumber: { type: string, minLength: 5, maxLength: 64 }
         country: { type: string, minLength: 2, maxLength: 80 }
         lastFour: { type: string, pattern: "^[A-Za-z0-9]{4}$" }
-      required: [method, lastFour]
+      required: [method]
     SavedPaymentMethod:
       type: object
       properties:
