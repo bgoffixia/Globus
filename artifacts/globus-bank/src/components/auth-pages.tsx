@@ -635,7 +635,7 @@ export function RequiredPasswordResetPage() {
   );
 }
 
-type SignUpStage = 'details' | 'verify' | 'finishing' | 'profile-error' | 'created';
+type SignUpStage = 'details' | 'verify' | 'finishing' | 'profile-error';
 
 export function ClerkSignUpForm() {
   const [, setLocation] = useLocation();
@@ -648,8 +648,6 @@ export function ClerkSignUpForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
-  const [customerId, setCustomerId] = useState('');
-  const [customerIdCopied, setCustomerIdCopied] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [stage, setStage] = useState<SignUpStage>('details');
   const [error, setError] = useState('');
@@ -664,7 +662,7 @@ export function ClerkSignUpForm() {
     setError('');
     setNotice('');
     try {
-      const savedProfile = await updateProfile.mutateAsync({
+      await updateProfile.mutateAsync({
         data: {
           firstName,
           lastName,
@@ -674,8 +672,7 @@ export function ClerkSignUpForm() {
           acceptedTerms: true,
         },
       });
-      setCustomerId(savedProfile.customerId);
-      setStage('created');
+      setLocation('/dashboard', { replace: true });
     } catch {
       setStage('profile-error');
       setError('Your sign-in is active, but your Globus profile could not be saved. Retry to finish setting up the account.');
@@ -764,16 +761,6 @@ export function ClerkSignUpForm() {
     setError('');
     setNotice('');
     setStage('details');
-  };
-
-  const copyCustomerId = async () => {
-    try {
-      await navigator.clipboard.writeText(customerId);
-      setCustomerIdCopied(true);
-      window.setTimeout(() => setCustomerIdCopied(false), 1800);
-    } catch {
-      setCustomerIdCopied(false);
-    }
   };
 
   return (
@@ -872,25 +859,6 @@ export function ClerkSignUpForm() {
           {error && <p role="alert" className="gb-auth-error">{error}</p>}
           <button type="button" className="gb-primary-button" onClick={saveBankProfile} disabled={updateProfile.isPending}>
             <span>{updateProfile.isPending ? 'Saving profile…' : 'Retry profile save'}</span>
-            <span aria-hidden="true">→</span>
-          </button>
-        </div>
-      )}
-
-      {stage === 'created' && (
-        <div className="gb-form-heading gb-customer-id-confirmation">
-          <span className="gb-step-label">ACCOUNT READY <i /></span>
-          <h1>Your Customer ID</h1>
-          <p>Save this unique ID. You’ll use it with your password whenever you sign in.</p>
-          <div className="gb-customer-id-card">
-            <span>GLOBUS CUSTOMER ID</span>
-            <strong>{customerId}</strong>
-          </div>
-          <button type="button" className="gb-secondary-button" onClick={copyCustomerId}>
-            {customerIdCopied ? 'Copied' : 'Copy Customer ID'}
-          </button>
-          <button type="button" className="gb-primary-button" onClick={() => setLocation('/dashboard')}>
-            <span>Continue to account</span>
             <span aria-hidden="true">→</span>
           </button>
         </div>

@@ -864,6 +864,18 @@ router.put("/bank/profile", async (req, res): Promise<void> => {
     .where(eq(bankUsersTable.id, currentUser.id))
     .returning();
 
+  const [accountStatus, operationEligibility] = await Promise.all([
+    getEffectiveBankAccountStatus(
+      user.id,
+      user.accountStatus as "active" | "restricted" | "suspended",
+    ),
+    getBankOperationEligibility(
+      user.id,
+      user.accountStatus as "active" | "restricted" | "suspended",
+      user.verificationStatus,
+    ),
+  ]);
+
   res.json(
     UpdateBankProfileResponse.parse({
       id: user.id,
@@ -877,7 +889,8 @@ router.put("/bank/profile", async (req, res): Promise<void> => {
       transactionPinConfigured: !!user.transactionPinHash,
       verificationStatus: user.verificationStatus,
       verificationNote: user.verificationNote,
-      accountStatus: user.accountStatus,
+      accountStatus,
+      ...operationEligibility,
       createdAt: user.createdAt.toISOString(),
     }),
   );
