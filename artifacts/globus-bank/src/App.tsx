@@ -8,7 +8,7 @@ import { BankShell } from '@/components/bank-shell';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { AuthFrame, ClerkSignInForm, ClerkSignUpForm, EmailRecoverySignInForm } from '@/components/auth-pages';
-import { RequiredPasswordResetPage } from '@/components/auth-pages';
+import { PasswordResetLinkPage, RequiredPasswordResetPage } from '@/components/auth-pages';
 import { PwaInstallPrompt } from '@/components/pwa-install-prompt';
 import { GlobusLoader } from '@/components/globus-loader';
 import NotFound from '@/pages/not-found';
@@ -244,6 +244,7 @@ function ClerkRoutes() {
           </Show>
         </Route>
         <Route path="/sign-in/email" component={EmailRecoveryPage} />
+        <Route path="/sign-in/recover" component={PasswordResetLinkPage} />
         <Route path="/sign-in/*?" component={SignInPage} />
         <Route path="/sign-up/*?" component={SignUpPage} />
         <Route path="/dashboard"><ProtectedPage><DashboardPage /></ProtectedPage></Route>

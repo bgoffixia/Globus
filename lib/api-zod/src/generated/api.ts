@@ -1251,7 +1251,7 @@ export const ResetAdminUserTransactionPinResponse = zod.object({
 
 
 /**
- * @summary Require a member to set a new password and revoke active sessions
+ * @summary Require a password change, revoke sessions, and email a secure recovery link
  */
 
 
@@ -1278,7 +1278,7 @@ export const ResetAdminUserPasswordResponse = zod.object({
   "resetRequired": zod.literal(true),
   "sessionsRevoked": zod.number().int().min(resetAdminUserPasswordResponseSessionsRevokedMin),
   "requestedAt": zod.coerce.date(),
-  "emailSent": zod.literal(false)
+  "emailSent": zod.boolean()
 })
 
 

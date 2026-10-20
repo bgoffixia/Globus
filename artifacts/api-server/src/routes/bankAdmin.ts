@@ -106,6 +106,7 @@ import {
   isPasswordResetRequired,
   setPasswordResetCache,
 } from "../lib/password-reset";
+import { sendPasswordResetEmail } from "../lib/password-reset-email";
 import {
   balanceForWallet,
   bankOperationRestrictionError,
@@ -1880,13 +1881,21 @@ router.post(
       reason,
     });
 
+    let primaryEmail: string | undefined;
     try {
-      await clerkClient.users.getUser(target.id);
+      const identity = await clerkClient.users.getUser(target.id);
+      const primaryEmailAddress = identity.emailAddresses.find(
+        (email) => email.id === identity.primaryEmailAddressId,
+      );
+      if (primaryEmailAddress?.verification?.status === "verified") {
+        primaryEmail = primaryEmailAddress.emailAddress;
+      }
       await clerkClient.users.updateUserMetadata(target.id, {
         publicMetadata: {
           globusPasswordResetRequiredAt: requestedAt,
         },
       });
+      setPasswordResetCache(target.id, true);
 
       const sessions = [];
       let offset = 0;
@@ -1929,12 +1938,44 @@ router.post(
         return;
       }
 
+      let emailSent = false;
+      let signInTokenId: string | undefined;
+      try {
+        if (primaryEmail) {
+          const token = await clerkClient.signInTokens.createSignInToken({
+            userId: target.id,
+            expiresInSeconds: 15 * 60,
+          });
+          signInTokenId = token.id;
+          emailSent = await sendPasswordResetEmail({
+            recipient: primaryEmail,
+            ticket: token.token,
+          });
+        }
+      } catch {
+        emailSent = false;
+      }
+      if (!emailSent && signInTokenId) {
+        await clerkClient.signInTokens
+          .revokeSignInToken(signInTokenId)
+          .catch(() => undefined);
+      }
+
+      await db.insert(bankAuditLogsTable).values({
+        actorUserId,
+        targetUserId: target.id,
+        action: emailSent
+          ? "password_reset_email_sent"
+          : "password_reset_email_failed",
+        reason: "Delivery status only.",
+      });
+
       res.json(
         ResetAdminUserPasswordResponse.parse({
           resetRequired: true,
           sessionsRevoked,
           requestedAt,
-          emailSent: false,
+          emailSent,
         }),
       );
     } catch {

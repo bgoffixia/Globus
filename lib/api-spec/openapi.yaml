@@ -906,7 +906,7 @@ paths:
     post:
       operationId: resetAdminUserPassword
       tags: [admin]
-      summary: Require a member to set a new password and revoke active sessions
+      summary: Require a password change, revoke sessions, and email a secure recovery link
       parameters:
         - name: userId
           in: path
@@ -1524,7 +1524,7 @@ components:
         resetRequired: { type: boolean, const: true }
         sessionsRevoked: { type: integer, minimum: 0 }
         requestedAt: { type: string, format: date-time }
-        emailSent: { type: boolean, const: false }
+        emailSent: { type: boolean }
       required: [resetRequired, sessionsRevoked, requestedAt, emailSent]
     BankProfileInput:
       type: object

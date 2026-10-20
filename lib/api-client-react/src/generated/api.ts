@@ -3546,7 +3546,7 @@ export const getResetAdminUserPasswordUrl = (userId: string,) => {
 }
 
 /**
- * @summary Require a member to set a new password and revoke active sessions
+ * @summary Require a password change, revoke sessions, and email a secure recovery link
  */
 export const resetAdminUserPassword = async (userId: string,
     adminUserPasswordResetInput: AdminUserPasswordResetInput, options?: Parameters<typeof customFetch>[1]): Promise<AdminUserPasswordResetResult> => {
@@ -3613,7 +3613,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type ResetAdminUserPasswordMutationVariables = {userId: string;data: BodyType<AdminUserPasswordResetInput>}
 
     /**
- * @summary Require a member to set a new password and revoke active sessions
+ * @summary Require a password change, revoke sessions, and email a secure recovery link
  */
 export const useResetAdminUserPassword = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ServiceUnavailableResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resetAdminUserPassword>>, TError,ResetAdminUserPasswordMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}

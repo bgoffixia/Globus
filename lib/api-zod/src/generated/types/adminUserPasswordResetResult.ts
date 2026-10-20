@@ -11,5 +11,5 @@ export interface AdminUserPasswordResetResult {
   /** @minimum 0 */
   sessionsRevoked: number;
   requestedAt: Date;
-  emailSent: false;
+  emailSent: boolean;
 }

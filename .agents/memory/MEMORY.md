@@ -4,3 +4,4 @@
 - [Admin transaction controls](admin-transaction-controls.md) — Status corrections never change postings; restrictions are additive and enforced server-side.
 - [Transaction PIN security](transaction-pin-security.md) — Store only PIN hashes; admins reset member PINs but never view or assign their values.
 - [Exchange-rate quote boundary](grey-quote-boundary.md) — Prefer Frankfurter reference rates with Grey as a read-only fallback; rate feeds never move money.
+- [Resend sender configuration](resend-sender.md) — Transactional mail uses an explicitly configured verified sender because the connected Resend access cannot list domains.

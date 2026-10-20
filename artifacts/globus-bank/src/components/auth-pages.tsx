@@ -1,5 +1,5 @@
-import { useState, type FormEvent, type ReactNode } from 'react';
-import { useClerk, useSignIn, useSignUp } from '@clerk/react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useClerk, useSignIn, useSignUp, useUser } from '@clerk/react';
 import { getGetBankProfileQueryKey, useCompleteRequiredPasswordReset, useGetBankProfile, useLookupCustomerId, useUpdateBankProfile } from '@workspace/api-client-react';
 import { Link, useLocation } from 'wouter';
 import './auth-pages.css';
@@ -321,6 +321,84 @@ export function EmailRecoverySignInForm() {
       )}
       <p className="gb-switch-copy"><Link href="/sign-in">Back to sign in</Link></p>
     </div>
+  );
+}
+
+export function PasswordResetLinkPage() {
+  const [, setLocation] = useLocation();
+  const { signIn } = useSignIn();
+  const { isLoaded, user } = useUser();
+  const { signOut } = useClerk();
+  const started = useRef(false);
+  const [message, setMessage] = useState('Checking your secure recovery link…');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const ticket = new URLSearchParams(window.location.hash.slice(1)).get('ticket');
+    if (!isLoaded || started.current) return;
+    if (!ticket) {
+      setMessage('');
+      setError('This recovery link is missing or incomplete. Request a new password recovery email.');
+      return;
+    }
+    started.current = true;
+
+    if (user) {
+      void signOut({ redirectUrl: window.location.href }).catch(() => {
+        setMessage('');
+        setError('Sign out of the current account, then open this recovery link again.');
+      });
+      return;
+    }
+
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${window.location.pathname}${window.location.search}`,
+    );
+
+    void (async () => {
+      try {
+        const ticketResult = await signIn.ticket({ ticket });
+        if (ticketResult.error || signIn.status !== 'complete') {
+          setMessage('');
+          setError('This recovery link is invalid, expired, or already used. Request a new password recovery email.');
+          return;
+        }
+
+        const finalized = await signIn.finalize({
+          navigate: () => setLocation('/dashboard'),
+        });
+        if (finalized.error) {
+          setMessage('');
+          setError('This recovery link could not be completed. Request a new password recovery email.');
+        }
+      } catch {
+        setMessage('');
+        setError('This recovery link is invalid, expired, or already used. Request a new password recovery email.');
+      }
+    })();
+  }, [isLoaded, setLocation, signIn, signOut, user]);
+
+  return (
+    <AuthFrame mode="sign-in">
+      <div className="gb-signin-form-wrap">
+        <div className="gb-form-heading">
+          <span className="gb-step-label">PASSWORD RECOVERY <i /></span>
+          <h1>{error ? 'Recovery link unavailable' : 'Secure password recovery'}</h1>
+          <p>{error || message}</p>
+        </div>
+        {error && (
+          <div className="gb-auth-form">
+            <Link className="gb-primary-button" href="/sign-in/email">
+              <span>Request a recovery email</span>
+              <span aria-hidden="true">→</span>
+            </Link>
+          </div>
+        )}
+        <p className="gb-switch-copy"><Link href="/sign-in">Back to sign in</Link></p>
+      </div>
+    </AuthFrame>
   );
 }
 

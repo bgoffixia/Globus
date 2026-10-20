@@ -342,7 +342,7 @@ export interface AdminUserPasswordResetResult {
   /** @minimum 0 */
   sessionsRevoked: number;
   requestedAt: string;
-  emailSent: false;
+  emailSent: boolean;
 }
 
 export interface BankProfileInput {
