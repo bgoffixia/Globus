@@ -121,6 +121,11 @@ test.describe('signed-in member pages at phone widths', () => {
   for (const width of viewportWidths) {
     test(`all member pages fit at ${width}px`, async ({ page }) => {
       for (const path of memberPaths) {
+        if (path === '/add-money' || path === '/withdraw') {
+          await page.route('**/bank/saved-payment-methods', async (route) => {
+            await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+          });
+        }
         await page.setViewportSize({ width, height: 850 });
         await page.goto(path, { waitUntil: 'domcontentloaded' });
         await expect(page.locator('.app-shell')).toBeVisible();
@@ -143,6 +148,22 @@ test.describe('signed-in member pages at phone widths', () => {
             await expect(page.getByTestId('deposit-wallet-details')).toBeVisible();
             await expect(page.getByRole('heading', { name: 'Account details' })).toBeVisible();
             await expect(page.getByTestId('deposit-request-form')).toBeVisible();
+            await page.getByTestId('button-deposit-bank-card').click();
+            await expect(page.getByTestId('deposit-card-options')).toBeVisible();
+            await expect(page.getByTestId('deposit-card-form')).toBeVisible();
+            await expect(page.getByTestId('input-card-last-four')).toBeVisible();
+          }
+        }
+        if (path === '/withdraw') {
+          await expect(page.getByTestId('withdrawal-workflow')).toBeVisible();
+          await expect(page.getByTestId('withdrawal-wallet-picker')).toBeVisible();
+          const firstWallet = page.locator('[data-testid^="button-select-withdrawal-wallet-"]').first();
+          if (await firstWallet.count()) {
+            await firstWallet.click();
+            await expect(page.getByTestId('withdrawal-wallet-details')).toBeVisible();
+            await expect(page.getByTestId('button-withdrawal-bank-card')).toBeVisible();
+            await page.getByTestId('button-withdrawal-bank-card').click();
+            await expect(page.getByTestId('withdrawal-destination-form')).toBeVisible();
           }
         }
         if (path === '/calculator') {

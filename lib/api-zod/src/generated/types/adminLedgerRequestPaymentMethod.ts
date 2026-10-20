@@ -6,10 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type WithdrawalDestinationMethod = typeof WithdrawalDestinationMethod[keyof typeof WithdrawalDestinationMethod];
+export type AdminLedgerRequestPaymentMethod = typeof AdminLedgerRequestPaymentMethod[keyof typeof AdminLedgerRequestPaymentMethod];
 
 
-export const WithdrawalDestinationMethod = {
+export const AdminLedgerRequestPaymentMethod = {
   bank_card: 'bank_card',
   bank_transfer: 'bank_transfer',
 } as const;

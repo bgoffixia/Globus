@@ -2624,6 +2624,10 @@ router.get(
           currency: request.currency,
           amount: formatMinorAmount(request.amountMinor),
           description: transaction.description,
+          ...(request.paymentMethod ? { paymentMethod: request.paymentMethod } : {}),
+          ...(request.paymentMethodSummary
+            ? { paymentMethodSummary: request.paymentMethodSummary }
+            : {}),
           status:
             request.status === "pending_provider_setup"
               ? "pending_review"

@@ -6,10 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type AdminLedgerRequestWithdrawalMethod = typeof AdminLedgerRequestWithdrawalMethod[keyof typeof AdminLedgerRequestWithdrawalMethod];
+export type LedgerRequestInputPaymentMethod = typeof LedgerRequestInputPaymentMethod[keyof typeof LedgerRequestInputPaymentMethod];
 
 
-export const AdminLedgerRequestWithdrawalMethod = {
+export const LedgerRequestInputPaymentMethod = {
   bank_card: 'bank_card',
   bank_transfer: 'bank_transfer',
 } as const;

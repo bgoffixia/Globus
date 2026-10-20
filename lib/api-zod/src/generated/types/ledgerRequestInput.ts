@@ -6,8 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ActiveCurrencyCode } from './activeCurrencyCode';
+import type { LedgerRequestInputPaymentMethod } from './ledgerRequestInputPaymentMethod';
 import type { LedgerRequestInputType } from './ledgerRequestInputType';
-import type { LedgerRequestInputWithdrawalMethod } from './ledgerRequestInputWithdrawalMethod';
 
 export interface LedgerRequestInput {
   type: LedgerRequestInputType;
@@ -23,6 +23,6 @@ export interface LedgerRequestInput {
   idempotencyKey: string;
   /** @pattern ^[0-9]{6}$ */
   transactionPin: string;
-  withdrawalDestinationId?: string;
-  withdrawalMethod?: LedgerRequestInputWithdrawalMethod;
+  savedPaymentMethodId?: string;
+  paymentMethod?: LedgerRequestInputPaymentMethod;
 }

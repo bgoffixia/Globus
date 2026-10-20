@@ -6,10 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type WithdrawalDestinationInputCardBrand = typeof WithdrawalDestinationInputCardBrand[keyof typeof WithdrawalDestinationInputCardBrand];
+export type SavedPaymentMethodInputCardBrand = typeof SavedPaymentMethodInputCardBrand[keyof typeof SavedPaymentMethodInputCardBrand];
 
 
-export const WithdrawalDestinationInputCardBrand = {
+export const SavedPaymentMethodInputCardBrand = {
   visa: 'visa',
   mastercard: 'mastercard',
   amex: 'amex',

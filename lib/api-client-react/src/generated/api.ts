@@ -63,7 +63,7 @@ import type {
   CreateIncomingExternalTransfer410,
   CustomerIdLookupInput,
   CustomerIdLookupResult,
-  DeleteWithdrawalDestinationResponse,
+  DeleteSavedPaymentMethodResponse,
   ExternalTransferInput,
   ForbiddenResponse,
   GetBankExchangeRateQuoteParams,
@@ -85,14 +85,14 @@ import type {
   ListAdminUsersParams,
   ListBankTransactionsParams,
   NotFoundResponse,
+  SavedPaymentMethod,
+  SavedPaymentMethodInput,
   ServiceUnavailableResponse,
   TransactionPinInput,
   TransactionPinUpdateResult,
   TransferInput,
   UnauthorizedResponse,
-  Wallet,
-  WithdrawalDestination,
-  WithdrawalDestinationInput
+  Wallet
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -519,20 +519,20 @@ export function useListBankWallets<TData = Awaited<ReturnType<typeof listBankWal
 
 
 
-export const getListBankWithdrawalDestinationsUrl = () => {
+export const getListBankSavedPaymentMethodsUrl = () => {
 
 
 
 
-  return `/api/bank/withdrawal-destinations`
+  return `/api/bank/saved-payment-methods`
 }
 
 /**
- * @summary List the authenticated user's saved masked withdrawal destinations
+ * @summary List the authenticated user's saved masked payment methods
  */
-export const listBankWithdrawalDestinations = async ( options?: Parameters<typeof customFetch>[1]): Promise<WithdrawalDestination[]> => {
+export const listBankSavedPaymentMethods = async ( options?: Parameters<typeof customFetch>[1]): Promise<SavedPaymentMethod[]> => {
 
-  return customFetch<WithdrawalDestination[]>(getListBankWithdrawalDestinationsUrl(),
+  return customFetch<SavedPaymentMethod[]>(getListBankSavedPaymentMethodsUrl(),
   {
     ...options,
     method: 'GET'
@@ -545,45 +545,45 @@ export const listBankWithdrawalDestinations = async ( options?: Parameters<typeo
 
 
 
-export const getListBankWithdrawalDestinationsQueryKey = () => {
+export const getListBankSavedPaymentMethodsQueryKey = () => {
     return [
-    `/api/bank/withdrawal-destinations`
+    `/api/bank/saved-payment-methods`
     ] as const;
     }
 
 
-export const getListBankWithdrawalDestinationsQueryOptions = <TData = Awaited<ReturnType<typeof listBankWithdrawalDestinations>>, TError = ErrorType<UnauthorizedResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listBankWithdrawalDestinations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getListBankSavedPaymentMethodsQueryOptions = <TData = Awaited<ReturnType<typeof listBankSavedPaymentMethods>>, TError = ErrorType<UnauthorizedResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listBankSavedPaymentMethods>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getListBankWithdrawalDestinationsQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getListBankSavedPaymentMethodsQueryKey();
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listBankWithdrawalDestinations>>> = ({ signal }) => listBankWithdrawalDestinations({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listBankSavedPaymentMethods>>> = ({ signal }) => listBankSavedPaymentMethods({ signal, ...requestOptions });
 
 
 
 
 
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listBankWithdrawalDestinations>>, TError, TData> & { queryKey: QueryKey }
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listBankSavedPaymentMethods>>, TError, TData> & { queryKey: QueryKey }
 }
 
-export type ListBankWithdrawalDestinationsQueryResult = NonNullable<Awaited<ReturnType<typeof listBankWithdrawalDestinations>>>
-export type ListBankWithdrawalDestinationsQueryError = ErrorType<UnauthorizedResponse>
+export type ListBankSavedPaymentMethodsQueryResult = NonNullable<Awaited<ReturnType<typeof listBankSavedPaymentMethods>>>
+export type ListBankSavedPaymentMethodsQueryError = ErrorType<UnauthorizedResponse>
 
 
 /**
- * @summary List the authenticated user's saved masked withdrawal destinations
+ * @summary List the authenticated user's saved masked payment methods
  */
 
-export function useListBankWithdrawalDestinations<TData = Awaited<ReturnType<typeof listBankWithdrawalDestinations>>, TError = ErrorType<UnauthorizedResponse>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listBankWithdrawalDestinations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export function useListBankSavedPaymentMethods<TData = Awaited<ReturnType<typeof listBankSavedPaymentMethods>>, TError = ErrorType<UnauthorizedResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listBankSavedPaymentMethods>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getListBankWithdrawalDestinationsQueryOptions(options)
+  const queryOptions = getListBankSavedPaymentMethodsQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -596,18 +596,18 @@ export function useListBankWithdrawalDestinations<TData = Awaited<ReturnType<typ
 
 
 
-export const getCreateBankWithdrawalDestinationUrl = () => {
+export const getCreateBankSavedPaymentMethodUrl = () => {
 
 
 
 
-  return `/api/bank/withdrawal-destinations`
+  return `/api/bank/saved-payment-methods`
 }
 
 /**
- * @summary Save a masked withdrawal destination for future requests
+ * @summary Save a masked card or bank-account reference for future requests
  */
-export const createBankWithdrawalDestination = async (withdrawalDestinationInput: WithdrawalDestinationInput, options?: Parameters<typeof customFetch>[1]): Promise<WithdrawalDestination> => {
+export const createBankSavedPaymentMethod = async (savedPaymentMethodInput: SavedPaymentMethodInput, options?: Parameters<typeof customFetch>[1]): Promise<SavedPaymentMethod> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -623,12 +623,12 @@ export const createBankWithdrawalDestination = async (withdrawalDestinationInput
     }
     return headers;
   };
-return customFetch<WithdrawalDestination>(getCreateBankWithdrawalDestinationUrl(),
+return customFetch<SavedPaymentMethod>(getCreateBankSavedPaymentMethodUrl(),
   {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(withdrawalDestinationInput)
+    body: JSON.stringify(savedPaymentMethodInput)
   }
 );}
 
@@ -636,13 +636,13 @@ return customFetch<WithdrawalDestination>(getCreateBankWithdrawalDestinationUrl(
 
 
 
-export const getCreateBankWithdrawalDestinationMutationKey = () => ['createBankWithdrawalDestination'] as const;
+export const getCreateBankSavedPaymentMethodMutationKey = () => ['createBankSavedPaymentMethod'] as const;
 
-export const getCreateBankWithdrawalDestinationMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ConflictResponse>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createBankWithdrawalDestination>>, TError,CreateBankWithdrawalDestinationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof createBankWithdrawalDestination>>, TError,CreateBankWithdrawalDestinationMutationVariables, TContext> => {
+export const getCreateBankSavedPaymentMethodMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createBankSavedPaymentMethod>>, TError,CreateBankSavedPaymentMethodMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createBankSavedPaymentMethod>>, TError,CreateBankSavedPaymentMethodMutationVariables, TContext> => {
 
-const mutationKey = getCreateBankWithdrawalDestinationMutationKey();
+const mutationKey = getCreateBankSavedPaymentMethodMutationKey();
 const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -652,10 +652,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createBankWithdrawalDestination>>, CreateBankWithdrawalDestinationMutationVariables> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createBankSavedPaymentMethod>>, CreateBankSavedPaymentMethodMutationVariables> = (props) => {
           const {data} = props ?? {};
 
-          return  createBankWithdrawalDestination(data,requestOptions)
+          return  createBankSavedPaymentMethod(data,requestOptions)
         }
 
 
@@ -665,39 +665,39 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type CreateBankWithdrawalDestinationMutationResult = NonNullable<Awaited<ReturnType<typeof createBankWithdrawalDestination>>>
-    export type CreateBankWithdrawalDestinationMutationBody = BodyType<WithdrawalDestinationInput>
-    export type CreateBankWithdrawalDestinationMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ConflictResponse>
-    export type CreateBankWithdrawalDestinationMutationVariables = {data: BodyType<WithdrawalDestinationInput>}
+    export type CreateBankSavedPaymentMethodMutationResult = NonNullable<Awaited<ReturnType<typeof createBankSavedPaymentMethod>>>
+    export type CreateBankSavedPaymentMethodMutationBody = BodyType<SavedPaymentMethodInput>
+    export type CreateBankSavedPaymentMethodMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ConflictResponse>
+    export type CreateBankSavedPaymentMethodMutationVariables = {data: BodyType<SavedPaymentMethodInput>}
 
     /**
- * @summary Save a masked withdrawal destination for future requests
+ * @summary Save a masked card or bank-account reference for future requests
  */
-export const useCreateBankWithdrawalDestination = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ConflictResponse>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createBankWithdrawalDestination>>, TError,CreateBankWithdrawalDestinationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+export const useCreateBankSavedPaymentMethod = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createBankSavedPaymentMethod>>, TError,CreateBankSavedPaymentMethodMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
-        Awaited<ReturnType<typeof createBankWithdrawalDestination>>,
+        Awaited<ReturnType<typeof createBankSavedPaymentMethod>>,
         TError,
-        CreateBankWithdrawalDestinationMutationVariables,
+        CreateBankSavedPaymentMethodMutationVariables,
         TContext
       > => {
-      return useMutation(getCreateBankWithdrawalDestinationMutationOptions(options));
+      return useMutation(getCreateBankSavedPaymentMethodMutationOptions(options));
     }
 
-export const getDeleteBankWithdrawalDestinationUrl = (destinationId: string,) => {
+export const getDeleteBankSavedPaymentMethodUrl = (paymentMethodId: string,) => {
 
 
 
 
-  return `/api/bank/withdrawal-destinations/${destinationId}`
+  return `/api/bank/saved-payment-methods/${paymentMethodId}`
 }
 
 /**
- * @summary Remove a saved withdrawal destination from future use
+ * @summary Remove a saved payment method from future use
  */
-export const deleteBankWithdrawalDestination = async (destinationId: string, options?: Parameters<typeof customFetch>[1]): Promise<DeleteWithdrawalDestinationResponse> => {
+export const deleteBankSavedPaymentMethod = async (paymentMethodId: string, options?: Parameters<typeof customFetch>[1]): Promise<DeleteSavedPaymentMethodResponse> => {
 
-  return customFetch<DeleteWithdrawalDestinationResponse>(getDeleteBankWithdrawalDestinationUrl(destinationId),
+  return customFetch<DeleteSavedPaymentMethodResponse>(getDeleteBankSavedPaymentMethodUrl(paymentMethodId),
   {
     ...options,
     method: 'DELETE'
@@ -710,13 +710,13 @@ export const deleteBankWithdrawalDestination = async (destinationId: string, opt
 
 
 
-export const getDeleteBankWithdrawalDestinationMutationKey = () => ['deleteBankWithdrawalDestination'] as const;
+export const getDeleteBankSavedPaymentMethodMutationKey = () => ['deleteBankSavedPaymentMethod'] as const;
 
-export const getDeleteBankWithdrawalDestinationMutationOptions = <TError = ErrorType<UnauthorizedResponse | NotFoundResponse>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteBankWithdrawalDestination>>, TError,DeleteBankWithdrawalDestinationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof deleteBankWithdrawalDestination>>, TError,DeleteBankWithdrawalDestinationMutationVariables, TContext> => {
+export const getDeleteBankSavedPaymentMethodMutationOptions = <TError = ErrorType<UnauthorizedResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteBankSavedPaymentMethod>>, TError,DeleteBankSavedPaymentMethodMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteBankSavedPaymentMethod>>, TError,DeleteBankSavedPaymentMethodMutationVariables, TContext> => {
 
-const mutationKey = getDeleteBankWithdrawalDestinationMutationKey();
+const mutationKey = getDeleteBankSavedPaymentMethodMutationKey();
 const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -726,10 +726,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteBankWithdrawalDestination>>, DeleteBankWithdrawalDestinationMutationVariables> = (props) => {
-          const {destinationId} = props ?? {};
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteBankSavedPaymentMethod>>, DeleteBankSavedPaymentMethodMutationVariables> = (props) => {
+          const {paymentMethodId} = props ?? {};
 
-          return  deleteBankWithdrawalDestination(destinationId,requestOptions)
+          return  deleteBankSavedPaymentMethod(paymentMethodId,requestOptions)
         }
 
 
@@ -739,23 +739,23 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type DeleteBankWithdrawalDestinationMutationResult = NonNullable<Awaited<ReturnType<typeof deleteBankWithdrawalDestination>>>
+    export type DeleteBankSavedPaymentMethodMutationResult = NonNullable<Awaited<ReturnType<typeof deleteBankSavedPaymentMethod>>>
 
-    export type DeleteBankWithdrawalDestinationMutationError = ErrorType<UnauthorizedResponse | NotFoundResponse>
-    export type DeleteBankWithdrawalDestinationMutationVariables = {destinationId: string}
+    export type DeleteBankSavedPaymentMethodMutationError = ErrorType<UnauthorizedResponse | NotFoundResponse>
+    export type DeleteBankSavedPaymentMethodMutationVariables = {paymentMethodId: string}
 
     /**
- * @summary Remove a saved withdrawal destination from future use
+ * @summary Remove a saved payment method from future use
  */
-export const useDeleteBankWithdrawalDestination = <TError = ErrorType<UnauthorizedResponse | NotFoundResponse>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteBankWithdrawalDestination>>, TError,DeleteBankWithdrawalDestinationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+export const useDeleteBankSavedPaymentMethod = <TError = ErrorType<UnauthorizedResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteBankSavedPaymentMethod>>, TError,DeleteBankSavedPaymentMethodMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
-        Awaited<ReturnType<typeof deleteBankWithdrawalDestination>>,
+        Awaited<ReturnType<typeof deleteBankSavedPaymentMethod>>,
         TError,
-        DeleteBankWithdrawalDestinationMutationVariables,
+        DeleteBankSavedPaymentMethodMutationVariables,
         TContext
       > => {
-      return useMutation(getDeleteBankWithdrawalDestinationMutationOptions(options));
+      return useMutation(getDeleteBankSavedPaymentMethodMutationOptions(options));
     }
 
 export const getListBankTransactionsUrl = (params?: ListBankTransactionsParams,) => {

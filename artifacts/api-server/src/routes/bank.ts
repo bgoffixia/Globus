@@ -3,8 +3,8 @@ import { getAuth } from "@clerk/express";
 import { rateLimit } from "express-rate-limit";
 import { and, asc, count, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
-  CreateBankWithdrawalDestinationBody,
-  CreateBankWithdrawalDestinationResponse,
+  CreateBankSavedPaymentMethodBody,
+  CreateBankSavedPaymentMethodResponse,
   CreateIdentityDocumentUploadUrlBody,
   CreateIdentityDocumentUploadUrlResponse,
   CreateExternalTransferBody,
@@ -15,8 +15,8 @@ import {
   CompleteIdentityDocumentUploadResponse,
   DeleteMyIdentityDocumentParams,
   DeleteMyIdentityDocumentResponse,
-  DeleteBankWithdrawalDestinationParams,
-  DeleteBankWithdrawalDestinationResponse,
+  DeleteBankSavedPaymentMethodParams,
+  DeleteBankSavedPaymentMethodResponse,
   CreateIncomingExternalTransferResponse,
   CreateInternationalTransferRequestBody,
   CreateInternationalTransferRequestResponse,
@@ -31,7 +31,7 @@ import {
   ListBankTransactionsQueryParams,
   ListBankTransactionsResponse,
   ListBankWalletsResponse,
-  ListBankWithdrawalDestinationsResponse,
+  ListBankSavedPaymentMethodsResponse,
   LookupCustomerIdBody,
   LookupCustomerIdResponse,
   SubmitIdentityDocumentsBody,
@@ -50,7 +50,7 @@ import {
   bankSandboxRequestsTable,
   bankTransactionsTable,
   bankUsersTable,
-  bankWithdrawalDestinationsTable,
+  bankSavedPaymentMethodsTable,
   bankWalletsTable,
   db,
 } from "@workspace/db";
@@ -477,7 +477,7 @@ router.get("/bank/wallets", async (req, res): Promise<void> => {
   res.json(ListBankWalletsResponse.parse(await getWalletsForUser(user.id)));
 });
 
-router.get("/bank/withdrawal-destinations", async (req, res): Promise<void> => {
+router.get("/bank/saved-payment-methods", async (req, res): Promise<void> => {
   const authUserId = getAuth(req).userId;
   if (!authUserId) {
     res.status(401).json({ error: "Sign in to access your Globus account." });
@@ -486,17 +486,17 @@ router.get("/bank/withdrawal-destinations", async (req, res): Promise<void> => {
   const user = await getOrCreateBankUser(authUserId);
   const destinations = await db
     .select()
-    .from(bankWithdrawalDestinationsTable)
+    .from(bankSavedPaymentMethodsTable)
     .where(
       and(
-        eq(bankWithdrawalDestinationsTable.userId, user.id),
-        isNull(bankWithdrawalDestinationsTable.deletedAt),
+        eq(bankSavedPaymentMethodsTable.userId, user.id),
+        isNull(bankSavedPaymentMethodsTable.deletedAt),
       ),
     )
-    .orderBy(desc(bankWithdrawalDestinationsTable.createdAt))
+    .orderBy(desc(bankSavedPaymentMethodsTable.createdAt))
     .limit(20);
   res.json(
-    ListBankWithdrawalDestinationsResponse.parse(
+    ListBankSavedPaymentMethodsResponse.parse(
       destinations.map((destination) => ({
         id: destination.id,
         method: destination.method,
@@ -514,21 +514,21 @@ router.get("/bank/withdrawal-destinations", async (req, res): Promise<void> => {
 });
 
 router.post(
-  "/bank/withdrawal-destinations",
+  "/bank/saved-payment-methods",
   async (req, res): Promise<void> => {
     const authUserId = getAuth(req).userId;
     if (!authUserId) {
       res.status(401).json({ error: "Sign in to access your Globus account." });
       return;
     }
-    const parsed = CreateBankWithdrawalDestinationBody.safeParse(req.body);
+    const parsed = CreateBankSavedPaymentMethodBody.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: parsed.error.message });
       return;
     }
     const user = await getOrCreateBankUser(authUserId);
     if (user.accountStatus !== "active" || !user.acceptedTermsAt) {
-      res.status(409).json({ error: "Complete account setup before saving a destination." });
+      res.status(409).json({ error: "Complete account setup before saving a payment method." });
       return;
     }
 
@@ -554,49 +554,56 @@ router.post(
       });
       return;
     }
-    const [activeCount] = await db
-      .select({ total: count() })
-      .from(bankWithdrawalDestinationsTable)
-      .where(
-        and(
-          eq(bankWithdrawalDestinationsTable.userId, user.id),
-          isNull(bankWithdrawalDestinationsTable.deletedAt),
-        ),
+    const saved = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtext(${`saved-payment-methods:${user.id}`})::bigint)`,
       );
-    if ((activeCount?.total ?? 0) >= 10) {
-      res.status(409).json({ error: "You can save up to 10 withdrawal destinations." });
+      const [activeCount] = await tx
+        .select({ total: count() })
+        .from(bankSavedPaymentMethodsTable)
+        .where(
+          and(
+            eq(bankSavedPaymentMethodsTable.userId, user.id),
+            isNull(bankSavedPaymentMethodsTable.deletedAt),
+          ),
+        );
+      if ((activeCount?.total ?? 0) >= 10) return null;
+
+      const [row] = await tx
+        .insert(bankSavedPaymentMethodsTable)
+        .values({
+          userId: user.id,
+          method,
+          cardBrand: method === "bank_card" ? parsed.data.cardBrand ?? null : null,
+          bankName:
+            method === "bank_transfer" ? parsed.data.bankName?.trim() ?? null : null,
+          accountHolder:
+            method === "bank_transfer"
+              ? parsed.data.accountHolder?.trim() ?? null
+              : null,
+          country:
+            method === "bank_transfer" ? parsed.data.country?.trim() || null : null,
+          lastFour,
+        })
+        .returning();
+      await tx.insert(bankAuditLogsTable).values({
+        actorUserId: user.id,
+        targetUserId: user.id,
+        action: "save_payment_method",
+        reason:
+          method === "bank_card"
+            ? `Member saved a masked card reference ending ${lastFour}.`
+            : `Member saved a masked bank-account reference ending ${lastFour}.`,
+      });
+      return row;
+    });
+    if (!saved) {
+      res.status(409).json({ error: "You can save up to 10 payment methods." });
       return;
     }
 
-    const [saved] = await db
-      .insert(bankWithdrawalDestinationsTable)
-      .values({
-        userId: user.id,
-        method,
-        cardBrand: method === "bank_card" ? parsed.data.cardBrand ?? null : null,
-        bankName:
-          method === "bank_transfer" ? parsed.data.bankName?.trim() ?? null : null,
-        accountHolder:
-          method === "bank_transfer"
-            ? parsed.data.accountHolder?.trim() ?? null
-            : null,
-        country:
-          method === "bank_transfer" ? parsed.data.country?.trim() || null : null,
-        lastFour,
-      })
-      .returning();
-    await db.insert(bankAuditLogsTable).values({
-      actorUserId: user.id,
-      targetUserId: user.id,
-      action: "save_withdrawal_destination",
-      reason:
-        method === "bank_card"
-          ? `Member saved a masked card reference ending ${lastFour}.`
-          : `Member saved a masked bank-account reference ending ${lastFour}.`,
-    });
-
     res.status(201).json(
-      CreateBankWithdrawalDestinationResponse.parse({
+      CreateBankSavedPaymentMethodResponse.parse({
         id: saved.id,
         method: saved.method,
         ...(saved.cardBrand ? { cardBrand: saved.cardBrand } : {}),
@@ -611,9 +618,9 @@ router.post(
 );
 
 router.delete(
-  "/bank/withdrawal-destinations/:destinationId",
+  "/bank/saved-payment-methods/:paymentMethodId",
   async (req, res): Promise<void> => {
-    const params = DeleteBankWithdrawalDestinationParams.safeParse(req.params);
+    const params = DeleteBankSavedPaymentMethodParams.safeParse(req.params);
     if (!params.success) {
       res.status(400).json({ error: params.error.message });
       return;
@@ -624,28 +631,35 @@ router.delete(
       return;
     }
     const user = await getOrCreateBankUser(authUserId);
-    const [removed] = await db
-      .update(bankWithdrawalDestinationsTable)
-      .set({ deletedAt: new Date() })
-      .where(
-        and(
-          eq(bankWithdrawalDestinationsTable.id, params.data.destinationId),
-          eq(bankWithdrawalDestinationsTable.userId, user.id),
-          isNull(bankWithdrawalDestinationsTable.deletedAt),
-        ),
-      )
-      .returning({ id: bankWithdrawalDestinationsTable.id, lastFour: bankWithdrawalDestinationsTable.lastFour });
+    const removed = await db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(bankSavedPaymentMethodsTable)
+        .set({ deletedAt: new Date() })
+        .where(
+          and(
+            eq(bankSavedPaymentMethodsTable.id, params.data.paymentMethodId),
+            eq(bankSavedPaymentMethodsTable.userId, user.id),
+            isNull(bankSavedPaymentMethodsTable.deletedAt),
+          ),
+        )
+        .returning({
+          id: bankSavedPaymentMethodsTable.id,
+          lastFour: bankSavedPaymentMethodsTable.lastFour,
+        });
+      if (!row) return null;
+      await tx.insert(bankAuditLogsTable).values({
+        actorUserId: user.id,
+        targetUserId: user.id,
+        action: "remove_payment_method",
+        reason: `Member removed a saved masked payment method ending ${row.lastFour}.`,
+      });
+      return row;
+    });
     if (!removed) {
-      res.status(404).json({ error: "Saved withdrawal destination not found." });
+      res.status(404).json({ error: "Saved payment method not found." });
       return;
     }
-    await db.insert(bankAuditLogsTable).values({
-      actorUserId: user.id,
-      targetUserId: user.id,
-      action: "remove_withdrawal_destination",
-      reason: `Member removed a saved masked destination ending ${removed.lastFour}.`,
-    });
-    res.json(DeleteBankWithdrawalDestinationResponse.parse({ id: removed.id, deleted: true }));
+    res.json(DeleteBankSavedPaymentMethodResponse.parse({ id: removed.id, deleted: true }));
   },
 );
 
@@ -1733,22 +1747,19 @@ router.post("/bank/ledger-requests", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  const requiresSavedMethod =
+    parsed.data.type === "withdrawal" ||
+    (parsed.data.type === "deposit" && parsed.data.paymentMethod === "bank_card");
   if (
-    parsed.data.type === "withdrawal" &&
-    (!parsed.data.withdrawalDestinationId ||
-      !parsed.data.withdrawalMethod)
+    (requiresSavedMethod &&
+      (!parsed.data.savedPaymentMethodId || !parsed.data.paymentMethod)) ||
+    (!!parsed.data.savedPaymentMethodId !== !!parsed.data.paymentMethod)
   ) {
     res.status(400).json({
-      error: "Choose a saved withdrawal destination before submitting.",
-    });
-    return;
-  }
-  if (
-    parsed.data.type === "deposit" &&
-    (parsed.data.withdrawalDestinationId || parsed.data.withdrawalMethod)
-  ) {
-    res.status(400).json({
-      error: "Withdrawal destinations can only be used for withdrawal requests.",
+      error:
+        parsed.data.type === "withdrawal"
+          ? "Choose a saved withdrawal destination before submitting."
+          : "Choose a saved card before submitting a card deposit request.",
     });
     return;
   }
@@ -1796,9 +1807,9 @@ router.post("/bank/ledger-requests", async (req, res): Promise<void> => {
       existing[0].type !== parsed.data.type ||
       existing[0].currency !== parsed.data.currency ||
       existing[0].amountMinor !== amountMinor ||
-      existing[0].withdrawalDestinationId !==
-        (parsed.data.withdrawalDestinationId ?? null) ||
-      existing[0].withdrawalMethod !== (parsed.data.withdrawalMethod ?? null)
+      existing[0].savedPaymentMethodId !==
+        (parsed.data.savedPaymentMethodId ?? null) ||
+      existing[0].paymentMethod !== (parsed.data.paymentMethod ?? null)
     ) {
       res.status(409).json({ error: "That request reference is already in use." });
       return;
@@ -1848,43 +1859,42 @@ router.post("/bank/ledger-requests", async (req, res): Promise<void> => {
         duplicate.type === parsed.data.type &&
         duplicate.currency === parsed.data.currency &&
         duplicate.amountMinor === amountMinor &&
-        duplicate.withdrawalDestinationId ===
-          (parsed.data.withdrawalDestinationId ?? null) &&
-        duplicate.withdrawalMethod === (parsed.data.withdrawalMethod ?? null)
+        duplicate.savedPaymentMethodId ===
+          (parsed.data.savedPaymentMethodId ?? null) &&
+        duplicate.paymentMethod === (parsed.data.paymentMethod ?? null)
         ? { sandboxRequest: duplicate }
         : { error: "That request reference is already in use." };
     }
 
     const reference = createReference();
     let destinationSummary: string | null = null;
-    let withdrawalDestinationId: string | null = null;
-    let withdrawalMethod: string | null = null;
+    let savedPaymentMethodId: string | null = null;
+    let paymentMethod: string | null = null;
     if (
-      parsed.data.type === "withdrawal" &&
-      parsed.data.withdrawalDestinationId &&
-      parsed.data.withdrawalMethod
+      parsed.data.savedPaymentMethodId &&
+      parsed.data.paymentMethod
     ) {
       const [destination] = await tx
         .select()
-        .from(bankWithdrawalDestinationsTable)
+        .from(bankSavedPaymentMethodsTable)
         .where(
           and(
             eq(
-              bankWithdrawalDestinationsTable.id,
-              parsed.data.withdrawalDestinationId,
+              bankSavedPaymentMethodsTable.id,
+              parsed.data.savedPaymentMethodId,
             ),
-            eq(bankWithdrawalDestinationsTable.userId, userId),
-            eq(bankWithdrawalDestinationsTable.method, parsed.data.withdrawalMethod),
-            isNull(bankWithdrawalDestinationsTable.deletedAt),
+            eq(bankSavedPaymentMethodsTable.userId, userId),
+            eq(bankSavedPaymentMethodsTable.method, parsed.data.paymentMethod),
+            isNull(bankSavedPaymentMethodsTable.deletedAt),
           ),
         )
         .for("update")
         .limit(1);
       if (!destination) {
-        return { error: "Choose an active saved withdrawal destination." };
+        return { error: "Choose an active saved payment method." };
       }
-      withdrawalDestinationId = destination.id;
-      withdrawalMethod = destination.method;
+      savedPaymentMethodId = destination.id;
+      paymentMethod = destination.method;
       destinationSummary =
         destination.method === "bank_card"
           ? `${(destination.cardBrand ?? "Card").toUpperCase()} card ·••• ${destination.lastFour}`
@@ -1953,9 +1963,9 @@ router.post("/bank/ledger-requests", async (req, res): Promise<void> => {
         type: parsed.data.type,
         currency: parsed.data.currency,
         destinationCurrency: null,
-        withdrawalDestinationId,
-        withdrawalMethod,
-        withdrawalDestinationSummary: destinationSummary,
+        savedPaymentMethodId,
+        paymentMethod,
+        paymentMethodSummary: destinationSummary,
         amountMinor,
         status: "pending_review",
       })

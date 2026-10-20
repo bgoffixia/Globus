@@ -6,7 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface DeleteWithdrawalDestinationResponse {
+export interface DeleteSavedPaymentMethodResponse {
   id: string;
   deleted: true;
 }

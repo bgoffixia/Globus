@@ -139,6 +139,7 @@ export const bankSavedPaymentMethodsTable = pgTable(
     cardBrand: text("card_brand"),
     bankName: text("bank_name"),
     accountHolder: text("account_holder"),
+    country: text("country"),
     lastFour: text("last_four").notNull(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })

@@ -501,10 +501,10 @@ export const LedgerRequestInputType = {
   withdrawal: 'withdrawal',
 } as const;
 
-export type LedgerRequestInputWithdrawalMethod = typeof LedgerRequestInputWithdrawalMethod[keyof typeof LedgerRequestInputWithdrawalMethod];
+export type LedgerRequestInputPaymentMethod = typeof LedgerRequestInputPaymentMethod[keyof typeof LedgerRequestInputPaymentMethod];
 
 
-export const LedgerRequestInputWithdrawalMethod = {
+export const LedgerRequestInputPaymentMethod = {
   bank_card: 'bank_card',
   bank_transfer: 'bank_transfer',
 } as const;
@@ -523,22 +523,22 @@ export interface LedgerRequestInput {
   idempotencyKey: string;
   /** @pattern ^[0-9]{6}$ */
   transactionPin: string;
-  withdrawalDestinationId?: string;
-  withdrawalMethod?: LedgerRequestInputWithdrawalMethod;
+  savedPaymentMethodId?: string;
+  paymentMethod?: LedgerRequestInputPaymentMethod;
 }
 
-export type WithdrawalDestinationInputMethod = typeof WithdrawalDestinationInputMethod[keyof typeof WithdrawalDestinationInputMethod];
+export type SavedPaymentMethodInputMethod = typeof SavedPaymentMethodInputMethod[keyof typeof SavedPaymentMethodInputMethod];
 
 
-export const WithdrawalDestinationInputMethod = {
+export const SavedPaymentMethodInputMethod = {
   bank_card: 'bank_card',
   bank_transfer: 'bank_transfer',
 } as const;
 
-export type WithdrawalDestinationInputCardBrand = typeof WithdrawalDestinationInputCardBrand[keyof typeof WithdrawalDestinationInputCardBrand];
+export type SavedPaymentMethodInputCardBrand = typeof SavedPaymentMethodInputCardBrand[keyof typeof SavedPaymentMethodInputCardBrand];
 
 
-export const WithdrawalDestinationInputCardBrand = {
+export const SavedPaymentMethodInputCardBrand = {
   visa: 'visa',
   mastercard: 'mastercard',
   amex: 'amex',
@@ -546,9 +546,9 @@ export const WithdrawalDestinationInputCardBrand = {
   other: 'other',
 } as const;
 
-export interface WithdrawalDestinationInput {
-  method: WithdrawalDestinationInputMethod;
-  cardBrand?: WithdrawalDestinationInputCardBrand;
+export interface SavedPaymentMethodInput {
+  method: SavedPaymentMethodInputMethod;
+  cardBrand?: SavedPaymentMethodInputCardBrand;
   /**
      * @minLength 1
      * @maxLength 120
@@ -568,18 +568,18 @@ export interface WithdrawalDestinationInput {
   lastFour: string;
 }
 
-export type WithdrawalDestinationMethod = typeof WithdrawalDestinationMethod[keyof typeof WithdrawalDestinationMethod];
+export type SavedPaymentMethodMethod = typeof SavedPaymentMethodMethod[keyof typeof SavedPaymentMethodMethod];
 
 
-export const WithdrawalDestinationMethod = {
+export const SavedPaymentMethodMethod = {
   bank_card: 'bank_card',
   bank_transfer: 'bank_transfer',
 } as const;
 
-export type WithdrawalDestinationCardBrand = typeof WithdrawalDestinationCardBrand[keyof typeof WithdrawalDestinationCardBrand];
+export type SavedPaymentMethodCardBrand = typeof SavedPaymentMethodCardBrand[keyof typeof SavedPaymentMethodCardBrand];
 
 
-export const WithdrawalDestinationCardBrand = {
+export const SavedPaymentMethodCardBrand = {
   visa: 'visa',
   mastercard: 'mastercard',
   amex: 'amex',
@@ -587,10 +587,10 @@ export const WithdrawalDestinationCardBrand = {
   other: 'other',
 } as const;
 
-export interface WithdrawalDestination {
+export interface SavedPaymentMethod {
   id: string;
-  method: WithdrawalDestinationMethod;
-  cardBrand?: WithdrawalDestinationCardBrand;
+  method: SavedPaymentMethodMethod;
+  cardBrand?: SavedPaymentMethodCardBrand;
   bankName?: string;
   accountHolder?: string;
   country?: string;
@@ -599,7 +599,7 @@ export interface WithdrawalDestination {
   createdAt: string;
 }
 
-export interface DeleteWithdrawalDestinationResponse {
+export interface DeleteSavedPaymentMethodResponse {
   id: string;
   deleted: true;
 }
@@ -640,10 +640,10 @@ export const AdminLedgerRequestType = {
   withdrawal: 'withdrawal',
 } as const;
 
-export type AdminLedgerRequestWithdrawalMethod = typeof AdminLedgerRequestWithdrawalMethod[keyof typeof AdminLedgerRequestWithdrawalMethod];
+export type AdminLedgerRequestPaymentMethod = typeof AdminLedgerRequestPaymentMethod[keyof typeof AdminLedgerRequestPaymentMethod];
 
 
-export const AdminLedgerRequestWithdrawalMethod = {
+export const AdminLedgerRequestPaymentMethod = {
   bank_card: 'bank_card',
   bank_transfer: 'bank_transfer',
 } as const;
@@ -669,8 +669,8 @@ export interface AdminLedgerRequest {
   currency: CurrencyCode;
   amount: string;
   description: string;
-  withdrawalMethod?: AdminLedgerRequestWithdrawalMethod;
-  withdrawalDestinationSummary?: string;
+  paymentMethod?: AdminLedgerRequestPaymentMethod;
+  paymentMethodSummary?: string;
   status: AdminLedgerRequestStatus;
   createdAt: string;
 }

@@ -5,12 +5,12 @@
  * Globus internal ledger API; no external financial provider is connected
  * OpenAPI spec version: 0.1.0
  */
-import type { WithdrawalDestinationInputCardBrand } from './withdrawalDestinationInputCardBrand';
-import type { WithdrawalDestinationInputMethod } from './withdrawalDestinationInputMethod';
+import type { SavedPaymentMethodInputCardBrand } from './savedPaymentMethodInputCardBrand';
+import type { SavedPaymentMethodInputMethod } from './savedPaymentMethodInputMethod';
 
-export interface WithdrawalDestinationInput {
-  method: WithdrawalDestinationInputMethod;
-  cardBrand?: WithdrawalDestinationInputCardBrand;
+export interface SavedPaymentMethodInput {
+  method: SavedPaymentMethodInputMethod;
+  cardBrand?: SavedPaymentMethodInputCardBrand;
   /**
      * @minLength 1
      * @maxLength 120

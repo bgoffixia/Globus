@@ -51,12 +51,12 @@ import {
   getListMyIdentityDocumentsQueryKey,
   getListBankTransactionsQueryKey,
   getListBankWalletsQueryKey,
-  getListBankWithdrawalDestinationsQueryKey,
+  getListBankSavedPaymentMethodsQueryKey,
   useCreateAdminFunding,
   useCreateIdentityDocumentUploadUrl,
   useCompleteIdentityDocumentUpload,
   useCreateBankTransfer,
-  useCreateBankWithdrawalDestination,
+  useCreateBankSavedPaymentMethod,
   useCreateInternationalTransferRequest,
   useCreateLedgerRequest,
   useGetAdminAccess,
@@ -73,7 +73,7 @@ import {
   useListMyIdentityDocuments,
   useListBankTransactions,
   useListBankWallets,
-  useListBankWithdrawalDestinations,
+  useListBankSavedPaymentMethods,
   useListBankExchangeRates,
   useListInternationalTransferRequests,
   useUpdateAdminUserStatus,
@@ -85,10 +85,10 @@ import {
   useUpdateBankProfile,
   useUpsertBankExchangeRate,
   useDeleteMyIdentityDocument,
-  useDeleteBankWithdrawalDestination,
+  useDeleteBankSavedPaymentMethod,
   useSubmitIdentityDocuments,
 } from '@workspace/api-client-react';
-import type { AdminLedgerRequest, AdminUser, BankTransaction, IdentityDocument, InternationalTransferRequest, Wallet, WithdrawalDestination } from '@workspace/api-client-react';
+import type { AdminLedgerRequest, AdminUser, BankTransaction, IdentityDocument, InternationalTransferRequest, Wallet, SavedPaymentMethod } from '@workspace/api-client-react';
 import { GlobusLoader } from '@/components/globus-loader';
 import { BankSelect } from '@/components/bank-select';
 import { CountrySelect } from '@/components/country-select';
@@ -496,15 +496,15 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
   const queryClient = useQueryClient();
   const profileQuery = useGetBankProfile({ query: { queryKey: getGetBankProfileQueryKey() } });
   const walletsQuery = useListBankWallets({ query: { queryKey: getListBankWalletsQueryKey() } });
-  const withdrawalDestinationsQuery = useListBankWithdrawalDestinations({
+  const savedPaymentMethodsQuery = useListBankSavedPaymentMethods({
     query: {
-      queryKey: getListBankWithdrawalDestinationsQueryKey(),
-      enabled: type === 'withdrawal',
+      queryKey: getListBankSavedPaymentMethodsQueryKey(),
+      enabled: type === 'withdrawal' || type === 'deposit',
     },
   });
   const mutation = useCreateLedgerRequest();
-  const createWithdrawalDestination = useCreateBankWithdrawalDestination();
-  const deleteWithdrawalDestination = useDeleteBankWithdrawalDestination();
+  const createSavedPaymentMethod = useCreateBankSavedPaymentMethod();
+  const deleteSavedPaymentMethod = useDeleteBankSavedPaymentMethod();
   const [currency, setCurrency] = useState<Currency | null>(() => type === 'deposit' ? currencyFromQuery() : preferredCurrencyFromQuery());
   const [depositWalletSelected, setDepositWalletSelected] = useState(() => type === 'deposit' && currencyFromQuery() !== null);
   const [withdrawalWalletSelected, setWithdrawalWalletSelected] = useState(false);
@@ -512,7 +512,7 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
   const [description, setDescription] = useState('');
   const [depositMethod, setDepositMethod] = useState<'bank_card' | 'bank_transfer'>('bank_transfer');
   const [withdrawalMethod, setWithdrawalMethod] = useState<'bank_card' | 'bank_transfer'>('bank_transfer');
-  const [withdrawalDestinationId, setWithdrawalDestinationId] = useState('');
+  const [savedPaymentMethodId, setSavedPaymentMethodId] = useState('');
   const [showDestinationForm, setShowDestinationForm] = useState(false);
   const [destinationError, setDestinationError] = useState('');
   const [cardBrand, setCardBrand] = useState<'visa' | 'mastercard' | 'amex' | 'discover' | 'other'>('visa');
@@ -528,15 +528,18 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
   const [errorMessage, setErrorMessage] = useState('');
   const selectedWallet = walletsQuery.data?.find(wallet => wallet.currency === currency);
   const available = Number(selectedWallet?.available ?? 0);
-  const destinationsForMethod = (withdrawalDestinationsQuery.data ?? []).filter(
-    destination => destination.method === withdrawalMethod,
+  const currentPaymentMethod = type === 'deposit' ? depositMethod : withdrawalMethod;
+  const destinationsForMethod = (savedPaymentMethodsQuery.data ?? []).filter(
+    destination => destination.method === currentPaymentMethod,
   );
   const selectedDestination = destinationsForMethod.find(
-    destination => destination.id === withdrawalDestinationId,
+    destination => destination.id === savedPaymentMethodId,
   );
+  const requiresSavedMethod = type === 'withdrawal' || depositMethod === 'bank_card';
   const shouldShowDestinationForm =
-    showDestinationForm ||
-    (withdrawalDestinationsQuery.isSuccess && destinationsForMethod.length === 0);
+    requiresSavedMethod &&
+    (showDestinationForm ||
+      (savedPaymentMethodsQuery.isSuccess && destinationsForMethod.length === 0));
   const heading = type === 'deposit' ? 'Request a deposit' : 'Request a withdrawal';
   const sub = type === 'deposit'
     ? 'Choose a request method and ask an administrator to review a credit to your selected wallet.'
@@ -545,14 +548,18 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
     event.preventDefault();
     setResult(null);
     setErrorMessage('');
-    if (type === 'withdrawal' && !selectedDestination) {
-      setErrorMessage('Choose or save a withdrawal destination before continuing.');
+    if (requiresSavedMethod && !selectedDestination) {
+      setErrorMessage(
+        type === 'withdrawal'
+          ? 'Choose or save a withdrawal destination before continuing.'
+          : 'Choose or save a card before submitting a card deposit request.',
+      );
       return;
     }
     const requestDescription = type === 'deposit'
       ? `${depositMethod === 'bank_card' ? 'Bank card' : 'Bank transfer'} deposit request${sourceReference.trim() ? ` · Reference: ${sourceReference.trim()}` : ''}${description.trim() ? ` · Note: ${description.trim()}` : ''}`.slice(0, 140)
       : description.trim();
-    mutation.mutate({ data: { type, currency: currency ?? preferredCurrencyFromQuery(), amount, ...(requestDescription ? { description: requestDescription } : {}), ...(type === 'withdrawal' && selectedDestination ? { withdrawalDestinationId: selectedDestination.id, withdrawalMethod } : {}), transactionPin, idempotencyKey: crypto.randomUUID() } }, {
+    mutation.mutate({ data: { type, currency: currency ?? preferredCurrencyFromQuery(), amount, ...(requestDescription ? { description: requestDescription } : {}), ...(requiresSavedMethod && selectedDestination ? { savedPaymentMethodId: selectedDestination.id, paymentMethod: currentPaymentMethod } : {}), transactionPin, idempotencyKey: crypto.randomUUID() } }, {
       onSuccess: request => {
         setResult(request);
         setAmount('');
@@ -565,6 +572,42 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
       },
       onError: error => setErrorMessage(error instanceof Error ? error.message : 'Request could not be recorded. Please try again.'),
     });
+  };
+  const savePaymentMethod = async () => {
+    setDestinationError('');
+    try {
+      const data = currentPaymentMethod === 'bank_card'
+        ? { method: 'bank_card' as const, cardBrand, lastFour: cardLastFour.trim() }
+        : {
+            method: 'bank_transfer' as const,
+            bankName: bankName.trim(),
+            accountHolder: accountHolder.trim(),
+            country: bankCountry.trim() || undefined,
+            lastFour: accountLastFour.trim(),
+          };
+      const saved = await createSavedPaymentMethod.mutateAsync({ data });
+      await queryClient.invalidateQueries({ queryKey: getListBankSavedPaymentMethodsQueryKey() });
+      setSavedPaymentMethodId(saved.id);
+      setShowDestinationForm(false);
+      setCardLastFour('');
+      setBankName('');
+      setAccountHolder('');
+      setBankCountry('');
+      setAccountLastFour('');
+    } catch (error) {
+      setDestinationError(error instanceof Error ? error.message : 'The payment method could not be saved.');
+    }
+  };
+  const removePaymentMethod = async (method: SavedPaymentMethod) => {
+    if (!window.confirm(`Remove the saved ${method.method === 'bank_card' ? 'card' : 'bank account'} ending ${method.lastFour}?`)) return;
+    setDestinationError('');
+    try {
+      await deleteSavedPaymentMethod.mutateAsync({ paymentMethodId: method.id });
+      await queryClient.invalidateQueries({ queryKey: getListBankSavedPaymentMethodsQueryKey() });
+      if (savedPaymentMethodId === method.id) setSavedPaymentMethodId('');
+    } catch (error) {
+      setDestinationError(error instanceof Error ? error.message : 'The payment method could not be removed.');
+    }
   };
   if (type === 'deposit') {
     const accountHolder = [profileQuery.data?.firstName, profileQuery.data?.lastName].filter(Boolean).join(' ') || 'Globus member';
@@ -647,9 +690,40 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
             <form onSubmit={submit} className="min-w-0 rounded-2xl border border-[#e1e8ee] bg-white p-3.5 sm:p-4" data-testid="deposit-request-form">
               <div className="mb-3 flex items-center justify-between gap-3"><div><h2 className="text-[12px] font-bold text-[#2c425c]">Request a deposit</h2><p className="mt-0.5 text-[9px] text-[#8391a0]">Selected wallet · {selectedWallet.currency}</p></div><span className="rounded-lg bg-[#eef7f7] px-2.5 py-1.5 text-[9px] font-bold text-[#377b82]">{selectedWallet.currency}</span></div>
               <div className="grid grid-cols-2 gap-2" role="group" aria-label="Deposit request method">
-                <button type="button" onClick={() => setDepositMethod('bank_card')} aria-pressed={depositMethod === 'bank_card'} data-testid="button-deposit-bank-card" className={`rounded-lg border px-3 py-2.5 text-left text-[9px] font-bold transition ${depositMethod === 'bank_card' ? 'border-[#4e8c91] bg-[#f1f8f8] text-[#315c67]' : 'border-[#e1e8ed] bg-white text-[#718195]'}`}>Bank card</button>
+                <button type="button" onClick={() => { setDepositMethod('bank_card'); setShowDestinationForm(false); setDestinationError(''); }} aria-pressed={depositMethod === 'bank_card'} data-testid="button-deposit-bank-card" className={`rounded-lg border px-3 py-2.5 text-left text-[9px] font-bold transition ${depositMethod === 'bank_card' ? 'border-[#4e8c91] bg-[#f1f8f8] text-[#315c67]' : 'border-[#e1e8ed] bg-white text-[#718195]'}`}><span className="flex items-center gap-2"><CreditCard size={13} />Credit/debit card</span></button>
                 <button type="button" onClick={() => setDepositMethod('bank_transfer')} aria-pressed={depositMethod === 'bank_transfer'} data-testid="button-deposit-bank-transfer" className={`rounded-lg border px-3 py-2.5 text-left text-[9px] font-bold transition ${depositMethod === 'bank_transfer' ? 'border-[#4e8c91] bg-[#f1f8f8] text-[#315c67]' : 'border-[#e1e8ed] bg-white text-[#718195]'}`}>Bank transfer</button>
               </div>
+              {depositMethod === 'bank_card' && (
+                <section className="mt-3 rounded-xl border border-[#e1e8ed] bg-[#fbfcfd] p-3" aria-label="Saved card selection" data-testid="deposit-card-options">
+                  <div className="flex items-center justify-between gap-2"><h3 className="text-[9px] font-bold text-[#344b64]">Credit/debit card</h3>{destinationsForMethod.length > 0 && <button type="button" onClick={() => setShowDestinationForm(value => !value)} className="inline-flex items-center gap-1 text-[8px] font-bold text-[#397b80]"><Plus size={11} />Add card</button>}</div>
+                  {savedPaymentMethodsQuery.isLoading ? <p className="mt-2 text-[8px] text-[#8492a1]">Loading saved cards…</p> : null}
+                  <div className="mt-2 space-y-1.5">
+                    {destinationsForMethod.map(method => (
+                      <div key={method.id} className={`flex min-w-0 items-center gap-2 rounded-lg border px-2.5 py-2 ${savedPaymentMethodId === method.id ? 'border-[#4e8c91] bg-[#f1f8f8]' : 'border-[#e1e8ed] bg-white'}`}>
+                        <button type="button" onClick={() => setSavedPaymentMethodId(method.id)} aria-pressed={savedPaymentMethodId === method.id} className="flex min-w-0 flex-1 items-center gap-2 text-left" data-testid={`button-select-saved-card-${method.lastFour}`}>
+                          <CreditCard size={14} className="shrink-0 text-[#4d858a]" />
+                          <span className="min-w-0 truncate text-[9px] font-bold text-[#40576f]">{humanize(method.cardBrand ?? 'card')} ···· {method.lastFour}</span>
+                          <span className="ml-auto shrink-0 text-[8px] text-[#8492a1]">{savedPaymentMethodId === method.id ? 'Selected' : 'Select'}</span>
+                        </button>
+                        <button type="button" aria-label={`Remove card ending ${method.lastFour}`} onClick={() => void removePaymentMethod(method)} className="rounded p-1 text-[#8a98a5] hover:bg-[#f3f5f7] hover:text-[#a24940]"><Trash2 size={12} /></button>
+                      </div>
+                    ))}
+                  </div>
+                  {shouldShowDestinationForm && (
+                    <div className="mt-3 rounded-lg border border-dashed border-[#cbd9df] bg-white p-3" data-testid="deposit-card-form">
+                      <p className="text-[8px] font-bold uppercase tracking-[.1em] text-[#72859b]">{destinationsForMethod.length ? 'Add a card reference' : 'Add a card'}</p>
+                      <div className="mt-2 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2">
+                        <Field label="Card brand"><select value={cardBrand} onChange={event => setCardBrand(event.target.value as typeof cardBrand)} className={inputClass}><option value="visa">Visa</option><option value="mastercard">Mastercard</option><option value="amex">American Express</option><option value="discover">Discover</option><option value="other">Other</option></select></Field>
+                        <Field label="Last 4 digits"><input required inputMode="numeric" autoComplete="off" pattern="[0-9]{4}" maxLength={4} value={cardLastFour} onChange={event => setCardLastFour(event.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="1234" className={inputClass} data-testid="input-card-last-four" /></Field>
+                      </div>
+                      <p className="mt-2 text-[8px] leading-4 text-[#758596]">Only the card brand and last four digits are saved. No full card number or security code is collected, and this request does not charge a card.</p>
+                      {destinationError && <p role="alert" className="mt-2 text-[8px] text-[#a24940]">{destinationError}</p>}
+                      <button type="button" disabled={createSavedPaymentMethod.isPending || cardLastFour.length !== 4} onClick={() => void savePaymentMethod()} className="mt-2 inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-lg bg-[#eaf4f4] text-[8px] font-bold text-[#34747b] disabled:opacity-50" data-testid="button-save-card">{createSavedPaymentMethod.isPending ? 'Saving…' : 'Save card reference'} <ArrowRight size={11} /></button>
+                    </div>
+                  )}
+                  {!shouldShowDestinationForm && destinationsForMethod.length > 0 && <p className="mt-2 text-[8px] text-[#758596]">Select a saved card or add a new card reference.</p>}
+                </section>
+              )}
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
                 <Field label="Amount"><input required inputMode="decimal" pattern="[0-9]+(\.[0-9]{1,2})?" min="0.01" max="1000000" value={amount} onChange={event => setAmount(event.target.value)} placeholder={`0.00 ${selectedWallet.currency}`} className={inputClass} data-testid="input-deposit-amount" /><span className="mt-1 block text-[8px] text-[#8492a1]">Maximum 1,000,000.00</span></Field>
                 <Field label="Payment reference (optional)"><input maxLength={70} value={sourceReference} onChange={event => setSourceReference(event.target.value)} placeholder="Reference or sender bank" className={inputClass} data-testid="input-deposit-reference" /></Field>
@@ -659,7 +733,7 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
               {profileQuery.data?.transactionPinConfigured === false && <p className="mt-2 rounded-lg border border-[#eadfbe] bg-[#fbf7eb] px-3 py-2 text-[9px] leading-4 text-[#806b3d]">Set up your transaction PIN in <Link href="/profile" className="font-bold underline">Profile</Link> before submitting.</p>}
               {(errorMessage || mutation.isError) && <p role="alert" className="mt-2 rounded-lg bg-[#fff1ef] px-3 py-2 text-[9px] text-[#a24940]" data-testid="status-deposit-error">{errorMessage || 'The request could not be recorded.'}</p>}
               {result && <div role="status" className="mt-2 rounded-lg border border-[#d6e6e5] bg-[#f2f8f7] px-3 py-2 text-[9px] text-[#426e70]" data-testid="status-deposit-result"><p className="font-bold">Request recorded · {humanize(result.status)}</p><p className="mt-0.5">{result.message} · Ref {result.reference}</p></div>}
-              <button type="submit" disabled={mutation.isPending || transactionPin.length !== 6 || !amount || Number(amount) <= 0} className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-[#142f51] text-[10px] font-bold text-white transition hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50" data-testid="button-submit-deposit">{mutation.isPending ? 'Sending…' : 'Submit deposit request'} <ArrowRight size={13} /></button>
+              <button type="submit" disabled={mutation.isPending || transactionPin.length !== 6 || !amount || Number(amount) <= 0 || (requiresSavedMethod && !selectedDestination)} className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-[#142f51] text-[10px] font-bold text-white transition hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50" data-testid="button-submit-deposit">{mutation.isPending ? 'Sending…' : 'Submit deposit request'} <ArrowRight size={13} /></button>
             </form>
           </div>
         )}
@@ -667,32 +741,87 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
     );
   }
   return (
-    <>
-      <PageHeading eyebrow="Withdrawal request" title={heading} subtitle={sub} />
-      <div className="mt-7 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <form onSubmit={submit} className="rounded-[22px] border border-[#e1e8ee] bg-white p-5 sm:p-8">
-          <div className="mb-7 rounded-xl border border-[#eadfbe] bg-[#fbf7eb] p-4">
-            <div className="flex gap-3"><Clock3 size={17} className="mt-0.5 shrink-0 text-[#a17e36]" /><div><p className="text-[12px] font-bold text-[#715b2c]">Administrator review required</p><p className="mt-1 text-[11px] leading-5 text-[#89784f]">The requested amount remains reserved while pending. Approval records the withdrawal in Globus; no outside payout is made.</p></div></div>
-          </div>
-          <div className="grid gap-5 sm:grid-cols-2">
-            <Field label="Wallet currency"><select value={currency ?? 'USD'} onChange={event => setCurrency(event.target.value as Currency)} className={inputClass}>{currencies.map(item => <option key={item} value={item}>{item} · {currencyNames[item]}</option>)}</select></Field>
-            <Field label="Amount"><input required inputMode="decimal" pattern="[0-9]+(\.[0-9]{1,2})?" min="0.01" max={available} value={amount} onChange={event => setAmount(event.target.value)} placeholder="0.00" className={inputClass} /><span className="mt-1.5 block text-[10px] text-[#8391a0]">{`Available to withdraw: ${formatMoney(available, currency ?? 'USD')}`}</span></Field>
-          </div>
-          <div className="mt-5"><Field label="Note for the administrator (optional)"><input maxLength={80} value={description} onChange={event => setDescription(event.target.value)} placeholder="Add context for your request" className={inputClass} /></Field></div>
-          <div className="mt-5"><Field label="6-digit transaction PIN"><input required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="off" value={transactionPin} onChange={event => setTransactionPin(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="Enter your PIN" className={inputClass} /></Field></div>
-          {profileQuery.data?.transactionPinConfigured === false && <p className="mt-4 rounded-lg border border-[#eadfbe] bg-[#fbf7eb] px-4 py-3 text-[10px] leading-5 text-[#806b3d]">Set up your transaction PIN in <Link href="/profile" className="font-bold underline">Profile</Link> before submitting this request.</p>}
-          {(errorMessage || mutation.isError) && <p role="alert" className="mt-5 rounded-lg bg-[#fff1ef] px-4 py-3 text-[11px] text-[#a24940]">{errorMessage || 'The request could not be recorded.'}</p>}
-          {result && <div role="status" className="mt-5 rounded-xl border border-[#d6e6e5] bg-[#f2f8f7] p-4 text-[12px] text-[#426e70]"><p className="font-bold">Request recorded · {humanize(result.status)}</p><p className="mt-1">{result.message}</p><p className="mt-2 font-mono text-[10px]">Reference {result.reference}</p></div>}
-          <button disabled={mutation.isPending || transactionPin.length !== 6 || !amount || Number(amount) <= 0 || Number(amount) > available} className="mt-7 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#142f51] text-[12px] font-bold text-white transition hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">{mutation.isPending ? 'Sending for review…' : 'Submit request'} <ArrowRight size={15} /></button>
-          <p className="mt-3 text-center text-[10px] text-[#8794a1]">The request and review result are saved to your Globus activity.</p>
-        </form>
-        <div className="rounded-[22px] border border-[#e1e8ee] bg-white p-6">
-          <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#72859b]">Selected wallet</p>
-          <div className="mt-4 space-y-3">{walletsQuery.isLoading ? <ListSkeleton /> : walletsQuery.isError ? <InlineError text="Wallet balances are unavailable." retry={() => walletsQuery.refetch()} /> : selectedWallet && <><WalletMini wallet={selectedWallet} /><WalletReference customerId={profileQuery.data?.customerId ?? ''} wallet={selectedWallet} /></>}</div>
-          <p className="mt-6 text-[10px] leading-5 text-[#7d8b9b]">Account activity is recorded in Globus. A deposit request does not transfer outside funds.</p>
+    <div className="mx-auto min-w-0 max-w-[920px]" data-testid="withdrawal-workflow">
+      <header className="flex min-w-0 items-center justify-between gap-3">
+        <div className="min-w-0"><p className="text-[9px] font-bold uppercase tracking-[.16em] text-[#4d858a]">Wallet services</p><h1 className="bank-display mt-0.5 truncate text-[22px] font-semibold leading-tight text-[#213a55] sm:text-[26px]">{heading}</h1><p className="mt-1 text-[10px] text-[#758596]">{sub}</p></div>
+        {withdrawalWalletSelected && selectedWallet && <button type="button" onClick={() => { setWithdrawalWalletSelected(false); setResult(null); }} className="shrink-0 rounded-lg border border-[#dce6e9] bg-white px-3 py-2 text-[10px] font-bold text-[#3c7278] hover:bg-[#f3f8f8]" data-testid="button-change-withdrawal-wallet">Change wallet</button>}
+      </header>
+      {walletsQuery.isLoading ? (
+        <div className="mt-4 rounded-2xl border border-[#e1e8ee] bg-white p-5"><ListSkeleton /></div>
+      ) : walletsQuery.isError ? (
+        <div className="mt-4 rounded-2xl border border-[#e1e8ee] bg-white p-5"><InlineError text="Wallets could not be loaded." retry={() => walletsQuery.refetch()} /></div>
+      ) : !withdrawalWalletSelected || !selectedWallet ? (
+        <section className="mt-4 rounded-2xl border border-[#e1e8ee] bg-white p-4 sm:p-5" data-testid="withdrawal-wallet-picker">
+          <div className="mb-3 flex items-center justify-between gap-3"><div><h2 className="text-[12px] font-bold text-[#2c425c]">Select a source wallet</h2><p className="mt-0.5 text-[10px] text-[#8391a0]">Choose the wallet for your withdrawal request.</p></div><WalletCards size={18} className="shrink-0 text-[#4d858a]" /></div>
+          {walletsQuery.data?.length ? <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{walletsQuery.data.map(wallet => (
+            <button key={wallet.id} type="button" onClick={() => { setCurrency(wallet.currency as Currency); setWithdrawalWalletSelected(true); setResult(null); setErrorMessage(''); }} className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-[#e1e8ed] bg-[#fbfcfd] px-3.5 py-3 text-left transition hover:border-[#71a8aa] hover:bg-[#f3f9f9]" data-testid={`button-select-withdrawal-wallet-${wallet.currency.toLowerCase()}`}>
+              <span className="flex min-w-0 items-center gap-2.5"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[#eaf4f4] text-[10px] font-extrabold text-[#397b80]">{wallet.currency}</span><span className="min-w-0"><b className="block truncate text-[10px] text-[#344b64]">{currencyNames[wallet.currency] ?? wallet.currency}</b><small className="mt-0.5 block text-[9px] text-[#8492a1]">{humanize(wallet.status)}</small></span></span>
+              <span className="shrink-0 text-[10px] font-bold text-[#344b64]">{formatMoney(Number(wallet.available), wallet.currency)}</span>
+            </button>
+          ))}</div> : <EmptyState title="No wallets available" text="There are no wallets to select for a withdrawal request." />}
+        </section>
+      ) : (
+        <div className="mt-3 grid min-w-0 items-start gap-3 lg:grid-cols-[minmax(0,.78fr)_minmax(0,1.22fr)]">
+          <section className="min-w-0 rounded-2xl border border-[#e1e8ee] bg-white p-3.5 sm:p-4" data-testid="withdrawal-wallet-details">
+            <p className="mb-2 text-[9px] font-bold uppercase tracking-[.14em] text-[#72859b]">Source wallet</p>
+            <WalletMini wallet={selectedWallet} />
+            <div className="mt-2"><WalletReference customerId={profileQuery.data?.customerId ?? ''} wallet={selectedWallet} /></div>
+            <div className="mt-3 rounded-xl border border-[#eadfbe] bg-[#fbf7eb] p-3">
+              <div className="flex gap-2.5"><Clock3 size={14} className="mt-0.5 shrink-0 text-[#a17e36]" /><div><p className="text-[9px] font-bold text-[#715b2c]">Administrator review required</p><p className="mt-1 text-[8px] leading-4 text-[#89784f]">The amount is reserved while pending. Approval updates your Globus activity; no outside payout is made.</p></div></div>
+            </div>
+            <p className="mt-3 text-[9px] text-[#768696]">Available to withdraw: <b className="text-[#40576f]">{formatMoney(available, selectedWallet.currency)}</b></p>
+          </section>
+          <form onSubmit={submit} className="min-w-0 rounded-2xl border border-[#e1e8ee] bg-white p-3.5 sm:p-4" data-testid="withdrawal-request-form">
+            <h2 className="text-[12px] font-bold text-[#2c425c]">Withdrawal details</h2>
+            <div className="mt-3 grid grid-cols-2 gap-2" role="group" aria-label="Withdrawal method">
+              <button type="button" onClick={() => { setWithdrawalMethod('bank_card'); setSavedPaymentMethodId(''); setShowDestinationForm(false); setDestinationError(''); }} aria-pressed={withdrawalMethod === 'bank_card'} data-testid="button-withdrawal-bank-card" className={`rounded-lg border px-3 py-2.5 text-left text-[9px] font-bold transition ${withdrawalMethod === 'bank_card' ? 'border-[#4e8c91] bg-[#f1f8f8] text-[#315c67]' : 'border-[#e1e8ed] bg-white text-[#718195]'}`}><span className="flex items-center gap-2"><CreditCard size={13} />Bank card</span></button>
+              <button type="button" onClick={() => { setWithdrawalMethod('bank_transfer'); setSavedPaymentMethodId(''); setShowDestinationForm(false); setDestinationError(''); }} aria-pressed={withdrawalMethod === 'bank_transfer'} data-testid="button-withdrawal-bank-transfer" className={`rounded-lg border px-3 py-2.5 text-left text-[9px] font-bold transition ${withdrawalMethod === 'bank_transfer' ? 'border-[#4e8c91] bg-[#f1f8f8] text-[#315c67]' : 'border-[#e1e8ed] bg-white text-[#718195]'}`}><span className="flex items-center gap-2"><Building2 size={13} />Bank transfer</span></button>
+            </div>
+            <section className="mt-3 rounded-xl border border-[#e1e8ed] bg-[#fbfcfd] p-3" aria-label="Saved withdrawal destination">
+              <div className="flex items-center justify-between gap-2"><h3 className="text-[9px] font-bold text-[#344b64]">Saved {withdrawalMethod === 'bank_card' ? 'cards' : 'bank accounts'}</h3>{destinationsForMethod.length > 0 && <button type="button" onClick={() => setShowDestinationForm(value => !value)} className="inline-flex items-center gap-1 text-[8px] font-bold text-[#397b80]"><Plus size={11} />Add new</button>}</div>
+              {savedPaymentMethodsQuery.isLoading && <p className="mt-2 text-[8px] text-[#8492a1]">Loading saved details…</p>}
+              <div className="mt-2 space-y-1.5">
+                {destinationsForMethod.map(method => <div key={method.id} className={`flex min-w-0 items-center gap-2 rounded-lg border px-2.5 py-2 ${savedPaymentMethodId === method.id ? 'border-[#4e8c91] bg-[#f1f8f8]' : 'border-[#e1e8ed] bg-white'}`}>
+                  <button type="button" onClick={() => setSavedPaymentMethodId(method.id)} aria-pressed={savedPaymentMethodId === method.id} className="flex min-w-0 flex-1 items-center gap-2 text-left" data-testid={`button-select-saved-method-${method.lastFour}`}>
+                    {method.method === 'bank_card' ? <CreditCard size={14} className="shrink-0 text-[#4d858a]" /> : <Building2 size={14} className="shrink-0 text-[#4d858a]" />}
+                    <span className="min-w-0"><b className="block truncate text-[9px] text-[#40576f]">{method.method === 'bank_card' ? `${humanize(method.cardBrand ?? 'card')} card` : `${method.bankName ?? 'Bank account'} · ${method.accountHolder ?? ''}`}</b><small className="text-[8px] text-[#8492a1]">•••• {method.lastFour}</small></span>
+                    <span className="ml-auto shrink-0 text-[8px] text-[#8492a1]">{savedPaymentMethodId === method.id ? 'Selected' : 'Select'}</span>
+                  </button>
+                  <button type="button" aria-label={`Remove saved destination ending ${method.lastFour}`} onClick={() => void removePaymentMethod(method)} className="rounded p-1 text-[#8a98a5] hover:bg-[#f3f5f7] hover:text-[#a24940]"><Trash2 size={12} /></button>
+                </div>)}
+              </div>
+              {shouldShowDestinationForm && (
+                <div className="mt-3 rounded-lg border border-dashed border-[#cbd9df] bg-white p-3" data-testid="withdrawal-destination-form">
+                  <p className="text-[8px] font-bold uppercase tracking-[.1em] text-[#72859b]">{destinationsForMethod.length ? 'Add another destination' : 'Add a destination'}</p>
+                  {withdrawalMethod === 'bank_card' ? <div className="mt-2 grid grid-cols-2 gap-2">
+                    <Field label="Card brand"><select value={cardBrand} onChange={event => setCardBrand(event.target.value as typeof cardBrand)} className={inputClass}><option value="visa">Visa</option><option value="mastercard">Mastercard</option><option value="amex">American Express</option><option value="discover">Discover</option><option value="other">Other</option></select></Field>
+                    <Field label="Last 4 digits"><input inputMode="numeric" autoComplete="off" pattern="[0-9]{4}" maxLength={4} value={cardLastFour} onChange={event => setCardLastFour(event.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="1234" className={inputClass} /></Field>
+                  </div> : <div className="mt-2 grid grid-cols-2 gap-2">
+                    <Field label="Bank name"><input value={bankName} onChange={event => setBankName(event.target.value)} maxLength={80} placeholder="Bank name" className={inputClass} /></Field>
+                    <Field label="Account holder"><input value={accountHolder} onChange={event => setAccountHolder(event.target.value)} maxLength={100} placeholder="Name on account" className={inputClass} /></Field>
+                    <Field label="Country (optional)"><input value={bankCountry} onChange={event => setBankCountry(event.target.value)} maxLength={60} placeholder="Country" className={inputClass} /></Field>
+                    <Field label="Last 4 account characters"><input autoComplete="off" pattern="[A-Za-z0-9]{4}" maxLength={4} value={accountLastFour} onChange={event => setAccountLastFour(event.target.value.replace(/[^a-z0-9]/gi, '').slice(0, 4))} placeholder="1234" className={inputClass} /></Field>
+                  </div>}
+                  <p className="mt-2 text-[8px] leading-4 text-[#758596]">Only the card brand or bank details and last four are saved. Full card numbers, security codes, and full account numbers are not collected.</p>
+                  {destinationError && <p role="alert" className="mt-2 text-[8px] text-[#a24940]">{destinationError}</p>}
+                  <button type="button" disabled={createSavedPaymentMethod.isPending || (withdrawalMethod === 'bank_card' ? cardLastFour.length !== 4 : !bankName.trim() || !accountHolder.trim() || accountLastFour.length !== 4)} onClick={() => void savePaymentMethod()} className="mt-2 inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-lg bg-[#eaf4f4] text-[8px] font-bold text-[#34747b] disabled:opacity-50">{createSavedPaymentMethod.isPending ? 'Saving…' : 'Save masked details'} <ArrowRight size={11} /></button>
+                </div>
+              )}
+              {!shouldShowDestinationForm && destinationsForMethod.length > 0 && <p className="mt-2 text-[8px] text-[#758596]">Select a saved destination or add a new one.</p>}
+            </section>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <Field label="Amount"><input required inputMode="decimal" pattern="[0-9]+(\.[0-9]{1,2})?" min="0.01" max={available} value={amount} onChange={event => setAmount(event.target.value)} placeholder={`0.00 ${selectedWallet.currency}`} className={inputClass} data-testid="input-withdrawal-amount" /></Field>
+              <Field label="Note for administrator (optional)"><input maxLength={80} value={description} onChange={event => setDescription(event.target.value)} placeholder="Add context" className={inputClass} /></Field>
+            </div>
+            <div className="mt-2"><Field label="6-digit transaction PIN"><input required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="off" value={transactionPin} onChange={event => setTransactionPin(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="Enter your PIN" className={inputClass} /></Field></div>
+            {profileQuery.data?.transactionPinConfigured === false && <p className="mt-2 rounded-lg border border-[#eadfbe] bg-[#fbf7eb] px-3 py-2 text-[9px] leading-4 text-[#806b3d]">Set up your transaction PIN in <Link href="/profile" className="font-bold underline">Profile</Link> before submitting.</p>}
+            {(destinationError || errorMessage || mutation.isError) && <p role="alert" className="mt-2 rounded-lg bg-[#fff1ef] px-3 py-2 text-[9px] text-[#a24940]">{destinationError || errorMessage || 'The request could not be recorded.'}</p>}
+            {result && <div role="status" className="mt-2 rounded-lg border border-[#d6e6e5] bg-[#f2f8f7] px-3 py-2 text-[9px] text-[#426e70]"><p className="font-bold">Request recorded · {humanize(result.status)}</p><p className="mt-0.5">{result.message} · Ref {result.reference}</p></div>}
+            <button type="submit" disabled={mutation.isPending || transactionPin.length !== 6 || !amount || Number(amount) <= 0 || Number(amount) > available || !selectedDestination} className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-[#142f51] text-[10px] font-bold text-white transition hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50" data-testid="button-submit-withdrawal">{mutation.isPending ? 'Sending for review…' : 'Submit withdrawal request'} <ArrowRight size={13} /></button>
+          </form>
         </div>
-      </div>
-    </>
+      )}
+    </div>
   );
 }
 
@@ -1162,6 +1291,7 @@ function AdminLedgerRequestQueue() {
                   <div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-[#eef6f6] px-2.5 py-1 text-[9px] font-bold uppercase tracking-wide text-[#36777c]">{request.type}</span><span className="font-mono text-[9px] text-[#8291a0]">{request.reference}</span><span className="text-[9px] text-[#8291a0]">{formatDate(request.createdAt)}</span></div>
                   <p className="mt-2 truncate text-[11px] font-semibold text-[#344b64]">{request.memberName} · {request.email}</p>
                   <p className="mt-1 text-[10px] text-[#7e8d9c]">{request.description || `${humanize(request.type)} request`} · {request.status === 'pending_provider_setup' ? 'Awaiting review' : humanize(request.status)}</p>
+                  {request.paymentMethodSummary && <p className="mt-1 truncate text-[9px] text-[#5f7789]">Payment destination: {request.paymentMethodSummary}</p>}
                 </div>
                 <div className="flex shrink-0 items-center justify-between gap-3 sm:justify-end">
                   <strong className="text-[13px] text-[#2d435c]">{formatMoney(Number(request.amount), request.currency)}</strong>
@@ -1177,7 +1307,7 @@ function AdminLedgerRequestQueue() {
         <form role="dialog" aria-modal="true" aria-labelledby="ledger-review-title" onSubmit={submitDecision} className="w-full max-w-lg rounded-[22px] border border-[#dfe7ec] bg-white p-5 shadow-2xl sm:p-7">
           <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#55868b]">Administrator authorization</p>
           <h2 id="ledger-review-title" className="mt-1 text-[16px] font-bold text-[#29425c]">{reviewTarget.decision === 'approve' ? 'Approve customer request' : 'Reject customer request'}</h2>
-          <p className="mt-2 text-[11px] leading-5 text-[#718296]">{reviewTarget.request.memberName} · {reviewTarget.request.reference} · {formatMoney(Number(reviewTarget.request.amount), reviewTarget.request.currency)}</p>
+          <p className="mt-2 text-[11px] leading-5 text-[#718296]">{reviewTarget.request.memberName} · {reviewTarget.request.reference} · {formatMoney(Number(reviewTarget.request.amount), reviewTarget.request.currency)}{reviewTarget.request.paymentMethodSummary ? ` · ${reviewTarget.request.paymentMethodSummary}` : ''}</p>
           <div className="mt-5">
             <Field label="Your 6-digit transaction PIN"><input required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="current-password" value={transactionPin} onChange={event => setTransactionPin(event.target.value.replace(/\D/g, '').slice(0, 6))} className={inputClass} /></Field>
           </div>

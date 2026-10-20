@@ -5,9 +5,9 @@
  * Globus internal ledger API; no external financial provider is connected
  * OpenAPI spec version: 0.1.0
  */
+import type { AdminLedgerRequestPaymentMethod } from './adminLedgerRequestPaymentMethod';
 import type { AdminLedgerRequestStatus } from './adminLedgerRequestStatus';
 import type { AdminLedgerRequestType } from './adminLedgerRequestType';
-import type { AdminLedgerRequestWithdrawalMethod } from './adminLedgerRequestWithdrawalMethod';
 import type { CurrencyCode } from './currencyCode';
 
 export interface AdminLedgerRequest {
@@ -21,8 +21,8 @@ export interface AdminLedgerRequest {
   currency: CurrencyCode;
   amount: string;
   description: string;
-  withdrawalMethod?: AdminLedgerRequestWithdrawalMethod;
-  withdrawalDestinationSummary?: string;
+  paymentMethod?: AdminLedgerRequestPaymentMethod;
+  paymentMethodSummary?: string;
   status: AdminLedgerRequestStatus;
   createdAt: Date;
 }
