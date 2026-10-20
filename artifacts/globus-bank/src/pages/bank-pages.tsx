@@ -1095,11 +1095,11 @@ export function ProfilePage() {
     const invalidFile = files.find(
       file =>
         !allowedTypes.has(file.type) ||
-        file.size < 5 * 1024 * 1024 ||
+        file.size < 1 ||
         file.size > 10 * 1024 * 1024,
     );
     if (invalidFile) {
-      setIdentityError('Each PDF, JPG or PNG file must be between 5 MB and 10 MB.');
+      setIdentityError('Each PDF, JPG or PNG must be a non-empty file no larger than 10 MB.');
       return;
     }
     setIdentityUploadPending(true);
@@ -1246,7 +1246,7 @@ export function ProfilePage() {
           <div>
             <p className="text-[9px] font-bold uppercase tracking-[.15em] text-[#55868b]">Private identity review</p>
             <h2 className="mt-1 text-[13px] font-bold text-[#29425c]">Submit identity documents</h2>
-            <p className="mt-1.5 max-w-2xl text-[10px] leading-4 text-[#718296]">Upload PDF, JPG or PNG files. Each must be 5–10 MB; you can upload up to five.</p>
+            <p className="mt-1.5 max-w-2xl text-[10px] leading-4 text-[#718296]">Upload PDF, JPG or PNG files up to 10 MB each, with no 5 MB minimum. You can upload up to five.</p>
           </div>
           <span className="shrink-0 rounded-lg border border-[#d9e8e9] bg-[#f2f8f8] px-3 py-2 text-[10px] font-bold text-[#4e777a]">{humanize(profile?.verificationStatus)}</span>
         </div>

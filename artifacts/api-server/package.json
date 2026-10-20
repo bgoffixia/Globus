@@ -8,6 +8,7 @@
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "test:bank-identity": "tsx --test test/bank-identity.test.ts",
+    "test:identity-documents": "tsx --test test/identity-document-size.test.ts",
     "test:financial-access": "tsx --test test/financial-access.test.ts",
     "test:sensitive-bank-details": "tsx --test test/sensitive-bank-details.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"

@@ -405,7 +405,7 @@ export interface IdentityDocument {
 export interface IdentityDocumentUploadInput {
   contentType: IdentityDocumentContentType;
   /**
-     * @minimum 5242880
+     * @minimum 1
      * @maximum 10485760
      */
   sizeBytes: number;
