@@ -6,6 +6,7 @@ import {
   CircleHelp,
   Contact,
   CreditCard,
+  House,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -113,7 +114,11 @@ export function BankShell({ children }: { children: ReactNode }) {
             </button>
             <p className="min-w-0 truncate text-[11px] font-medium text-[#738297] sm:text-[12px]"><span className="hidden sm:inline">Globus Bank <span className="px-1.5 text-[#c5ced7]">/</span> </span><span className="text-[#253850]">{pageLabel(location)}</span></p>
           </div>
-          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
+            <Link href="/home" aria-label="Return to Globus home" data-testid="link-app-home" className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-[#d6e8e9] bg-white px-2 text-[9px] font-bold text-[#377d83] hover:bg-[#eff8f8] sm:px-3 sm:text-[10px]">
+              <House size={14} />
+              <span className="hidden sm:inline">Home</span>
+            </Link>
             <InstallAppButton className="hidden items-center gap-1.5 rounded-lg border border-[#d6e8e9] bg-white px-2.5 py-2 text-[10px] font-bold text-[#377d83] hover:bg-[#eff8f8] sm:inline-flex" />
             <Link href="/profile" aria-label="Open your profile" data-testid="link-header-profile" className={`grid h-9 w-9 place-items-center overflow-hidden rounded-full border border-[#dbe3eb] bg-white text-xs font-bold text-[#27445e] ${isProfile ? 'ring-2 ring-[#68a3a6] ring-offset-2' : ''}`}>
               {user?.imageUrl ? <img src={user.imageUrl} alt="" className="h-full w-full object-cover" /> : initials}

@@ -18,6 +18,7 @@ import {
   Download,
   FileText,
   Globe2,
+  House,
   History,
   LockKeyhole,
   Printer,
@@ -131,10 +132,11 @@ function currencyActionHref(path: string, currency: Currency) {
 
 export function HomePage() {
   const health = useHealthCheck({ query: { queryKey: getHealthCheckQueryKey(), retry: false } });
+  const { isSignedIn } = useUser();
   return (
     <div className="public-viewport-scroll bg-[#f6f8fa] text-[#192e49]">
       <header className="relative z-10 mx-auto flex max-w-[1320px] items-center justify-between gap-2 px-4 pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-5 sm:gap-3 sm:px-6 sm:py-6 lg:px-12">
-        <Link href="/" aria-label="Globus Bank home" className="flex shrink-0 items-center">
+          <Link href={isSignedIn ? '/home' : '/'} aria-label="Globus Bank home" className="flex shrink-0 items-center">
           <img src={`${import.meta.env.BASE_URL}globus-wordmark.png`} alt="Globus Bank — Your world. Our priority." className="h-auto w-[108px] sm:w-[156px]" />
         </Link>
         <nav className="hidden items-center gap-8 text-[13px] font-medium text-[#607187] md:flex">
@@ -144,8 +146,14 @@ export function HomePage() {
         </nav>
         <div className="flex shrink-0 items-center gap-1 sm:gap-3">
           <InstallAppButton className="inline-flex items-center gap-1 rounded-xl border border-[#dbe5eb] bg-white px-2 py-2.5 text-[10px] font-bold text-[#36516d] hover:bg-[#f0f5f7] sm:gap-1.5 sm:px-3 sm:text-[12px]" />
-          <Link href="/sign-in" className="whitespace-nowrap rounded-xl px-2 py-2.5 text-[12px] font-bold text-[#263e5b] hover:bg-[#eaf0f4] sm:px-4 sm:text-[13px]">Sign in</Link>
-          <Link href="/sign-up" className="whitespace-nowrap rounded-xl bg-[#142f51] px-2.5 py-2.5 text-[11px] font-bold text-white shadow-sm transition hover:bg-[#1b4269] sm:px-5 sm:text-[13px]"><span className="sm:hidden">Open</span><span className="hidden sm:inline">Open an account</span></Link>
+          {isSignedIn ? (
+            <Link href="/dashboard" className="whitespace-nowrap rounded-xl bg-[#142f51] px-3 py-2.5 text-[11px] font-bold text-white shadow-sm transition hover:bg-[#1b4269] sm:px-5 sm:text-[13px]">Dashboard</Link>
+          ) : (
+            <>
+              <Link href="/sign-in" className="whitespace-nowrap rounded-xl px-2 py-2.5 text-[12px] font-bold text-[#263e5b] hover:bg-[#eaf0f4] sm:px-4 sm:text-[13px]">Sign in</Link>
+              <Link href="/sign-up" className="whitespace-nowrap rounded-xl bg-[#142f51] px-2.5 py-2.5 text-[11px] font-bold text-white shadow-sm transition hover:bg-[#1b4269] sm:px-5 sm:text-[13px]"><span className="sm:hidden">Open</span><span className="hidden sm:inline">Open an account</span></Link>
+            </>
+          )}
         </div>
       </header>
 
@@ -166,8 +174,8 @@ export function HomePage() {
             Bring your currencies together, understand every movement, and manage routed transfers and reviewed deposit requests with clear statuses.
           </p>
           <div className="mt-8 flex flex-col items-stretch gap-2 sm:mt-9 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
-            <Link href="/sign-up" className="inline-flex w-full items-center justify-center gap-3 rounded-xl bg-[#152f50] px-5 py-3.5 text-[13px] font-bold text-white shadow-[0_10px_24px_rgba(18,43,75,.16)] transition hover:-translate-y-0.5 hover:bg-[#1b4168] sm:w-auto sm:px-6 sm:py-4">
-              Get started <ArrowRight size={16} />
+            <Link href={isSignedIn ? '/dashboard' : '/sign-up'} className="inline-flex w-full items-center justify-center gap-3 rounded-xl bg-[#152f50] px-5 py-3.5 text-[13px] font-bold text-white shadow-[0_10px_24px_rgba(18,43,75,.16)] transition hover:-translate-y-0.5 hover:bg-[#1b4168] sm:w-auto sm:px-6 sm:py-4">
+              {isSignedIn ? 'Go to your dashboard' : 'Get started'} <ArrowRight size={16} />
             </Link>
             <Link href="/about" className="rounded-xl px-5 py-3.5 text-center text-[13px] font-bold text-[#36506c] hover:bg-[#eaf0f4] sm:py-4">How Globus works</Link>
           </div>

@@ -107,6 +107,7 @@ test.describe('signed-in member pages at phone widths', () => {
 
   const memberPaths = [
     '/dashboard',
+    '/home',
     '/wallets',
     '/transactions',
     '/send',
@@ -128,7 +129,11 @@ test.describe('signed-in member pages at phone widths', () => {
         }
         await page.setViewportSize({ width, height: 850 });
         await page.goto(path, { waitUntil: 'domcontentloaded' });
-        await expect(page.locator('.app-shell')).toBeVisible();
+        if (path === '/home') {
+          await expect(page.locator('.public-viewport-scroll')).toBeVisible();
+        } else {
+          await expect(page.locator('.app-shell')).toBeVisible();
+        }
         await expectNoHorizontalOverflow(page, `Signed-in member page at ${width}px (${path})`);
         const documentHeight = await page.evaluate(() => ({
           viewport: window.innerHeight,
@@ -188,6 +193,10 @@ test.describe('signed-in member pages at phone widths', () => {
           await page.getByTestId('link-header-profile').click();
           await expect(page).toHaveURL(/\/profile$/);
           await expect(page.getByRole('heading', { name: 'Your profile' })).toBeVisible();
+          await page.getByTestId('link-app-home').click();
+          await expect(page).toHaveURL(/\/home$/);
+          await expect(page.locator('.public-viewport-scroll')).toBeVisible();
+          await expect(page.getByRole('link', { name: 'Dashboard' })).toBeVisible();
         }
       }
     });

@@ -219,6 +219,14 @@ function ClerkRoutes() {
       <ClerkQueryClientCacheInvalidator />
       <Switch>
         <Route path="/" component={HomeRedirect} />
+        <Route path="/home">
+          <Show when="signed-in">
+            <HomePage />
+          </Show>
+          <Show when="signed-out">
+            <Redirect to="/sign-in" />
+          </Show>
+        </Route>
         <Route path="/sign-in/email" component={EmailRecoveryPage} />
         <Route path="/sign-in/*?" component={SignInPage} />
         <Route path="/sign-up/*?" component={SignUpPage} />
