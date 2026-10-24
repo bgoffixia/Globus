@@ -163,6 +163,12 @@
   scrollbar-gutter: stable;
 }
 
+.bank-main-column > main.profile-viewport-fixed {
+  height: auto;
+  overflow: hidden;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
 .public-viewport-scroll {
   width: 100%;
   height: 100vh;

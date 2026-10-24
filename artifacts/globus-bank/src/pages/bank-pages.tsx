@@ -989,6 +989,7 @@ export function ProfilePage() {
   const [identityError, setIdentityError] = useState('');
   const [identityUploadPending, setIdentityUploadPending] = useState(false);
   const [identityConsent, setIdentityConsent] = useState(false);
+  const [profileTab, setProfileTab] = useState<'overview' | 'details' | 'security' | 'verification'>('overview');
   const profile = query.data;
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -1188,18 +1189,94 @@ export function ProfilePage() {
   };
   if (query.isLoading) return <PageSkeleton />;
   if (query.isError) return <Failure title="Your profile is unavailable" retry={() => query.refetch()} />;
+  const profileTabs = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'details', label: 'Personal details' },
+    { id: 'security', label: 'Security' },
+    { id: 'verification', label: 'Verification' },
+  ] as const;
   return (
-    <>
-      <PageHeading eyebrow="Your account" title="Your profile" subtitle="Manage your details, profile photo, and identity documents." />
-      <section className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-[16px] border border-[#e1e8ee] bg-white px-4 py-3">
-        <div>
-          <p className="text-[8px] font-bold uppercase tracking-[.15em] text-[#718296]">Your Globus Customer ID</p>
-          <p className="mt-1 font-mono text-[17px] font-bold tracking-[.16em] text-[#17314f]">{profile?.customerId}</p>
+    <div className="flex h-full min-h-0 flex-col gap-2.5" data-testid="customer-profile-page">
+      <header className="flex shrink-0 flex-wrap items-end justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[8px] font-bold uppercase tracking-[.17em] text-[#55868b]">Your account</p>
+          <h1 className="mt-0.5 text-[19px] font-bold tracking-tight text-[#17314f] sm:text-[22px]">Profile</h1>
+          <p className="text-[9px] text-[#7c8b9a]">Manage your personal details and account security.</p>
         </div>
-        <button type="button" data-testid="button-copy-customer-id" onClick={copyCustomerId} className="inline-flex items-center gap-2 rounded-lg border border-[#dfe6eb] px-3 py-2 text-[9px] font-bold text-[#355570] hover:bg-[#f5f8f9]"><Copy size={13} />{customerIdCopied ? 'Copied' : 'Copy ID'}</button>
-      </section>
-      <div className="mt-3 grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_300px]">
-        <form onSubmit={submit} className="rounded-[18px] border border-[#e1e8ee] bg-white p-4 sm:p-5">
+        <div className="flex shrink-0 items-center gap-2 rounded-xl border border-[#e1e8ee] bg-white px-3 py-2">
+          <div>
+            <p className="text-[7px] font-bold uppercase tracking-[.13em] text-[#718296]">Customer ID</p>
+            <p className="font-mono text-[11px] font-bold tracking-[.12em] text-[#17314f]">{profile?.customerId}</p>
+          </div>
+          <button type="button" data-testid="button-copy-customer-id" onClick={copyCustomerId} aria-label="Copy Customer ID" className="grid h-8 w-8 place-items-center rounded-lg border border-[#dfe6eb] text-[#355570] hover:bg-[#f5f8f9]">
+            {customerIdCopied ? <Check size={13} /> : <Copy size={13} />}
+          </button>
+        </div>
+      </header>
+      <nav
+        role="tablist"
+        aria-label="Profile sections"
+        onKeyDown={event => {
+          const currentIndex = profileTabs.findIndex(tab => tab.id === profileTab);
+          const nextIndex = event.key === 'Home'
+            ? 0
+            : event.key === 'End'
+              ? profileTabs.length - 1
+              : event.key === 'ArrowRight'
+                ? (currentIndex + 1) % profileTabs.length
+                : event.key === 'ArrowLeft'
+                  ? (currentIndex - 1 + profileTabs.length) % profileTabs.length
+                  : -1;
+          if (nextIndex >= 0) {
+            event.preventDefault();
+            const nextTab = profileTabs[nextIndex];
+            setProfileTab(nextTab.id);
+            document.getElementById(`profile-tab-${nextTab.id}`)?.focus();
+          }
+        }}
+        className="flex shrink-0 gap-1 overflow-x-auto rounded-xl border border-[#e1e8ee] bg-white p-1"
+      >
+        {profileTabs.map(tab => <button
+          key={tab.id}
+          type="button"
+          role="tab"
+          id={`profile-tab-${tab.id}`}
+          tabIndex={profileTab === tab.id ? 0 : -1}
+          aria-selected={profileTab === tab.id}
+          aria-controls="profile-tab-panel"
+          onClick={() => setProfileTab(tab.id)}
+          className={`shrink-0 rounded-lg px-3 py-2 text-[9px] font-bold transition sm:px-4 ${profileTab === tab.id ? 'bg-[#173858] text-white shadow-sm' : 'text-[#64798d] hover:bg-[#f3f7f8] hover:text-[#315b65]'}`}
+        >{tab.label}</button>)}
+      </nav>
+      <div id="profile-tab-panel" role="tabpanel" aria-labelledby={`profile-tab-${profileTab}`} className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-0.5">
+        {profileTab === 'overview' && <section className="rounded-[18px] border border-[#e1e8ee] bg-white p-4 sm:p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#edf0f2] pb-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-full border border-[#dbe5ea] bg-[#eef5f6] text-[15px] font-bold text-[#387b82]">
+                {user?.imageUrl ? <img src={user.imageUrl} alt="Your profile" className="h-full w-full object-cover" /> : (user?.firstName?.[0] ?? profile?.email?.[0] ?? 'G').toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-[12px] font-bold text-[#29425c]">{[profile?.firstName, profile?.lastName].filter(Boolean).join(' ') || 'Globus member'}</p>
+                <p className="truncate text-[9px] text-[#7e8d9c]">{profile?.email}</p>
+              </div>
+            </div>
+            <label htmlFor="profile-photo-upload" className={`inline-flex h-9 shrink-0 cursor-pointer items-center gap-2 rounded-lg border border-[#dfe7eb] px-3 text-[9px] font-bold text-[#3f5c75] hover:bg-[#f5f8f9] ${photoPending ? 'pointer-events-none opacity-50' : ''}`}>
+              <Camera size={13} />{photoPending ? 'Uploading…' : 'Change photo'}
+            </label>
+            <input id="profile-photo-upload" type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={uploadProfilePhoto} disabled={photoPending} />
+          </div>
+          <p className="mt-2 text-[8px] text-[#8794a2]">JPG, PNG or WebP · up to 5 MB. Your photo appears across Globus.</p>
+          {photoMessage && <p role="status" className="mt-2 rounded-lg bg-[#f0f8f4] px-3 py-2 text-[9px] text-[#41755f]">{photoMessage}</p>}
+          {photoError && <p role="alert" className="mt-2 rounded-lg bg-[#fff1ef] px-3 py-2 text-[9px] text-[#a24940]">{photoError}</p>}
+          <div className="mt-4 grid gap-2 sm:grid-cols-3">
+            <div className="rounded-xl bg-[#f7f9fa] p-3"><p className="text-[8px] font-bold uppercase tracking-[.12em] text-[#71869a]">Account</p><span className={`mt-1 inline-flex rounded-full px-2 py-1 text-[9px] font-bold ${profile?.accountStatus === 'active' ? 'bg-[#edf6f1] text-[#4c836e]' : 'bg-[#fbf7eb] text-[#927944]'}`}>{humanize(profile?.accountStatus)}</span></div>
+            <div className="rounded-xl bg-[#f7f9fa] p-3"><p className="text-[8px] font-bold uppercase tracking-[.12em] text-[#71869a]">Identity verification</p><span className={`mt-1 inline-flex rounded-full px-2 py-1 text-[9px] font-bold ${profile?.verificationStatus === 'approved' ? 'bg-[#edf6f1] text-[#4c836e]' : 'bg-[#fbf7eb] text-[#927944]'}`}>{humanize(profile?.verificationStatus)}</span></div>
+            <div className="rounded-xl bg-[#f7f9fa] p-3"><p className="text-[8px] font-bold uppercase tracking-[.12em] text-[#71869a]">Member since</p><p className="mt-1 text-[10px] font-semibold text-[#324962]">{formatDate(profile?.createdAt)}</p></div>
+          </div>
+          <button type="button" onClick={() => setProfileTab('details')} className="mt-4 inline-flex h-9 items-center gap-2 rounded-lg bg-[#173858] px-4 text-[9px] font-bold text-white hover:bg-[#1b4269]">Review personal details <ArrowRight size={12} /></button>
+        </section>}
+        {profileTab === 'details' && <form onSubmit={submit} className="rounded-[18px] border border-[#e1e8ee] bg-white p-4 sm:p-5">
+          <div className="mb-3"><h2 className="text-[12px] font-bold text-[#29425c]">Personal details</h2><p className="mt-1 text-[9px] text-[#7c8b9a]">Keep your account information current.</p></div>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="First name"><input required maxLength={80} value={firstName} onChange={event => setFirstName(event.target.value)} className={inputClass} /></Field>
             <Field label="Last name"><input maxLength={80} value={lastName} onChange={event => setLastName(event.target.value)} className={inputClass} /></Field>
@@ -1208,38 +1285,11 @@ export function ProfilePage() {
             <Field label="Date of birth"><input type="date" value={dateOfBirth} onChange={event => setDateOfBirth(event.target.value)} className={inputClass} /></Field>
             <Field label="Email address"><input disabled value={profile?.email ?? ''} className={`${inputClass} bg-[#f4f7f9] text-[#8190a0]`} /></Field>
           </div>
-          <label className="mt-3 flex items-start gap-2.5 text-[10px] leading-4 text-[#728296]"><input type="checkbox" checked={accepted} onChange={event => setAccepted(event.target.checked)} className="mt-0.5 accent-[#387e84]" /><span>I confirm these profile details are accurate and accept the Globus account terms.</span></label>
-          {note && <p role="status" className={`mt-3 rounded-lg px-3 py-2 text-[10px] ${note.startsWith('Profile saved') ? 'bg-[#f0f8f4] text-[#41755f]' : 'bg-[#fff1ef] text-[#a24940]'}`}>{note}</p>}
-          <button disabled={!accepted || update.isPending} className="mt-3 h-10 rounded-lg bg-[#142f51] px-4 text-[10px] font-bold text-white hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-45">{update.isPending ? 'Saving profile…' : 'Save profile'}</button>
-        </form>
-        <section className="rounded-[18px] border border-[#e1e8ee] bg-white p-4">
-          <div className="mb-4 border-b border-[#edf0f2] pb-4">
-            <p className="text-[9px] font-bold uppercase tracking-[.15em] text-[#71869a]">Profile photo</p>
-            <div className="mt-3 flex items-center gap-3">
-              <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-full border border-[#dbe5ea] bg-[#eef5f6] text-[15px] font-bold text-[#387b82]">
-                {user?.imageUrl
-                  ? <img src={user.imageUrl} alt="Your profile" className="h-full w-full object-cover" />
-                  : (user?.firstName?.[0] ?? profile?.email?.[0] ?? 'G').toUpperCase()}
-              </div>
-              <div>
-                <label htmlFor="profile-photo-upload" className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border border-[#dfe7eb] px-3.5 py-2.5 text-[10px] font-bold text-[#3f5c75] hover:bg-[#f5f8f9] ${photoPending ? 'pointer-events-none opacity-50' : ''}`}>
-                  <Camera size={14} />
-                  {photoPending ? 'Uploading…' : 'Change photo'}
-                </label>
-                <input id="profile-photo-upload" type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={uploadProfilePhoto} disabled={photoPending} />
-                <p className="mt-2 text-[9px] text-[#8794a2]">JPG, PNG or WebP · up to 5 MB</p>
-              </div>
-            </div>
-            <p className="mt-2 text-[9px] leading-4 text-[#708196]">Your photo appears across Globus.</p>
-            {photoMessage && <p role="status" className="mt-2 rounded-lg bg-[#f0f8f4] px-3 py-2 text-[9px] text-[#41755f]">{photoMessage}</p>}
-            {photoError && <p role="alert" className="mt-2 rounded-lg bg-[#fff1ef] px-3 py-2 text-[9px] text-[#a24940]">{photoError}</p>}
-          </div>
-          <p className="text-[9px] font-bold uppercase tracking-[.15em] text-[#71869a]">Account status</p>
-          <div className="mt-3 space-y-3"><StatusLine label="Account" value={humanize(profile?.accountStatus)} positive={profile?.accountStatus === 'active'} /><StatusLine label="Verification" value={humanize(profile?.verificationStatus)} positive={profile?.verificationStatus === 'approved'} /></div>
-          <div className="mt-4 border-t border-[#edf0f2] pt-3"><p className="text-[9px] text-[#8995a2]">Member since</p><p className="mt-1 text-[11px] font-semibold text-[#324962]">{formatDate(profile?.createdAt)}</p></div>
-        </section>
-      </div>
-      <section id="identity-verification" className="mt-3 rounded-[18px] border border-[#e1e8ee] bg-white p-4 sm:p-5">
+          <label className="mt-3 flex items-start gap-2.5 text-[9px] leading-4 text-[#728296]"><input type="checkbox" checked={accepted} onChange={event => setAccepted(event.target.checked)} className="mt-0.5 accent-[#387e84]" /><span>I confirm these profile details are accurate and accept the Globus account terms.</span></label>
+          {note && <p role="status" className={`mt-3 rounded-lg px-3 py-2 text-[9px] ${note.startsWith('Profile saved') ? 'bg-[#f0f8f4] text-[#41755f]' : 'bg-[#fff1ef] text-[#a24940]'}`}>{note}</p>}
+          <button disabled={!accepted || update.isPending} className="mt-3 h-9 rounded-lg bg-[#142f51] px-4 text-[9px] font-bold text-white hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-45">{update.isPending ? 'Saving profile…' : 'Save profile'}</button>
+        </form>}
+        {profileTab === 'security' && <section id="transaction-security" className="rounded-[18px] border border-[#e1e8ee] bg-white p-4 sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-[9px] font-bold uppercase tracking-[.15em] text-[#55868b]">Transaction security</p>
@@ -1255,8 +1305,8 @@ export function ProfilePage() {
           {pinMessage && <p role={pinMessage.startsWith('Transaction PIN saved') ? 'status' : 'alert'} className={`sm:col-span-2 rounded-lg px-4 py-3 text-[11px] ${pinMessage.startsWith('Transaction PIN saved') ? 'bg-[#f0f8f4] text-[#41755f]' : 'bg-[#fff1ef] text-[#a24940]'}`}>{pinMessage}</p>}
           <button disabled={updatePin.isPending || newPin.length !== 6 || confirmPin.length !== 6} className="h-10 w-fit rounded-lg bg-[#142f51] px-4 text-[10px] font-bold text-white hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50">{updatePin.isPending ? 'Saving PIN…' : profile?.transactionPinConfigured ? 'Update PIN' : 'Create PIN'}</button>
         </form>
-      </section>
-      <section className="mt-3 rounded-[18px] border border-[#e1e8ee] bg-white p-4 sm:p-5">
+        </section>}
+        {profileTab === 'verification' && <section id="identity-verification" className="rounded-[18px] border border-[#e1e8ee] bg-white p-4 sm:p-5">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-[9px] font-bold uppercase tracking-[.15em] text-[#55868b]">Private identity review</p>
@@ -1302,8 +1352,9 @@ export function ProfilePage() {
             </form>
           </>
         )}
-      </section>
-    </>
+        </section>}
+      </div>
+    </div>
   );
 }
 
