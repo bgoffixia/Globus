@@ -116,70 +116,92 @@ export function AdminWorkspace() {
 }
 
 function WorkspaceFrame({ children, active, title }: { children: ReactNode; active: string; title: string }) {
-  const [moreOpen, setMoreOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { user } = useUser();
   const email = user?.primaryEmailAddress?.emailAddress || '';
   const initials = (user?.firstName?.[0] || email[0] || 'G').toUpperCase();
-  const primaryNavigation = nav.filter(({ path: href }) =>
-    ['/admin', '/admin/users', '/admin/funding', '/admin/transactions'].includes(href),
-  );
-  const secondaryNavigation = nav.filter(({ path: href }) =>
-    ['/admin/accounts', '/admin/wallets', '/admin/restrictions', '/admin/audit', '/admin/settings', '/admin/logout'].includes(href),
-  );
+  const navigationGroups = [
+    { title: 'Workspace', paths: ['/admin'] },
+    { title: 'Customers', paths: ['/admin/users', '/admin/accounts'] },
+    { title: 'Money movement', paths: ['/admin/funding', '/admin/transactions'] },
+    { title: 'Controls & oversight', paths: ['/admin/wallets', '/admin/restrictions', '/admin/audit'] },
+    { title: 'Configuration', paths: ['/admin/settings'] },
+  ].map(group => ({ ...group, items: nav.filter(item => group.paths.includes(item.path)) }));
+  const logoutItem = nav.find(item => item.path === '/admin/logout')!;
   const isActive = (href: string) =>
     href === '/admin'
       ? active === 'overview'
       : href === '/admin/users'
         ? active === 'users' || active === 'member-detail'
         : active === href.split('/')[2];
-  const navigationLink = (item: (typeof nav)[number], compact = false) => {
+  const navigationLink = (item: (typeof nav)[number], onNavigate?: () => void) => {
     const Icon = item.icon;
     return (
       <Link
         key={item.path}
         href={item.path}
-        onClick={() => setMoreOpen(false)}
+        onClick={onNavigate}
         aria-current={isActive(item.path) ? 'page' : undefined}
-        className={`inline-flex shrink-0 items-center gap-2 rounded-lg font-semibold transition ${
-          compact ? 'px-3 py-2 text-[10px]' : 'w-full px-3 py-2.5 text-[11px]'
-        } ${isActive(item.path) ? 'bg-[#e8f1ed] text-[#285d61]' : 'text-[#556e73] hover:bg-[#f1f6f2]'}`}
+        className={`flex w-full items-center gap-3 rounded-[10px] px-3 py-2.5 text-[11px] font-semibold transition ${
+          isActive(item.path) ? 'bg-[#e7f0eb] text-[#245b5d] shadow-[inset_3px_0_0_#43898a]' : 'text-[#536b70] hover:bg-[#f0f5f1]'
+        }`}
       >
-        <Icon size={compact ? 14 : 15} strokeWidth={1.9} />
+        <Icon size={15} strokeWidth={1.9} />
         <span>{item.label}</span>
+        {isActive(item.path) && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[#43898a]" aria-hidden="true" />}
       </Link>
     );
   };
+  const navContent = (onNavigate?: () => void) => <>
+    <div className="space-y-5">
+      {navigationGroups.map(group => <section key={group.title}>
+        <h2 className="mb-1.5 px-3 text-[8px] font-extrabold uppercase tracking-[.18em] text-[#94a19d]">{group.title}</h2>
+        <div className="space-y-0.5">{group.items.map(item => navigationLink(item, onNavigate))}</div>
+      </section>)}
+    </div>
+    <div className="mt-5 border-t border-[#e5ebe6] pt-3">{navigationLink(logoutItem, onNavigate)}</div>
+  </>;
   return <div className="admin-viewport bg-[#f1f5f0] text-[#243d4b]">
-    <header className="sticky top-0 z-30 border-b border-[#dde6e3] bg-[#f7f8f3]/95 shadow-[0_2px_10px_rgba(28,53,69,.025)] backdrop-blur">
-      <div className="mx-auto flex min-h-[58px] max-w-[1540px] items-center justify-between gap-3 px-3 sm:px-6">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <div className="grid h-8 w-8 shrink-0 place-items-center rounded-[9px] bg-[#17394a] text-[#d7bd75]"><Landmark size={16} /></div>
-          <div className="min-w-0"><p className="text-[12px] font-extrabold tracking-[-.04em] text-[#193d4c]">GLOBUS <span className="font-semibold text-[#9a7c39]">BANK</span></p><p className="truncate text-[9px] text-[#71858b]">{title}</p></div>
-        </div>
-        <div className="hidden min-w-0 items-center gap-2 sm:flex">
-          <Pill tone="good">Authorized</Pill>
-          <div className="grid h-8 w-8 place-items-center rounded-full border border-[#d9e3df] bg-white text-[10px] font-bold">{initials}</div>
-        </div>
-        <div className="flex items-center gap-2 sm:hidden">
-          <button aria-label="Open administration tools" aria-expanded={moreOpen} onClick={() => setMoreOpen(value => !value)} className="rounded-lg border border-[#dce5e1] bg-white p-2 text-[#3b6168]"><Menu size={16} /></button>
-        </div>
+    <aside className="admin-sidebar hidden w-[248px] shrink-0 flex-col border-r border-[#dce5e0] bg-[#fbfcf8] px-4 pb-4 pt-5 lg:flex">
+      <div className="mb-8 flex items-center gap-3 px-2">
+        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-[12px] bg-[#17394a] text-[#d7bd75] shadow-sm"><Landmark size={19} /></div>
+        <div><p className="text-[13px] font-extrabold tracking-[-.04em] text-[#193d4c]">GLOBUS <span className="font-semibold text-[#9a7c39]">BANK</span></p><p className="mt-0.5 text-[9px] font-semibold uppercase tracking-[.14em] text-[#8a9995]">Admin console</p></div>
       </div>
-      <div className="mx-auto flex max-w-[1540px] items-center gap-1 overflow-x-auto border-t border-[#e6ece8] px-2 py-1.5 sm:px-5">
-        <nav aria-label="Primary administration navigation" className="flex min-w-0 items-center gap-1">
-          {primaryNavigation.map(item => navigationLink(item, true))}
-        </nav>
-        <div className="relative ml-auto shrink-0">
-          <button type="button" aria-expanded={moreOpen} aria-controls="admin-more-tools" onClick={() => setMoreOpen(value => !value)} className={`inline-flex items-center gap-1 rounded-lg px-3 py-2 text-[10px] font-semibold transition ${secondaryNavigation.some(item => isActive(item.path)) ? 'bg-[#e8f1ed] text-[#285d61]' : 'text-[#607579] hover:bg-[#edf3ef]'}`}>
-            <span className="hidden sm:inline">More tools</span><span className="sm:hidden">More</span><ChevronDown size={13} />
-          </button>
-          {moreOpen && <div id="admin-more-tools" className="absolute right-0 top-[calc(100%+8px)] z-50 w-56 rounded-xl border border-[#dce5e1] bg-[#fffefa] p-2 shadow-[0_16px_40px_rgba(22,48,58,.16)]">
-            <p className="px-3 pb-1 pt-2 text-[8px] font-bold uppercase tracking-[.16em] text-[#8a9a98]">Administration</p>
-            <nav aria-label="Additional administration tools" className="space-y-0.5">{secondaryNavigation.map(item => navigationLink(item))}</nav>
-          </div>}
-        </div>
+      <nav aria-label="Administration navigation" className="min-h-0 flex-1 overflow-y-auto pr-1">{navContent()}</nav>
+      <div className="mt-5 flex items-center gap-2.5 rounded-xl border border-[#e3eae5] bg-white p-3">
+        <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#eaf2ed] text-[10px] font-bold text-[#356d6c]">{initials}</div>
+        <div className="min-w-0"><p className="truncate text-[10px] font-bold text-[#34515a]">{user?.fullName || 'Administrator'}</p><p className="truncate text-[9px] text-[#849390]">{email || 'Authorized operator'}</p></div>
       </div>
-    </header>
-    <main className="page-enter mx-auto w-full max-w-[1450px] min-w-0 px-3 py-4 sm:px-6 sm:py-6 xl:px-8">{children}</main>
+    </aside>
+    <div className="admin-main-column">
+      <header className="z-30 border-b border-[#dde6e3] bg-[#f7f8f3]/95 shadow-[0_2px_10px_rgba(28,53,69,.025)] backdrop-blur">
+        <div className="flex min-h-[58px] items-center justify-between gap-3 px-3 sm:px-6">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <button type="button" aria-label="Open admin navigation" aria-expanded={mobileMenuOpen} aria-controls="admin-mobile-navigation" onClick={() => setMobileMenuOpen(true)} className="rounded-lg border border-[#dce5e1] bg-white p-2 text-[#3b6168] lg:hidden"><Menu size={16} /></button>
+            <div className="min-w-0"><p className="hidden text-[8px] font-bold uppercase tracking-[.16em] text-[#79908e] sm:block">Administration</p><h1 className="truncate text-[12px] font-bold text-[#284754] sm:mt-0.5 sm:text-[14px]">{title}</h1></div>
+          </div>
+          <div className="flex min-w-0 items-center gap-2">
+            <Pill tone="good">Authorized</Pill>
+            <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-[#d9e3df] bg-white text-[10px] font-bold text-[#3c626a]">{initials}</div>
+          </div>
+        </div>
+      </header>
+      <main className="page-enter mx-auto w-full max-w-[1450px] min-w-0 px-3 py-4 sm:px-6 sm:py-6 xl:px-8">{children}</main>
+    </div>
+    {mobileMenuOpen && <div className="fixed inset-0 z-[60] lg:hidden">
+      <button type="button" aria-label="Close admin navigation" className="absolute inset-0 bg-[#142a35]/45 backdrop-blur-[1px]" onClick={() => setMobileMenuOpen(false)} />
+      <aside id="admin-mobile-navigation" className="admin-sidebar absolute inset-y-0 left-0 flex w-[min(84vw,300px)] flex-col border-r border-[#dce5e0] bg-[#fbfcf8] px-4 pb-4 pt-4 shadow-2xl">
+        <div className="mb-6 flex items-center justify-between gap-3 px-2">
+          <div className="flex items-center gap-3"><div className="grid h-9 w-9 place-items-center rounded-[11px] bg-[#17394a] text-[#d7bd75]"><Landmark size={17} /></div><div><p className="text-[12px] font-extrabold tracking-[-.04em] text-[#193d4c]">GLOBUS <span className="font-semibold text-[#9a7c39]">BANK</span></p><p className="text-[8px] font-semibold uppercase tracking-[.14em] text-[#8a9995]">Admin console</p></div></div>
+          <button type="button" aria-label="Close admin navigation" onClick={() => setMobileMenuOpen(false)} className="rounded-lg p-2 text-[#71858b] hover:bg-[#eef4ef]"><X size={17} /></button>
+        </div>
+        <nav aria-label="Administration navigation" className="min-h-0 flex-1 overflow-y-auto">{navContent(() => setMobileMenuOpen(false))}</nav>
+        <div className="mt-4 flex items-center gap-2.5 rounded-xl border border-[#e3eae5] bg-white p-3">
+          <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#eaf2ed] text-[10px] font-bold text-[#356d6c]">{initials}</div>
+          <div className="min-w-0"><p className="truncate text-[10px] font-bold text-[#34515a]">{user?.fullName || 'Administrator'}</p><p className="truncate text-[9px] text-[#849390]">{email || 'Authorized operator'}</p></div>
+        </div>
+      </aside>
+    </div>}
   </div>;
 }
 
