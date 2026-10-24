@@ -102,8 +102,8 @@ export function TransferReceiptModal({ transaction, onClose, title }: { transact
       const actionHeight = actionsRef.current?.offsetHeight ?? 0;
       if (!documentHeight) return;
       const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
-      const availableHeight = Math.max(120, viewportHeight - 24 - actionHeight);
-      const scale = Math.min(1, availableHeight / documentHeight);
+      const availableHeight = Math.max(0, Math.min(viewportHeight * 0.8, viewportHeight - 24) - actionHeight);
+      const scale = Math.min(0.86, availableHeight / documentHeight);
       setReceiptFit(current => {
         const height = Math.ceil(documentHeight * scale);
         return current.scale === scale && current.height === height ? current : { scale, height };
@@ -169,7 +169,7 @@ export function TransferReceiptModal({ transaction, onClose, title }: { transact
 
   return (
     <div className="receipt-backdrop fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-[#10243c]/60 p-2 backdrop-blur-sm sm:p-3" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <section role="dialog" aria-modal="true" aria-labelledby="receipt-title" data-testid="dialog-transfer-receipt" className="receipt-dialog relative flex max-h-[calc(100dvh-1.5rem)] w-full max-w-[440px] flex-col overflow-hidden rounded-[22px] bg-[#fcfbf8] shadow-[0_30px_80px_rgba(10,30,55,.35)]">
+      <section role="dialog" aria-modal="true" aria-labelledby="receipt-title" data-testid="dialog-transfer-receipt" className="receipt-dialog relative flex w-full max-w-[440px] flex-col overflow-hidden rounded-[22px] bg-[#fcfbf8] shadow-[0_30px_80px_rgba(10,30,55,.35)]">
         <div data-testid="receipt-document-frame" className="receipt-document-frame w-full shrink-0" style={{ height: `${receiptFit.height}px` }}>
           <article ref={printRef} className="receipt-print w-full" style={{ transform: `scale(${receiptFit.scale})`, transformOrigin: 'top center' }}>
             <header className="relative overflow-hidden bg-[#132f51] px-6 pb-6 pt-5 text-white">

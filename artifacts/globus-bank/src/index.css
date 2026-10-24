@@ -339,6 +339,20 @@ img, svg, video, canvas {
   }
 }
 
+.receipt-dialog {
+  max-height: min(80dvh, calc(100dvh - 1.5rem));
+}
+
+.receipt-document-frame {
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.receipt-print {
+  flex: none;
+}
+
 @media print {
   @page {
     margin: 16mm;
