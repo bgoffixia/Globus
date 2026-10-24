@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
-import { BadgeCheck, Clock3, Download, Printer, X } from 'lucide-react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { BadgeCheck, Clock3, Download, ImageDown, Printer, X } from 'lucide-react';
 import type { BankTransaction, InternationalTransferRequest } from '@workspace/api-client-react';
 import { destinationCurrencyDigits } from '@/lib/destination-currency';
-import { downloadTransactionReceiptPdf } from '@/lib/transaction-receipt-pdf';
+import { downloadTransactionReceiptPdf, saveTransactionReceiptPng } from '@/lib/transaction-receipt-pdf';
 
 export type ReceiptConversion = {
   sourceAmount: string;
@@ -75,10 +75,13 @@ export function receiptFromRequest(r: InternationalTransferRequest): ReceiptTran
 }
 
 export function TransferReceiptModal({ transaction, onClose, title }: { transaction: ReceiptTransaction; onClose: () => void; title?: string }) {
-  const [downloading, setDownloading] = useState(false);
+  const [exporting, setExporting] = useState<'pdf' | 'png' | null>(null);
   const [downloadError, setDownloadError] = useState('');
   const closeRef = useRef<HTMLButtonElement>(null);
+  const printRef = useRef<HTMLElement>(null);
+  const actionsRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
+  const [receiptFit, setReceiptFit] = useState({ scale: 1, height: 0 });
   onCloseRef.current = onClose;
   const conversion = parseReceiptConversion(transaction);
   const completed = transaction.status === 'completed';
@@ -93,29 +96,70 @@ export function TransferReceiptModal({ transaction, onClose, title }: { transact
     return () => { window.removeEventListener('keydown', esc); prev?.focus?.(); };
   }, []);
 
+  useLayoutEffect(() => {
+    const measure = () => {
+      const documentHeight = printRef.current?.scrollHeight ?? 0;
+      const actionHeight = actionsRef.current?.offsetHeight ?? 0;
+      if (!documentHeight) return;
+      const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+      const availableHeight = Math.max(120, viewportHeight - 24 - actionHeight);
+      const scale = Math.min(1, availableHeight / documentHeight);
+      setReceiptFit(current => {
+        const height = Math.ceil(documentHeight * scale);
+        return current.scale === scale && current.height === height ? current : { scale, height };
+      });
+    };
+    measure();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    if (printRef.current) observer?.observe(printRef.current);
+    if (actionsRef.current) observer?.observe(actionsRef.current);
+    window.addEventListener('resize', measure);
+    window.visualViewport?.addEventListener('resize', measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', measure);
+      window.visualViewport?.removeEventListener('resize', measure);
+    };
+  }, [downloadError]);
+
+  const exportData = () => ({
+    reference: transaction.reference,
+    amount: formatAmount(transaction.amount, transaction.currency),
+    status: humanizeStatus(transaction.status),
+    date: formatDateTime(transaction.createdAt),
+    description: transaction.description || heading,
+    counterparty: transaction.counterparty || 'Globus account',
+    activity: heading,
+    sourceAmount: conversion ? formatAmount(conversion.sourceAmount, conversion.sourceCurrency) : undefined,
+    exchangeRate: conversion ? `1 ${conversion.sourceCurrency} = ${formatRate(conversion.exchangeRate)} ${conversion.destinationCurrency}` : undefined,
+    convertedAmount: conversion ? formatAmount(conversion.destinationAmount, conversion.destinationCurrency) : undefined,
+    recipient: transaction.recipient?.name,
+    route: transaction.recipient?.route,
+  });
+
   const downloadPdf = async () => {
     setDownloadError('');
-    setDownloading(true);
+    setExporting('pdf');
     try {
       if (!completed) throw new Error('PDF receipts are available for completed transactions only.');
-      await downloadTransactionReceiptPdf({
-        reference: transaction.reference,
-        amount: formatAmount(transaction.amount, transaction.currency),
-        status: humanizeStatus(transaction.status),
-        date: formatDateTime(transaction.createdAt),
-        description: transaction.description || heading,
-        counterparty: transaction.counterparty || 'Globus account',
-        activity: heading,
-        sourceAmount: conversion ? formatAmount(conversion.sourceAmount, conversion.sourceCurrency) : undefined,
-        exchangeRate: conversion ? `1 ${conversion.sourceCurrency} = ${formatRate(conversion.exchangeRate)} ${conversion.destinationCurrency}` : undefined,
-        convertedAmount: conversion ? formatAmount(conversion.destinationAmount, conversion.destinationCurrency) : undefined,
-        recipient: transaction.recipient?.name,
-        route: transaction.recipient?.route,
-      }, `${import.meta.env.BASE_URL}globus-wordmark-transparent.png`);
+      await downloadTransactionReceiptPdf(exportData(), `${import.meta.env.BASE_URL}globus-wordmark-transparent.png`);
     } catch (error) {
       setDownloadError(error instanceof Error ? error.message : 'The PDF receipt could not be downloaded.');
     } finally {
-      setDownloading(false);
+      setExporting(null);
+    }
+  };
+
+  const downloadPng = async () => {
+    setDownloadError('');
+    setExporting('png');
+    try {
+      if (!completed) throw new Error('PNG receipts are available for completed transactions only.');
+      await saveTransactionReceiptPng(exportData(), `${import.meta.env.BASE_URL}globus-wordmark-transparent.png`);
+    } catch (error) {
+      setDownloadError(error instanceof Error ? error.message : 'The PNG receipt could not be saved.');
+    } finally {
+      setExporting(null);
     }
   };
 
@@ -124,10 +168,10 @@ export function TransferReceiptModal({ transaction, onClose, title }: { transact
   );
 
   return (
-    <div className="receipt-backdrop fixed inset-0 z-50 overflow-y-auto bg-[#10243c]/60 p-3 backdrop-blur-sm sm:p-6" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="flex min-h-full items-center justify-center" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
-        <section role="dialog" aria-modal="true" aria-labelledby="receipt-title" data-testid="dialog-transfer-receipt" className="receipt-dialog relative w-full max-w-[440px] overflow-hidden rounded-[22px] bg-[#fcfbf8] shadow-[0_30px_80px_rgba(10,30,55,.35)]">
-          <article className="receipt-print">
+    <div className="receipt-backdrop fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-[#10243c]/60 p-2 backdrop-blur-sm sm:p-3" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <section role="dialog" aria-modal="true" aria-labelledby="receipt-title" data-testid="dialog-transfer-receipt" className="receipt-dialog relative flex max-h-[calc(100dvh-1.5rem)] w-full max-w-[440px] flex-col overflow-hidden rounded-[22px] bg-[#fcfbf8] shadow-[0_30px_80px_rgba(10,30,55,.35)]">
+        <div data-testid="receipt-document-frame" className="receipt-document-frame w-full shrink-0" style={{ height: `${receiptFit.height}px` }}>
+          <article ref={printRef} className="receipt-print w-full" style={{ transform: `scale(${receiptFit.scale})`, transformOrigin: 'top center' }}>
             <header className="relative overflow-hidden bg-[#132f51] px-6 pb-6 pt-5 text-white">
               <div className="absolute -right-12 -top-16 h-44 w-44 rounded-full border border-white/10" />
               <div className="absolute -right-4 -top-8 h-28 w-28 rounded-full border border-white/10" />
@@ -167,13 +211,17 @@ export function TransferReceiptModal({ transaction, onClose, title }: { transact
               </dl>
             </div>
           </article>
-          <div className="receipt-actions flex flex-wrap items-center justify-end gap-2 border-t border-[#ecefef] px-6 py-4">
-            <button type="button" data-testid="button-download-receipt-pdf" disabled={downloading || !completed} onClick={downloadPdf} className="inline-flex items-center gap-2 rounded-lg border border-[#dfe7eb] bg-white px-3 py-2.5 text-[10px] font-bold text-[#4a667e] hover:bg-[#f5f8f9] disabled:cursor-not-allowed disabled:opacity-50"><Download size={14} /> {downloading ? 'Preparing PDF…' : 'Download PDF'}</button>
-            <button type="button" onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-lg bg-[#142f51] px-4 py-2.5 text-[10px] font-bold text-white hover:bg-[#1b4269]"><Printer size={14} /> Print</button>
+        </div>
+        <div ref={actionsRef} className="receipt-actions shrink-0 border-t border-[#ecefef] px-3 py-2.5 sm:px-5">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <button type="button" data-testid="button-save-receipt-png" aria-label="Save receipt PNG to device or gallery" disabled={exporting !== null || !completed} onClick={downloadPng} className="inline-flex items-center gap-1.5 rounded-lg border border-[#dfe7eb] bg-white px-2.5 py-2 text-[9px] font-bold text-[#4a667e] hover:bg-[#f5f8f9] disabled:cursor-not-allowed disabled:opacity-50"><ImageDown size={13} />{exporting === 'png' ? 'Preparing image…' : 'Save PNG'}</button>
+            <button type="button" data-testid="button-download-receipt-pdf" disabled={exporting !== null || !completed} onClick={downloadPdf} className="inline-flex items-center gap-1.5 rounded-lg border border-[#dfe7eb] bg-white px-2.5 py-2 text-[9px] font-bold text-[#4a667e] hover:bg-[#f5f8f9] disabled:cursor-not-allowed disabled:opacity-50"><Download size={13} />{exporting === 'pdf' ? 'Preparing PDF…' : 'Download PDF'}</button>
+            <button type="button" onClick={() => window.print()} className="inline-flex items-center gap-1.5 rounded-lg bg-[#142f51] px-3 py-2 text-[9px] font-bold text-white hover:bg-[#1b4269]"><Printer size={13} /> Print</button>
           </div>
-          {downloadError && <p role="alert" data-testid="status-receipt-download-error" className="px-6 pb-4 text-right text-[10px] text-[#a24940]">{downloadError}</p>}
-        </section>
-      </div>
+          {downloadError && <p role="alert" data-testid="status-receipt-download-error" className="mt-1 text-right text-[9px] text-[#a24940]">{downloadError}</p>}
+          <p className="mt-1 text-right text-[8px] text-[#8794a2]">On supported phones, choose “Save Image” to add the PNG to your gallery.</p>
+        </div>
+      </section>
     </div>
   );
 }

@@ -362,18 +362,26 @@ img, svg, video, canvas {
     position: absolute !important;
     inset: 0 !important;
     display: block !important;
+    overflow: visible !important;
     padding: 0 !important;
     background: #fff !important;
     backdrop-filter: none !important;
   }
 
   .receipt-dialog {
+    display: block !important;
     width: 100% !important;
     max-width: none !important;
+    max-height: none !important;
     margin: 0 !important;
     padding: 0 !important;
     overflow: visible !important;
     box-shadow: none !important;
+  }
+
+  .receipt-document-frame {
+    height: auto !important;
+    overflow: visible !important;
   }
 
   .receipt-print {
@@ -381,6 +389,7 @@ img, svg, video, canvas {
     width: 100% !important;
     border: 0 !important;
     padding: 0 !important;
+    transform: none !important;
   }
 
   .receipt-actions {

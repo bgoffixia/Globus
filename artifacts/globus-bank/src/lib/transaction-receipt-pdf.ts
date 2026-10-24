@@ -186,14 +186,7 @@ export async function downloadTransactionReceiptPdf(
   receipt: TransactionReceiptPdfData,
   logoUrl: string,
 ) {
-  const logo = await loadImage(logoUrl);
-  const canvas = document.createElement('canvas');
-  canvas.width = PAGE_WIDTH;
-  canvas.height = PAGE_HEIGHT;
-  const context = canvas.getContext('2d');
-  if (!context) throw new Error('PDF receipt generation is not available in this browser.');
-  drawReceipt(context, logo, receipt);
-
+  const canvas = await renderReceiptCanvas(receipt, logoUrl);
   const jpeg = await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(
       blob => blob ? resolve(blob) : reject(new Error('The PDF receipt could not be created.')),
@@ -202,11 +195,51 @@ export async function downloadTransactionReceiptPdf(
     );
   });
   const pdf = createPdfFromJpeg(new Uint8Array(await jpeg.arrayBuffer()));
-  const url = URL.createObjectURL(pdf);
-  const link = document.createElement('a');
+  downloadBlob(pdf, receipt.reference, 'pdf');
+}
+
+export async function saveTransactionReceiptPng(
+  receipt: TransactionReceiptPdfData,
+  logoUrl: string,
+) {
+  const canvas = await renderReceiptCanvas(receipt, logoUrl);
+  const png = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      blob => blob ? resolve(blob) : reject(new Error('The PNG receipt could not be created.')),
+      'image/png',
+    );
+  });
   const safeReference = receipt.reference.replace(/[^a-z0-9_-]+/gi, '-');
+  const file = new File([png], `globus-receipt-${safeReference}.png`, { type: 'image/png' });
+  if (navigator.share && navigator.canShare?.({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: 'Globus transaction receipt' });
+      return;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      // Fall back to a standard image download when the device share sheet is unavailable.
+    }
+  }
+  downloadBlob(png, receipt.reference, 'png');
+}
+
+async function renderReceiptCanvas(receipt: TransactionReceiptPdfData, logoUrl: string) {
+  const logo = await loadImage(logoUrl);
+  const canvas = document.createElement('canvas');
+  canvas.width = PAGE_WIDTH;
+  canvas.height = PAGE_HEIGHT;
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('Receipt image generation is not available in this browser.');
+  drawReceipt(context, logo, receipt);
+  return canvas;
+}
+
+function downloadBlob(blob: Blob, reference: string, extension: 'pdf' | 'png') {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  const safeReference = reference.replace(/[^a-z0-9_-]+/gi, '-');
   link.href = url;
-  link.download = `globus-receipt-${safeReference}.pdf`;
+  link.download = `globus-receipt-${safeReference}.${extension}`;
   link.click();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
