@@ -449,6 +449,11 @@ export interface BankDashboard {
   recentTransactions: BankTransaction[];
   referenceCurrency: CurrencyCode;
   internalLedger: true;
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  verificationNotice: string | null;
 }
 
 export interface TransferInput {
@@ -1147,6 +1152,11 @@ export interface AdminSettings {
   fundingLimit: string;
   secondApprovalThreshold: string;
   frozenIncomingPolicy: AdminSettingsFrozenIncomingPolicy;
+  /**
+     * @minLength 1
+     * @maxLength 500
+     */
+  unverifiedDashboardMessage: string;
   updatedAt: string;
 }
 
@@ -1155,6 +1165,11 @@ export interface AdminSettingsInput {
   fundingLimit: string;
   /** @pattern ^[0-9]{1,12}(\.[0-9]{1,2})?$ */
   secondApprovalThreshold: string;
+  /**
+     * @minLength 1
+     * @maxLength 500
+     */
+  unverifiedDashboardMessage: string;
   /**
      * @minLength 5
      * @maxLength 500
@@ -1402,6 +1417,15 @@ page?: number;
  * @maximum 100
  */
 pageSize?: number;
+};
+
+export type ListAdminLedgerRequestsParams = {
+/**
+ * Limit the queue to one customer when opening their management page
+ * @minLength 1
+ * @maxLength 128
+ */
+userId?: string;
 };
 
 export type ListAdminUsersParams = {

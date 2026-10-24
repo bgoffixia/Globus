@@ -12,6 +12,11 @@ export interface AdminSettingsInput {
   /** @pattern ^[0-9]{1,12}(\.[0-9]{1,2})?$ */
   secondApprovalThreshold: string;
   /**
+     * @minLength 1
+     * @maxLength 500
+     */
+  unverifiedDashboardMessage: string;
+  /**
      * @minLength 5
      * @maxLength 500
      */

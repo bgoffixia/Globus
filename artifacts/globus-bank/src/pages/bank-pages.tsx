@@ -28,6 +28,7 @@ import {
   UserRound,
   WalletCards,
   Trash2,
+  TriangleAlert,
   X,
 } from 'lucide-react';
 import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
@@ -259,7 +260,14 @@ export function HomePage() {
 }
 
 export function DashboardPage() {
-  const query = useGetBankDashboard({ query: { queryKey: getGetBankDashboardQueryKey() } });
+  const query = useGetBankDashboard({
+    query: {
+      queryKey: getGetBankDashboardQueryKey(),
+      refetchInterval: 15_000,
+      refetchIntervalInBackground: false,
+      refetchOnWindowFocus: true,
+    },
+  });
   const [selectedCurrency, setSelectedCurrency] = useState<Currency | null>(null);
   const dash = query.data;
   const selectedWallet = dash?.wallets.find(wallet => wallet.currency === selectedCurrency)
@@ -274,6 +282,13 @@ export function DashboardPage() {
   return (
     <>
       <PageHeading eyebrow="Your dashboard" title={`Good to see you${dash?.profile.firstName ? `, ${dash.profile.firstName}` : ''}.`} subtitle="Wallets, quick actions, and recent activity." />
+
+      {dash?.verificationNotice && (
+        <div role="status" className="mt-3 flex min-w-0 items-start gap-3 rounded-xl border border-[#eadbb0] bg-[#fbf7eb] px-3.5 py-3 text-[#725e34] sm:px-4">
+          <TriangleAlert size={17} className="mt-0.5 shrink-0 text-[#9a7b36]" />
+          <p className="min-w-0 break-words text-[10px] leading-5 sm:text-[11px]">{dash.verificationNotice}</p>
+        </div>
+      )}
 
       <div className="mt-3 grid min-w-0 gap-2.5 xl:grid-cols-[1.15fr_.85fr]">
         <section className="balance-panel relative min-w-0 overflow-hidden rounded-[18px] p-3.5 text-white sm:p-4 xl:col-start-1 xl:row-start-1">
@@ -1245,8 +1260,8 @@ export function ProfilePage() {
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-[9px] font-bold uppercase tracking-[.15em] text-[#55868b]">Private identity review</p>
-            <h2 className="mt-1 text-[13px] font-bold text-[#29425c]">Submit identity documents</h2>
-            <p className="mt-1.5 max-w-2xl text-[10px] leading-4 text-[#718296]">Upload PDF, JPG or PNG files up to 10 MB each, with no 5 MB minimum. You can upload up to five.</p>
+            <h2 className="mt-1 text-[13px] font-bold text-[#29425c]">Request identity verification</h2>
+            <p className="mt-1.5 max-w-2xl text-[10px] leading-4 text-[#718296]">You can request a review without uploading a file. PDF, JPG or PNG documents are optional, up to 10 MB each, with no 5 MB minimum.</p>
           </div>
           <span className="shrink-0 rounded-lg border border-[#d9e8e9] bg-[#f2f8f8] px-3 py-2 text-[10px] font-bold text-[#4e777a]">{humanize(profile?.verificationStatus)}</span>
         </div>
@@ -1279,9 +1294,9 @@ export function ProfilePage() {
             <form onSubmit={submitForIdentityReview} className="mt-3 border-t border-[#edf0f2] pt-3">
               <label className="flex items-start gap-2.5 text-[10px] leading-4 text-[#65798e]">
                 <input type="checkbox" required checked={identityConsent} onChange={event => setIdentityConsent(event.target.checked)} className="mt-0.5 accent-[#387e84]" />
-                <span>I confirm these documents belong to me and the details on it match my personal information provided when creating my account.</span>
+                <span>I confirm the information in my request matches the personal information I provided when creating my account, and any documents I upload belong to me.</span>
               </label>
-              <button disabled={!identityConsent || submitIdentityDocuments.isPending || identityUploadPending || !(documentsQuery.data ?? []).some(document => document.status === 'uploaded') || (documentsQuery.data ?? []).some(document => document.status === 'uploading')} className="mt-3 h-10 rounded-lg bg-[#142f51] px-4 text-[10px] font-bold text-white hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-45">
+              <button disabled={!identityConsent || submitIdentityDocuments.isPending || identityUploadPending || (documentsQuery.data ?? []).some(document => document.status === 'uploading')} className="mt-3 h-10 rounded-lg bg-[#142f51] px-4 text-[10px] font-bold text-white hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-45">
                 {submitIdentityDocuments.isPending ? 'Submitting for review…' : profile?.verificationStatus === 'additional_information_required' ? 'Resubmit for review' : 'Submit for review'}
               </button>
             </form>
@@ -1294,7 +1309,7 @@ export function ProfilePage() {
 
 function AdminLedgerRequestQueue() {
   const queryClient = useQueryClient();
-  const requests = useListAdminLedgerRequests({
+  const requests = useListAdminLedgerRequests(undefined, {
     query: {
       queryKey: getListAdminLedgerRequestsQueryKey(),
       retry: false,

@@ -1,0 +1,24 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap');
+
+:root {
+  --background: 210 30% 97%;
+  --foreground: 218 44% 17%;
+  --border: 214 26% 88%;
+  --card: 0 0% 100%;
+  --primary: 219 57% 20%;
+  --accent: 190 60% 41%;
+  --app-font-sans: 'DM Sans', sans-serif;
+  --app-font-display: 'Manrope', sans-serif;
+}
+
+html, body, #root {
+  min-width: 320px;
+  min-height: 100%;
+  margin: 0;
+  background: #f1f5f0;
+  font-family: var(--app-font-sans);
+}
+
+button, input, select, textarea {
+  font: inherit;
+}

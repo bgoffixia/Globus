@@ -84,6 +84,7 @@ import type {
   ListAdminAccountsParams,
   ListAdminAuditLogsParams,
   ListAdminLedgerParams,
+  ListAdminLedgerRequestsParams,
   ListAdminRestrictionsParams,
   ListAdminTransactionsParams,
   ListAdminUsersParams,
@@ -3121,20 +3122,27 @@ export const useUpdateAdminSettings = <TError = ErrorType<BadRequestResponse | U
       return useMutation(getUpdateAdminSettingsMutationOptions(options));
     }
 
-export const getListAdminLedgerRequestsUrl = () => {
+export const getListAdminLedgerRequestsUrl = (params?: ListAdminLedgerRequestsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/bank/admin/ledger-requests`
+  return stringifiedParams.length > 0 ? `/api/bank/admin/ledger-requests?${stringifiedParams}` : `/api/bank/admin/ledger-requests`
 }
 
 /**
  * @summary List pending internal ledger deposit and withdrawal requests
  */
-export const listAdminLedgerRequests = async ( options?: Parameters<typeof customFetch>[1]): Promise<AdminLedgerRequest[]> => {
+export const listAdminLedgerRequests = async (params?: ListAdminLedgerRequestsParams, options?: Parameters<typeof customFetch>[1]): Promise<AdminLedgerRequest[]> => {
 
-  return customFetch<AdminLedgerRequest[]>(getListAdminLedgerRequestsUrl(),
+  return customFetch<AdminLedgerRequest[]>(getListAdminLedgerRequestsUrl(params),
   {
     ...options,
     method: 'GET'
@@ -3147,23 +3155,23 @@ export const listAdminLedgerRequests = async ( options?: Parameters<typeof custo
 
 
 
-export const getListAdminLedgerRequestsQueryKey = () => {
+export const getListAdminLedgerRequestsQueryKey = (params?: ListAdminLedgerRequestsParams,) => {
     return [
-    `/api/bank/admin/ledger-requests`
+    `/api/bank/admin/ledger-requests`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getListAdminLedgerRequestsQueryOptions = <TData = Awaited<ReturnType<typeof listAdminLedgerRequests>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminLedgerRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getListAdminLedgerRequestsQueryOptions = <TData = Awaited<ReturnType<typeof listAdminLedgerRequests>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>(params?: ListAdminLedgerRequestsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminLedgerRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getListAdminLedgerRequestsQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getListAdminLedgerRequestsQueryKey(params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminLedgerRequests>>> = ({ signal }) => listAdminLedgerRequests({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminLedgerRequests>>> = ({ signal }) => listAdminLedgerRequests(params, { signal, ...requestOptions });
 
 
 
@@ -3181,11 +3189,11 @@ export type ListAdminLedgerRequestsQueryError = ErrorType<UnauthorizedResponse |
  */
 
 export function useListAdminLedgerRequests<TData = Awaited<ReturnType<typeof listAdminLedgerRequests>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminLedgerRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ params?: ListAdminLedgerRequestsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminLedgerRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getListAdminLedgerRequestsQueryOptions(options)
+  const queryOptions = getListAdminLedgerRequestsQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

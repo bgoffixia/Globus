@@ -109,6 +109,7 @@ export * from './listAdminAccountsParams';
 export * from './listAdminAccountsStatus';
 export * from './listAdminAuditLogsParams';
 export * from './listAdminLedgerParams';
+export * from './listAdminLedgerRequestsParams';
 export * from './listAdminRestrictionsParams';
 export * from './listAdminRestrictionsStatus';
 export * from './listAdminTransactionsParams';

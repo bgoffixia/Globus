@@ -753,6 +753,12 @@ paths:
       operationId: listAdminLedgerRequests
       tags: [admin]
       summary: List pending internal ledger deposit and withdrawal requests
+      parameters:
+        - name: userId
+          in: query
+          description: Limit the queue to one customer when opening their management page
+          required: false
+          schema: { type: string, minLength: 1, maxLength: 128 }
       responses:
         "200":
           description: Pending requests for administrator review
@@ -1593,7 +1599,8 @@ components:
           items: { $ref: "#/components/schemas/BankTransaction" }
         referenceCurrency: { $ref: "#/components/schemas/CurrencyCode" }
         internalLedger: { type: boolean, const: true }
-      required: [profile, wallets, recentTransactions, referenceCurrency, internalLedger]
+        verificationNotice: { type: ["string", "null"], maxLength: 500 }
+      required: [profile, wallets, recentTransactions, referenceCurrency, internalLedger, verificationNotice]
     TransferInput:
       type: object
       properties:
@@ -1967,16 +1974,18 @@ components:
         fundingLimit: { type: string }
         secondApprovalThreshold: { type: string }
         frozenIncomingPolicy: { type: string, enum: [allow_frozen] }
+        unverifiedDashboardMessage: { type: string, minLength: 1, maxLength: 500 }
         updatedAt: { type: string, format: date-time }
-      required: [fundingLimit, secondApprovalThreshold, frozenIncomingPolicy, updatedAt]
+      required: [fundingLimit, secondApprovalThreshold, frozenIncomingPolicy, unverifiedDashboardMessage, updatedAt]
     AdminSettingsInput:
       type: object
       properties:
         fundingLimit: { type: string, pattern: "^[0-9]{1,12}(\\.[0-9]{1,2})?$" }
         secondApprovalThreshold: { type: string, pattern: "^[0-9]{1,12}(\\.[0-9]{1,2})?$" }
+        unverifiedDashboardMessage: { type: string, minLength: 1, maxLength: 500 }
         reason: { type: string, minLength: 5, maxLength: 500 }
         transactionPin: { type: string, pattern: "^[0-9]{6}$" }
-      required: [fundingLimit, secondApprovalThreshold, reason, transactionPin]
+      required: [fundingLimit, secondApprovalThreshold, unverifiedDashboardMessage, reason, transactionPin]
     AdminTransactionPage:
       type: object
       properties:

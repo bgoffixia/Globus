@@ -16,4 +16,9 @@ export interface BankDashboard {
   recentTransactions: BankTransaction[];
   referenceCurrency: CurrencyCode;
   internalLedger: true;
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  verificationNotice: string | null;
 }

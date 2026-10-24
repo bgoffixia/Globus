@@ -45,6 +45,7 @@ import {
 } from "@workspace/api-zod";
 import {
   bankAuditLogsTable,
+  bankAdminSettingsTable,
   bankExchangeRatesTable,
   bankIdentityDocumentsTable,
   bankInternationalTransferRequestsTable,
@@ -97,6 +98,8 @@ import {
 } from "../lib/password-reset";
 
 const router: IRouter = Router();
+const DEFAULT_UNVERIFIED_DASHBOARD_MESSAGE =
+  "Your identity verification is not complete. Submit a request for review to access eligible account features.";
 const customerIdLookupLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 8,
@@ -521,7 +524,24 @@ router.get("/bank/dashboard", async (req, res): Promise<void> => {
   }
 
   const profile = await getOrCreateBankUser(authUserId);
-  const [wallets, recentTransactions, accountStatus, operationEligibility] = await Promise.all([
+  const verificationNoticePromise =
+    profile.verificationStatus === "approved"
+      ? Promise.resolve(null)
+      : (async () => {
+          await db
+            .insert(bankAdminSettingsTable)
+            .values({ id: "operations" })
+            .onConflictDoNothing();
+          const [settings] = await db
+            .select({
+              message: bankAdminSettingsTable.unverifiedDashboardMessage,
+            })
+            .from(bankAdminSettingsTable)
+            .where(eq(bankAdminSettingsTable.id, "operations"))
+            .limit(1);
+          return settings?.message || DEFAULT_UNVERIFIED_DASHBOARD_MESSAGE;
+        })();
+  const [wallets, recentTransactions, accountStatus, operationEligibility, verificationNotice] = await Promise.all([
     getWalletsForUser(profile.id),
     getRecentTransactions(profile.id),
     getEffectiveBankAccountStatus(
@@ -533,6 +553,7 @@ router.get("/bank/dashboard", async (req, res): Promise<void> => {
       profile.accountStatus as "active" | "restricted" | "suspended",
       profile.verificationStatus,
     ),
+    verificationNoticePromise,
   ]);
 
   res.json(
@@ -557,6 +578,7 @@ router.get("/bank/dashboard", async (req, res): Promise<void> => {
       recentTransactions,
       referenceCurrency: "USD",
       internalLedger: true,
+      verificationNotice,
     }),
   );
 });
@@ -1237,9 +1259,6 @@ router.post(
         return { error: "Finish or remove each in-progress upload before submitting for review." };
       }
       const uploadedCount = documents.filter((document) => document.status === "uploaded").length;
-      if (uploadedCount === 0) {
-        return { error: "Upload at least one identity document before submitting." };
-      }
       const [updated] = await tx
         .update(bankUsersTable)
         .set({
@@ -1253,7 +1272,7 @@ router.post(
         actorUserId: profile.id,
         targetUserId: profile.id,
         action: "submit_identity_documents",
-        reason: `Member submitted ${uploadedCount} identity document(s) for review.`,
+        reason: `Member submitted an identity verification request with ${uploadedCount} uploaded document(s).`,
       });
       return { user: updated };
     });

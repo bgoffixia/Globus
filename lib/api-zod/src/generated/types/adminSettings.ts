@@ -11,5 +11,10 @@ export interface AdminSettings {
   fundingLimit: string;
   secondApprovalThreshold: string;
   frozenIncomingPolicy: AdminSettingsFrozenIncomingPolicy;
+  /**
+     * @minLength 1
+     * @maxLength 500
+     */
+  unverifiedDashboardMessage: string;
   updatedAt: Date;
 }

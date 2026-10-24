@@ -50,6 +50,7 @@ import {
   ListAdminIdentityDocumentsResponse,
   ListAdminUsersQueryParams,
   ListAdminUsersResponse,
+  ListAdminLedgerRequestsQueryParams,
   UpdateAdminUserVerificationBody,
   UpdateAdminUserVerificationParams,
   UpdateAdminUserVerificationResponse,
@@ -350,11 +351,11 @@ async function runIdentityReview(input: {
       .from(bankIdentityDocumentsTable)
       .where(eq(bankIdentityDocumentsTable.userId, input.userId))
       .for("update");
-    if (
-      documents.length === 0 ||
-      documents.some((document) => document.status !== "uploaded")
-    ) {
-      return { error: "At least one fully uploaded identity document is required." };
+    if (documents.some((document) => document.status !== "uploaded")) {
+      return {
+        error:
+          "Finish or remove each in-progress identity document upload before recording a decision.",
+      };
     }
 
     const finalDecision =
@@ -1027,6 +1028,7 @@ router.get("/bank/admin/settings", requireAdmin, async (_req, res): Promise<void
       fundingLimit: settings.fundingLimit,
       secondApprovalThreshold: settings.secondApprovalThreshold,
       frozenIncomingPolicy: "allow_frozen",
+      unverifiedDashboardMessage: settings.unverifiedDashboardMessage,
       updatedAt: settings.updatedAt.toISOString(),
     }),
   );
@@ -1077,12 +1079,19 @@ router.put("/bank/admin/settings", requireAdmin, async (req, res): Promise<void>
     res.status(400).json({ error: "Enter an audit reason of at least five characters." });
     return;
   }
+  const unverifiedDashboardMessage =
+    parsed.data.unverifiedDashboardMessage.trim();
+  if (!unverifiedDashboardMessage) {
+    res.status(400).json({ error: "Enter a default message for unverified members." });
+    return;
+  }
   const [settings] = await db
     .insert(bankAdminSettingsTable)
     .values({
       id: "operations",
       fundingLimit: formatMinorAmount(fundingLimitMinor),
       secondApprovalThreshold: formatMinorAmount(approvalThresholdMinor),
+      unverifiedDashboardMessage,
       updatedByUserId: actorUserId,
     })
     .onConflictDoUpdate({
@@ -1090,6 +1099,7 @@ router.put("/bank/admin/settings", requireAdmin, async (req, res): Promise<void>
       set: {
         fundingLimit: formatMinorAmount(fundingLimitMinor),
         secondApprovalThreshold: formatMinorAmount(approvalThresholdMinor),
+        unverifiedDashboardMessage,
         updatedByUserId: actorUserId,
         updatedAt: new Date(),
       },
@@ -1099,13 +1109,14 @@ router.put("/bank/admin/settings", requireAdmin, async (req, res): Promise<void>
     actorUserId,
     targetUserId: actorUserId,
     action: "update_admin_settings",
-    reason: `Funding cap ${settings.fundingLimit}; second approval threshold ${settings.secondApprovalThreshold}. ${reason}`,
+    reason: `Funding cap ${settings.fundingLimit}; second approval threshold ${settings.secondApprovalThreshold}; unverified dashboard notice updated. ${reason}`,
   });
   res.json(
     UpdateAdminSettingsResponse.parse({
       fundingLimit: settings.fundingLimit,
       secondApprovalThreshold: settings.secondApprovalThreshold,
       frozenIncomingPolicy: "allow_frozen",
+      unverifiedDashboardMessage: settings.unverifiedDashboardMessage,
       updatedAt: settings.updatedAt.toISOString(),
     }),
   );
@@ -2755,7 +2766,12 @@ router.post(
 router.get(
   "/bank/admin/ledger-requests",
   requireAdmin,
-  async (_req, res): Promise<void> => {
+  async (req, res): Promise<void> => {
+    const parsed = ListAdminLedgerRequestsQueryParams.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
     const rows = await db
       .select({
         request: bankSandboxRequestsTable,
@@ -2778,6 +2794,9 @@ router.get(
             "pending_provider_setup",
           ]),
           inArray(bankSandboxRequestsTable.type, ["deposit", "withdrawal"]),
+          ...(parsed.data.userId
+            ? [eq(bankSandboxRequestsTable.userId, parsed.data.userId)]
+            : []),
         ),
       )
       .orderBy(desc(bankSandboxRequestsTable.createdAt))
@@ -2878,6 +2897,15 @@ router.patch(
       if (!target) return { notFound: true as const };
       if (parsed.data.decision === "approve" && target.accountStatus !== "active") {
         return { error: "Only active accounts can receive approved ledger requests." };
+      }
+      if (
+        parsed.data.decision === "approve" &&
+        target.verificationStatus !== "approved"
+      ) {
+        return {
+          error:
+            "Identity verification must be approved before this deposit or withdrawal can be completed.",
+        };
       }
 
       const savedWallet =

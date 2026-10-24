@@ -313,6 +313,11 @@ export const bankAdminSettingsTable = pgTable("bank_admin_settings", {
   secondApprovalThreshold: text("second_approval_threshold")
     .notNull()
     .default("100000000"),
+  unverifiedDashboardMessage: text("unverified_dashboard_message")
+    .notNull()
+    .default(
+      "Your identity verification is not complete. Submit a request for review to access eligible account features.",
+    ),
   frozenIncomingPolicy: text("frozen_incoming_policy")
     .notNull()
     .default("allow_frozen"),

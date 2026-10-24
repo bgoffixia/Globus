@@ -80,6 +80,8 @@ export const CompleteRequiredPasswordResetResponse = zod.object({
  */
 export const getBankDashboardResponseProfileCustomerIdRegExp = new RegExp('^[A-Z0-9]{7}$');
 export const getBankDashboardResponseProfileDateOfBirthRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+export const getBankDashboardResponseVerificationNoticeMax = 500;
+
 
 
 export const GetBankDashboardResponse = zod.object({
@@ -122,7 +124,8 @@ export const GetBankDashboardResponse = zod.object({
   "createdAt": zod.coerce.date()
 })),
   "referenceCurrency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
-  "internalLedger": zod.literal(true)
+  "internalLedger": zod.literal(true),
+  "verificationNotice": zod.string().max(getBankDashboardResponseVerificationNoticeMax).nullable()
 })
 
 
@@ -1014,10 +1017,15 @@ export const ListAdminAuditLogsResponse = zod.object({
 /**
  * @summary Read operational funding and frozen-wallet policies
  */
+export const getAdminSettingsResponseUnverifiedDashboardMessageMax = 500;
+
+
+
 export const GetAdminSettingsResponse = zod.object({
   "fundingLimit": zod.string(),
   "secondApprovalThreshold": zod.string(),
   "frozenIncomingPolicy": zod.enum(['allow_frozen']),
+  "unverifiedDashboardMessage": zod.string().min(1).max(getAdminSettingsResponseUnverifiedDashboardMessageMax),
   "updatedAt": zod.coerce.date()
 })
 
@@ -1027,6 +1035,8 @@ export const GetAdminSettingsResponse = zod.object({
  */
 export const updateAdminSettingsBodyFundingLimitRegExp = new RegExp('^[0-9]{1,12}(\\.[0-9]{1,2})?$');
 export const updateAdminSettingsBodySecondApprovalThresholdRegExp = new RegExp('^[0-9]{1,12}(\\.[0-9]{1,2})?$');
+export const updateAdminSettingsBodyUnverifiedDashboardMessageMax = 500;
+
 export const updateAdminSettingsBodyReasonMin = 5;
 export const updateAdminSettingsBodyReasonMax = 500;
 
@@ -1036,14 +1046,20 @@ export const updateAdminSettingsBodyTransactionPinRegExp = new RegExp('^[0-9]{6}
 export const UpdateAdminSettingsBody = zod.object({
   "fundingLimit": zod.string().regex(updateAdminSettingsBodyFundingLimitRegExp),
   "secondApprovalThreshold": zod.string().regex(updateAdminSettingsBodySecondApprovalThresholdRegExp),
+  "unverifiedDashboardMessage": zod.string().min(1).max(updateAdminSettingsBodyUnverifiedDashboardMessageMax),
   "reason": zod.string().min(updateAdminSettingsBodyReasonMin).max(updateAdminSettingsBodyReasonMax),
   "transactionPin": zod.string().regex(updateAdminSettingsBodyTransactionPinRegExp)
 })
+
+export const updateAdminSettingsResponseUnverifiedDashboardMessageMax = 500;
+
+
 
 export const UpdateAdminSettingsResponse = zod.object({
   "fundingLimit": zod.string(),
   "secondApprovalThreshold": zod.string(),
   "frozenIncomingPolicy": zod.enum(['allow_frozen']),
+  "unverifiedDashboardMessage": zod.string().min(1).max(updateAdminSettingsResponseUnverifiedDashboardMessageMax),
   "updatedAt": zod.coerce.date()
 })
 
@@ -1051,6 +1067,14 @@ export const UpdateAdminSettingsResponse = zod.object({
 /**
  * @summary List pending internal ledger deposit and withdrawal requests
  */
+export const listAdminLedgerRequestsQueryUserIdMax = 128;
+
+
+
+export const ListAdminLedgerRequestsQueryParams = zod.object({
+  "userId": zod.coerce.string().min(1).max(listAdminLedgerRequestsQueryUserIdMax).optional().describe('Limit the queue to one customer when opening their management page')
+})
+
 export const ListAdminLedgerRequestsResponseItem = zod.object({
   "id": zod.string(),
   "transactionId": zod.string(),

@@ -4,8 +4,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation } from 'wouter';
 import {
   Activity, ArrowLeft, ArrowRight, ArrowUpRight, Banknote,
-  Check, ChevronLeft, ChevronRight, CircleAlert, ClipboardList, Download,
-  FileClock, Landmark, LayoutDashboard, LockKeyhole, LogOut, Search,
+  Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, ClipboardList, Download,
+  FileClock, Landmark, LayoutDashboard, LockKeyhole, LogOut, Menu, Search,
   Settings2, Shield, ShieldCheck, SlidersHorizontal, Users, WalletCards, X,
 } from 'lucide-react';
 import {
@@ -30,7 +30,7 @@ import {
   useUpdateAdminUserStatus, useUpdateAdminUserVerification, useUpdateAdminWalletStatus,
 } from '@workspace/api-client-react';
 import type {
-  ActiveCurrencyCode, AdminAccount, AdminAuditLog, AdminUser, BankTransaction, CurrencyCode,
+  ActiveCurrencyCode, AdminAccount, AdminAuditLog, AdminLedgerRequest, AdminUser, BankTransaction, CurrencyCode,
   AdminRestriction, BankRestrictionType, ListAdminTransactionsParams, ListAdminUsersParams, TransactionType,
 } from '@workspace/api-client-react';
 
@@ -41,7 +41,7 @@ const nav = [
   { path: '/admin/users', label: 'User Management', icon: Users },
   { path: '/admin/accounts', label: 'Account Management', icon: WalletCards },
   { path: '/admin/transactions', label: 'Transaction Management', icon: Activity },
-  { path: '/admin/funding', label: 'User Funding', icon: Banknote },
+  { path: '/admin/funding', label: 'Funding & requests', icon: Banknote },
   { path: '/admin/wallets', label: 'Wallet Controls', icon: LockKeyhole },
   { path: '/admin/restrictions', label: 'Restrictions', icon: Shield },
   { path: '/admin/audit', label: 'Audit Logs', icon: FileClock },
@@ -116,20 +116,70 @@ export function AdminWorkspace() {
 }
 
 function WorkspaceFrame({ children, active, title }: { children: ReactNode; active: string; title: string }) {
-  const [mobile, setMobile] = useState(false);
-  const { signOut } = useClerk();
+  const [moreOpen, setMoreOpen] = useState(false);
   const { user } = useUser();
   const email = user?.primaryEmailAddress?.emailAddress || '';
   const initials = (user?.firstName?.[0] || email[0] || 'G').toUpperCase();
+  const primaryNavigation = nav.filter(({ path: href }) =>
+    ['/admin', '/admin/users', '/admin/funding', '/admin/transactions'].includes(href),
+  );
+  const secondaryNavigation = nav.filter(({ path: href }) =>
+    ['/admin/accounts', '/admin/wallets', '/admin/restrictions', '/admin/audit', '/admin/settings', '/admin/logout'].includes(href),
+  );
+  const isActive = (href: string) =>
+    href === '/admin'
+      ? active === 'overview'
+      : href === '/admin/users'
+        ? active === 'users' || active === 'member-detail'
+        : active === href.split('/')[2];
+  const navigationLink = (item: (typeof nav)[number], compact = false) => {
+    const Icon = item.icon;
+    return (
+      <Link
+        key={item.path}
+        href={item.path}
+        onClick={() => setMoreOpen(false)}
+        aria-current={isActive(item.path) ? 'page' : undefined}
+        className={`inline-flex shrink-0 items-center gap-2 rounded-lg font-semibold transition ${
+          compact ? 'px-3 py-2 text-[10px]' : 'w-full px-3 py-2.5 text-[11px]'
+        } ${isActive(item.path) ? 'bg-[#e8f1ed] text-[#285d61]' : 'text-[#556e73] hover:bg-[#f1f6f2]'}`}
+      >
+        <Icon size={compact ? 14 : 15} strokeWidth={1.9} />
+        <span>{item.label}</span>
+      </Link>
+    );
+  };
   return <div className="admin-viewport bg-[#f1f5f0] text-[#243d4b]">
-    <aside className={`admin-sidebar fixed inset-y-0 left-0 z-50 flex w-[250px] flex-col bg-[#17394a] text-[#e4eeee] transition-transform duration-200 lg:translate-x-0 ${mobile ? 'translate-x-0' : '-translate-x-full'}`}>
-      <div className="flex h-[76px] items-center gap-3 border-b border-white/10 px-6"><div className="grid h-9 w-9 place-items-center rounded-xl bg-[#d7bd75] text-[#193b4b]"><Landmark size={19} /></div><div><p className="text-[16px] font-extrabold tracking-[-.05em]">GLOBUS</p><p className="text-[8px] font-bold tracking-[.24em] text-[#d8be77]">OPERATIONS</p></div><button aria-label="Close navigation" onClick={() => setMobile(false)} className="ml-auto lg:hidden"><X size={17} /></button></div>
-      <div className="mx-4 my-4 rounded-xl border border-white/10 bg-white/[.06] px-3 py-3"><p className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-[.14em] text-[#9ad0c8]"><span className="h-1.5 w-1.5 rounded-full bg-[#80c6b9]" />Globus records</p><p className="mt-1 text-[10px] text-[#a9bec2]">Administrative controls</p></div>
-      <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain px-3 pb-4">{nav.map(({ path: href, label, icon: Icon }) => <Link key={href} href={href} onClick={() => setMobile(false)} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-[11px] font-semibold transition ${active === href.split('/')[2] || (href === '/admin' && active === 'overview') ? 'bg-[#d7bd75] text-[#203d4b]' : 'text-[#d0dfdf] hover:bg-white/[.08]'}`}><Icon size={16} strokeWidth={1.8} />{label}{active === href.split('/')[2] && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[#49827d]" />}</Link>)}</nav>
-      <div className="border-t border-white/10 p-4"><div className="flex items-center gap-3 rounded-xl bg-white/[.055] p-3"><div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#d7e9e5] text-[11px] font-bold text-[#1c4452]">{initials}</div><div className="min-w-0 flex-1"><p className="truncate text-[10px] font-bold text-white">{user?.fullName || 'Operations administrator'}</p><p className="truncate text-[9px] text-[#a6bec0]">{email}</p></div><button aria-label="Sign out" onClick={() => signOut({ redirectUrl: import.meta.env.BASE_URL })} className="rounded-lg p-2 text-[#b4c8c9] hover:bg-white/10"><LogOut size={15} /></button></div></div>
-    </aside>
-    {mobile && <button aria-label="Dismiss navigation" onClick={() => setMobile(false)} className="fixed inset-0 z-40 bg-[#142a35]/50 lg:hidden" />}
-    <div className="admin-main-column min-w-0 lg:pl-[250px]"><header className="z-30 flex min-h-[64px] items-center justify-between border-b border-[#dde6e3] bg-[#f7f8f3]/95 px-4 pb-2 backdrop-blur sm:px-7"><div className="flex min-w-0 items-center gap-3"><button onClick={() => setMobile(true)} aria-label="Open navigation" className="rounded-lg p-2 hover:bg-[#e5ede8] lg:hidden"><SlidersHorizontal size={17} /></button><p className="truncate text-[11px] text-[#74878a]"><span className="hidden sm:inline">Globus Bank / </span><span className="font-bold text-[#2b4654]">{title}</span></p></div><div className="flex items-center gap-2"><Pill tone="good">Authorized workspace</Pill><div className="hidden h-8 w-8 place-items-center rounded-full border border-[#d9e3df] bg-white text-[10px] font-bold sm:grid">{initials}</div></div></header><main className="page-enter mx-auto w-full max-w-[1450px] px-4 py-5 sm:px-7 sm:py-7 xl:px-10">{children}</main></div>
+    <header className="sticky top-0 z-30 border-b border-[#dde6e3] bg-[#f7f8f3]/95 shadow-[0_2px_10px_rgba(28,53,69,.025)] backdrop-blur">
+      <div className="mx-auto flex min-h-[58px] max-w-[1540px] items-center justify-between gap-3 px-3 sm:px-6">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <div className="grid h-8 w-8 shrink-0 place-items-center rounded-[9px] bg-[#17394a] text-[#d7bd75]"><Landmark size={16} /></div>
+          <div className="min-w-0"><p className="text-[12px] font-extrabold tracking-[-.04em] text-[#193d4c]">GLOBUS <span className="font-semibold text-[#9a7c39]">BANK</span></p><p className="truncate text-[9px] text-[#71858b]">{title}</p></div>
+        </div>
+        <div className="hidden min-w-0 items-center gap-2 sm:flex">
+          <Pill tone="good">Authorized</Pill>
+          <div className="grid h-8 w-8 place-items-center rounded-full border border-[#d9e3df] bg-white text-[10px] font-bold">{initials}</div>
+        </div>
+        <div className="flex items-center gap-2 sm:hidden">
+          <button aria-label="Open administration tools" aria-expanded={moreOpen} onClick={() => setMoreOpen(value => !value)} className="rounded-lg border border-[#dce5e1] bg-white p-2 text-[#3b6168]"><Menu size={16} /></button>
+        </div>
+      </div>
+      <div className="mx-auto flex max-w-[1540px] items-center gap-1 overflow-x-auto border-t border-[#e6ece8] px-2 py-1.5 sm:px-5">
+        <nav aria-label="Primary administration navigation" className="flex min-w-0 items-center gap-1">
+          {primaryNavigation.map(item => navigationLink(item, true))}
+        </nav>
+        <div className="relative ml-auto shrink-0">
+          <button type="button" aria-expanded={moreOpen} aria-controls="admin-more-tools" onClick={() => setMoreOpen(value => !value)} className={`inline-flex items-center gap-1 rounded-lg px-3 py-2 text-[10px] font-semibold transition ${secondaryNavigation.some(item => isActive(item.path)) ? 'bg-[#e8f1ed] text-[#285d61]' : 'text-[#607579] hover:bg-[#edf3ef]'}`}>
+            <span className="hidden sm:inline">More tools</span><span className="sm:hidden">More</span><ChevronDown size={13} />
+          </button>
+          {moreOpen && <div id="admin-more-tools" className="absolute right-0 top-[calc(100%+8px)] z-50 w-56 rounded-xl border border-[#dce5e1] bg-[#fffefa] p-2 shadow-[0_16px_40px_rgba(22,48,58,.16)]">
+            <p className="px-3 pb-1 pt-2 text-[8px] font-bold uppercase tracking-[.16em] text-[#8a9a98]">Administration</p>
+            <nav aria-label="Additional administration tools" className="space-y-0.5">{secondaryNavigation.map(item => navigationLink(item))}</nav>
+          </div>}
+        </div>
+      </div>
+    </header>
+    <main className="page-enter mx-auto w-full max-w-[1450px] min-w-0 px-3 py-4 sm:px-6 sm:py-6 xl:px-8">{children}</main>
   </div>;
 }
 
@@ -137,12 +187,12 @@ function Overview() {
   const q = useQueryClient();
   const summary = useGetAdminSummary({ query: { queryKey: getGetAdminSummaryQueryKey(), retry: false } });
   const adminProfile = useGetBankProfile({ query: { queryKey: getGetBankProfileQueryKey() } });
-  const requests = useListAdminLedgerRequests({ query: { queryKey: getListAdminLedgerRequestsQueryKey() } });
+  const requests = useListAdminLedgerRequests(undefined, { query: { queryKey: getListAdminLedgerRequestsQueryKey() } });
   const [review, setReview] = useState<{ id: string; decision: 'approve' | 'reject'; reference: string } | null>(null);
-  const [reason, setReason] = useState(''); const [pin, setPin] = useState(''); const [error, setError] = useState('');
+  const [reason, setReason] = useState(''); const [pin, setPin] = useState(''); const [error, setError] = useState(''); const [confirmed, setConfirmed] = useState(false);
   const mutation = useReviewAdminLedgerRequest();
   const recent = summary.data?.recentActions || [];
-  const submit = async (e: FormEvent) => { e.preventDefault(); if (!review) return; setError(''); try { await mutation.mutateAsync({ requestId: review.id, data: { decision: review.decision, reason: reason.trim(), transactionPin: pin } }); await Promise.all([q.invalidateQueries({ queryKey: getListAdminLedgerRequestsQueryKey() }), q.invalidateQueries({ queryKey: getGetAdminSummaryQueryKey() })]); setReview(null); setReason(''); setPin(''); } catch (err) { setError(err instanceof Error ? err.message : 'Could not record this review.'); } };
+  const submit = async (e: FormEvent) => { e.preventDefault(); if (!review || !confirmed) return; setError(''); try { const result = await mutation.mutateAsync({ requestId: review.id, data: { decision: review.decision, reason: reason.trim(), transactionPin: pin } }); await Promise.all([q.invalidateQueries({ queryKey: getListAdminLedgerRequestsQueryKey() }), q.invalidateQueries({ queryKey: getGetAdminSummaryQueryKey() }), q.invalidateQueries({ queryKey: getListAdminUsersQueryKey() }), q.invalidateQueries({ queryKey: getListAdminAccountsQueryKey() }), q.invalidateQueries({ queryKey: getListAdminTransactionsQueryKey() }), q.invalidateQueries({ queryKey: getGetAdminUserDetailQueryKey(result.userId) })]); setReview(null); setReason(''); setPin(''); setConfirmed(false); } catch (err) { setError(err instanceof Error ? err.message : 'Could not record this review.'); } };
   return <><Heading kicker="Administrator workspace" title="Operations overview" subtitle="A clear view of account activity, member accounts and decisions waiting for review." action={<Link href="/admin/funding" className={button}><Banknote size={14} />Record funding</Link>} />
     {summary.isError && <InlineError text="Summary totals could not be loaded." retry={() => summary.refetch()} />}
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[
@@ -159,12 +209,12 @@ function Overview() {
      </div>
     <div className="mt-5 grid items-start gap-5 xl:grid-cols-[1.1fr_.9fr]">
       <Panel title="Deposit & withdrawal queue" eyebrow="Pending decisions" note="Approvals update wallet balances and require an audit reason plus administrator PIN." action={<Link href="/admin/funding" className="text-[10px] font-bold text-[#478181]">Funding review <ArrowRight className="ml-1 inline" size={13} /></Link>}>
-        {requests.isLoading ? <Skeleton /> : requests.isError ? <InlineError text="Pending requests are unavailable." retry={() => requests.refetch()} /> : requests.data?.length ? <div className="divide-y divide-[#edf0ed]">{requests.data.slice(0, 6).map(r => <div key={r.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><Pill tone={r.type === 'deposit' ? 'good' : 'warn'}>{r.type}</Pill><span className="font-mono text-[9px] text-[#89999a]">{r.reference}</span></div><p className="mt-2 truncate text-[11px] font-semibold">{r.memberName} · {r.email}</p><p className="mt-1 text-[9px] text-[#809194]">{dateTime(r.createdAt)} · {human(r.status)}</p></div><div className="flex items-center gap-2"><strong className="mr-1 text-[12px]">{money(r.amount, r.currency)}</strong><button onClick={() => { setReview({ id: r.id, reference: r.reference, decision: 'approve' }); setReason(''); setPin(''); }} className={quietButton}><Check size={13} />Review</button></div></div>)}</div> : <Empty title="Queue is clear" text="New deposit and withdrawal requests will appear here." />}
+        {requests.isLoading ? <Skeleton /> : requests.isError ? <InlineError text="Pending requests are unavailable." retry={() => requests.refetch()} /> : requests.data?.length ? <div className="divide-y divide-[#edf0ed]">{requests.data.slice(0, 6).map(r => <div key={r.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><Pill tone={r.type === 'deposit' ? 'good' : 'warn'}>{r.type}</Pill><span className="font-mono text-[9px] text-[#89999a]">{r.reference}</span></div><p className="mt-2 truncate text-[11px] font-semibold">{r.memberName} · {r.email}</p><p className="mt-1 text-[9px] text-[#809194]">{dateTime(r.createdAt)} · {human(r.status)}</p></div><div className="flex items-center gap-2"><strong className="mr-1 text-[12px]">{money(r.amount, r.currency)}</strong><button onClick={() => { setReview({ id: r.id, reference: r.reference, decision: 'approve' }); setReason(''); setPin(''); setConfirmed(false); }} className={quietButton}><Check size={13} />Review</button></div></div>)}</div> : <Empty title="Queue is clear" text="New deposit and withdrawal requests will appear here." />}
       </Panel>
       <Panel title="Recent administrative activity" eyebrow="Traceability"><div className="divide-y divide-[#edf0ed]">{recent.length ? recent.slice(0, 7).map((row: AdminAuditLog) => <div key={row.id} className="px-5 py-3.5"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-[11px] font-bold text-[#334d58]">{human(row.action)}</p><time className="text-[9px] text-[#829294]">{dateTime(row.createdAt)}</time></div><p className="mt-1 text-[10px] text-[#76898c]">{row.actorName} · {row.targetName}</p><p className="mt-1 line-clamp-2 text-[9px] leading-4 text-[#8a999a]">{row.reason}</p></div>) : <Empty title="No recent actions" text="Administrative changes will be recorded here." />}</div></Panel>
     </div>
     <div className={`${box} mt-5 flex flex-wrap items-center justify-between gap-3 p-4 text-[10px] text-[#617b7d]`}><span className="flex items-center gap-3"><ShieldCheck size={16} className="text-[#4c8980]" /> Every change is attributable and recorded. Wallet activity is saved in Globus.</span><span className="text-[9px] text-[#7d8d8f]">Administrator identity status: <b>{human(adminProfile.data?.verificationStatus)}</b></span></div>
-    {review && <Modal title={`${review.decision === 'approve' ? 'Approve' : 'Reject'} request`} close={() => setReview(null)}><p className="text-[11px] text-[#75878a]">Request reference <b className="font-mono text-[#314b57]">{review.reference}</b></p><form onSubmit={submit} className="mt-4 space-y-4"><Field label="Decision"><select className={input} value={review.decision} onChange={e => setReview({ ...review, decision: e.target.value as 'approve' | 'reject' })}><option value="approve">Approve</option><option value="reject">Reject</option></select></Field><Field label="Audit reason"><textarea required minLength={5} maxLength={500} value={reason} onChange={e => setReason(e.target.value)} className={`${input} h-24 py-2`} /></Field><Field label="Six-digit transaction PIN"><input required type="password" inputMode="numeric" maxLength={6} pattern="[0-9]{6}" value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))} className={input} /></Field>{error && <p role="alert" className="text-[11px] text-[#a45247]">{error}</p>}<div className="flex justify-end gap-2"><button type="button" className={quietButton} onClick={() => setReview(null)}>Cancel</button><button disabled={mutation.isPending || reason.trim().length < 5 || pin.length !== 6} className={button}>{mutation.isPending ? 'Saving…' : 'Confirm decision'}</button></div></form></Modal>}
+    {review && <Modal title={`${review.decision === 'approve' ? 'Approve' : 'Reject'} request`} close={() => setReview(null)}><p className="text-[11px] text-[#75878a]">Request reference <b className="font-mono text-[#314b57]">{review.reference}</b></p><form onSubmit={submit} className="mt-4 space-y-4"><Field label="Decision"><select className={input} value={review.decision} onChange={e => setReview({ ...review, decision: e.target.value as 'approve' | 'reject' })}><option value="approve">Approve and post to wallet</option><option value="reject">Reject request</option></select></Field><Field label="Audit reason"><textarea required minLength={5} maxLength={500} value={reason} onChange={e => setReason(e.target.value)} className={`${input} h-24 py-2`} /></Field><Field label="Six-digit transaction PIN"><input required type="password" inputMode="numeric" maxLength={6} pattern="[0-9]{6}" value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))} className={input} /></Field><label className="flex items-start gap-2 rounded-lg bg-[#f6f7f1] p-3 text-[10px] leading-5 text-[#718386]"><input required type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} className="mt-1 accent-[#438481]" /><span>I confirm this deposit or withdrawal decision. Approval updates the member’s Globus wallet immediately.</span></label>{error && <p role="alert" className="text-[11px] text-[#a45247]">{error}</p>}<div className="flex justify-end gap-2"><button type="button" className={quietButton} onClick={() => setReview(null)}>Cancel</button><button disabled={mutation.isPending || reason.trim().length < 5 || pin.length !== 6 || !confirmed} className={button}>{mutation.isPending ? 'Saving…' : 'Confirm decision'}</button></div></form></Modal>}
   </>;
 }
 
@@ -211,6 +261,7 @@ function MemberDetail({ userId }: { userId: string }) {
   const fullName = nameOf(u);
   return <><Link href="/admin/users" className="mb-4 inline-flex items-center gap-2 text-[10px] font-bold text-[#54777b]"><ArrowLeft size={13} />Back to members</Link><Heading kicker={`Member · ${u.customerId || 'Customer ID unavailable'}`} title={fullName} subtitle="Profile, wallet balances, recent activity and administrative history." action={<div className="flex flex-wrap gap-2"><button onClick={() => open('profile')} className={quietButton}>Edit profile</button><button onClick={() => open('status')} className={button}>{u.accountStatus === 'active' ? 'Restrict account' : 'Restore account'}</button></div>} />
     {message && <p role="status" className="mb-4 rounded-xl border border-[#cfe4d7] bg-[#eef7f0] p-3 text-[11px] text-[#47755e]">{message}</p>}
+    <MemberPendingRequests user={u} userId={userId} onUpdated={async statusMessage => { await refresh(); setMessage(statusMessage); }} />
     <div className="grid items-start gap-5 xl:grid-cols-[1.3fr_.7fr]"><div className="space-y-5">
        <Panel title="Member profile" eyebrow="Account record" action={<StatusPill status={u.accountStatus} />}><dl className="grid gap-x-8 gap-y-5 p-5 sm:grid-cols-2 sm:p-6">{[['Email', u.email], ['Phone', detail.data.phone || 'Not provided'], ['Country / region', u.country || 'Not provided'], ['Customer ID', u.customerId || '—'], ['Identity status', human(u.verificationStatus)], ['Wallet count', String(u.walletCount)], ['Total transactions', String(detail.data.transactionCount)], ['Member since', date(u.createdAt)], ['Restriction reason', u.accountRestrictionReason || '—']].map(([k, v]) => <div key={k}><dt className="text-[9px] font-bold uppercase tracking-[.12em] text-[#849493]">{k}</dt><dd className="mt-1 break-words text-[11px] font-semibold text-[#405b63]">{v}</dd></div>)}</dl></Panel>
        <Panel title="Currency wallets" eyebrow={`${detail.data.wallets.length} wallet records`} note="Each wallet is an account record. Balances are calculated from recorded activity."><div className="grid gap-3 p-5 sm:grid-cols-2">{detail.data.wallets.length ? detail.data.wallets.map(w => <article key={w.id} className="rounded-xl border border-[#e3ebe6] bg-[#f8faf6] p-4"><div className="flex items-center justify-between"><p className="font-mono text-[11px] font-bold">{w.currency}</p><StatusPill status={w.status} /></div><p className="mt-3 font-mono text-[21px] font-semibold tracking-[-.04em]">{money(w.available, w.currency)}</p><p className="mt-1 text-[9px] text-[#839394]">Available balance · pending {money(w.pending, w.currency)}</p></article>) : <Empty title="No wallets" text="No currency wallets are recorded for this member." />}</div></Panel>
@@ -236,6 +287,91 @@ function MemberDetail({ userId }: { userId: string }) {
        </>}
        <Field label={modal === 'pin' || modal === 'password-reset' ? 'Reset reason' : 'Audit reason'}><textarea required minLength={5} maxLength={500} className={`${input} h-20 py-2`} value={form.reason} onChange={e => setForm({ ...form, reason: e.target.value })} /></Field>{error && <p role="alert" className="text-[10px] text-[#a45247]">{error}</p>}<div className="flex justify-end gap-2 pt-2"><button type="button" onClick={() => setModal(null)} className={quietButton}>Cancel</button><button disabled={statusMutation.isPending || profileMutation.isPending || identityMutation.isPending || pinMutation.isPending || passwordMutation.isPending || form.reason.trim().length < 5 || (modal === 'profile' && form.transactionPin.length !== 6) || (modal === 'password-reset' && !form.confirmed)} className={button}>{statusMutation.isPending || profileMutation.isPending || identityMutation.isPending || pinMutation.isPending || passwordMutation.isPending ? 'Saving…' : 'Confirm & save'}</button></div>
     </form></Modal>}
+  </>;
+}
+
+function MemberPendingRequests({ userId, user, onUpdated }: { userId: string; user: AdminUser; onUpdated: (message: string) => Promise<void> }) {
+  const client = useQueryClient();
+  const params = { userId };
+  const requests = useListAdminLedgerRequests(params, {
+    query: { queryKey: getListAdminLedgerRequestsQueryKey(params), enabled: !!userId },
+  });
+  const review = useReviewAdminLedgerRequest();
+  const [target, setTarget] = useState<AdminLedgerRequest | null>(null);
+  const [decision, setDecision] = useState<'approve' | 'reject'>('approve');
+  const [reason, setReason] = useState('');
+  const [pin, setPin] = useState('');
+  const [confirmed, setConfirmed] = useState(false);
+  const [error, setError] = useState('');
+  const canApprove = user.accountStatus === 'active' && user.verificationStatus === 'approved';
+
+  const open = (request: AdminLedgerRequest) => {
+    setTarget(request);
+    setDecision(canApprove ? 'approve' : 'reject');
+    setReason('');
+    setPin('');
+    setConfirmed(false);
+    setError('');
+  };
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!target || !confirmed || (decision === 'approve' && !canApprove)) return;
+    setError('');
+    try {
+      const result = await review.mutateAsync({
+        requestId: target.id,
+        data: { decision, reason: reason.trim(), transactionPin: pin },
+      });
+      await Promise.all([
+        client.invalidateQueries({ queryKey: getListAdminLedgerRequestsQueryKey() }),
+        client.invalidateQueries({ queryKey: getGetAdminUserDetailQueryKey(userId) }),
+        client.invalidateQueries({ queryKey: getListAdminUsersQueryKey() }),
+        client.invalidateQueries({ queryKey: getGetAdminSummaryQueryKey() }),
+        client.invalidateQueries({ queryKey: getListAdminAccountsQueryKey() }),
+        client.invalidateQueries({ queryKey: getListAdminTransactionsQueryKey() }),
+      ]);
+      await onUpdated(
+        result.type === 'deposit'
+          ? decision === 'approve' ? 'Deposit approved and the member wallet balance has been updated.' : 'Deposit request rejected.'
+          : decision === 'approve' ? 'Withdrawal approved and the member wallet balance has been updated.' : 'Withdrawal request rejected.',
+      );
+      setTarget(null);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'The request could not be reviewed.');
+    }
+  };
+
+  return <>
+    <Panel title="Pending deposits & withdrawals" eyebrow={`${requests.data?.length ?? 0} waiting`} note="Review each request from this customer record.">
+      {requests.isLoading ? <Skeleton rows={2} /> : requests.isError ? <InlineError text="Member requests could not be loaded." retry={() => requests.refetch()} /> : requests.data?.length ? (
+        <div className="divide-y divide-[#edf0ed]">
+          {requests.data.map(request => <article key={request.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2"><Pill tone={request.type === 'deposit' ? 'good' : 'warn'}>{human(request.type)}</Pill><span className="font-mono text-[9px] text-[#89999a]">{request.reference}</span></div>
+              <p className="mt-1.5 text-[10px] text-[#6f8387]">{request.description || 'Member request'} · {dateTime(request.createdAt)}</p>
+            </div>
+            <div className="flex items-center gap-2"><strong className="text-[11px]">{money(request.amount, request.currency)}</strong><button type="button" onClick={() => open(request)} className={quietButton}>Review</button></div>
+          </article>)}
+        </div>
+      ) : <Empty title="No pending requests" text="New deposit and withdrawal requests will appear here." />}
+      {!canApprove && requests.data?.length ? <p className="border-t border-[#edf0ed] bg-[#fbf7eb] px-5 py-3 text-[9px] leading-4 text-[#806b3d]">Approval is available only when this account is active and identity verification is approved. Requests can still be rejected.</p> : null}
+    </Panel>
+    {target && <Modal title={`Review ${target.type} request`} close={() => setTarget(null)}>
+      <div className="rounded-xl border border-[#e2e9e5] bg-[#f8faf6] p-3.5">
+        <p className="text-[9px] font-bold uppercase tracking-[.12em] text-[#7b8d8c]">Member request</p>
+        <p className="mt-1.5 text-[12px] font-bold text-[#334e58]">{money(target.amount, target.currency)}</p>
+        <p className="mt-1 font-mono text-[9px] text-[#809194]">{target.reference}</p>
+      </div>
+      <form onSubmit={submit} className="mt-4 space-y-3">
+        <Field label="Decision"><select className={input} value={decision} onChange={event => setDecision(event.target.value as 'approve' | 'reject')}><option value="approve" disabled={!canApprove}>Approve and update wallet</option><option value="reject">Reject request</option></select></Field>
+        {decision === 'approve' && <p className="rounded-lg bg-[#eef7f0] p-3 text-[10px] leading-4 text-[#47755e]">Approval posts the balanced wallet entries and updates the member’s available balance as part of this review.</p>}
+        <Field label="Reason for this decision"><textarea required minLength={5} maxLength={500} className={`${input} h-20 py-2`} value={reason} onChange={event => setReason(event.target.value)} /></Field>
+        <Field label="Administrator six-digit PIN"><input required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} className={input} value={pin} onChange={event => setPin(event.target.value.replace(/\D/g, '').slice(0, 6))} /></Field>
+        <label className="flex items-start gap-2 rounded-lg bg-[#f6f7f1] p-3 text-[10px] leading-5 text-[#718386]"><input required type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} className="mt-1 accent-[#438481]" /><span>I confirm this decision applies to the request shown above.</span></label>
+        {error && <p role="alert" className="text-[10px] text-[#a45247]">{error}</p>}
+        <div className="flex justify-end gap-2"><button type="button" className={quietButton} onClick={() => setTarget(null)}>Cancel</button><button disabled={review.isPending || pin.length !== 6 || reason.trim().length < 5 || !confirmed || (decision === 'approve' && !canApprove)} className={button}>{review.isPending ? 'Saving…' : 'Confirm decision'}</button></div>
+      </form>
+    </Modal>}
   </>;
 }
 
@@ -424,7 +560,7 @@ function FundingPage() {
   const usersParams = useMemo(() => ({ ...(search.trim() ? { search: search.trim() } : {}), accountStatus: 'active' as const, limit: 30 }), [search]);
   const users = useListAdminUsers(usersParams, { query: { queryKey: getListAdminUsersQueryKey(usersParams) } });
   const settings = useGetAdminSettings({ query: { queryKey: getGetAdminSettingsQueryKey() } });
-  const requests = useListAdminLedgerRequests({ query: { queryKey: getListAdminLedgerRequestsQueryKey() } });
+  const requests = useListAdminLedgerRequests(undefined, { query: { queryKey: getListAdminLedgerRequestsQueryKey() } });
   const transactionsParams = { type: 'admin_funding' as TransactionType, status: 'pending' as const, page: 1, pageSize: 100 };
   const transactions = useListAdminTransactions(transactionsParams, { query: { queryKey: getListAdminTransactionsQueryKey(transactionsParams) } });
   const adjustmentsParams = { type: 'admin_adjustment' as TransactionType, status: 'pending' as const, page: 1, pageSize: 100 };
@@ -441,7 +577,7 @@ function FundingPage() {
   const fundingCap = Math.min(100000000, Number(settings.data?.fundingLimit || 100000000));
   const ready = !!member && !!selectedWallet && !(direction === 'debit' && selectedWallet.status === 'restricted') && Number(amount) > 0 && Number(amount) <= fundingCap && sender.trim() && description.trim() && reason.trim().length >= 5 && pin.length === 6;
   const submit = async () => { if (!member || !currency) return; setError(''); try { await create.mutateAsync({ userId: member.id, data: { direction, currency: currency as ActiveCurrencyCode, amount, senderName: sender.trim(), description: description.trim(), internalReference: reference.trim() || null, adminNotes: notes.trim() || null, reason: reason.trim(), transactionPin: pin, idempotencyKey: crypto.randomUUID() } }); setSuccess(`Funding instruction recorded for ${nameOf(member)}.`); setConfirm(false); setAmount(''); setDescription(''); setReference(''); setReason(''); setNotes(''); setPin(''); await Promise.all([client.invalidateQueries({ queryKey: getListAdminTransactionsQueryKey() }), client.invalidateQueries({ queryKey: getGetAdminSummaryQueryKey() }), client.invalidateQueries({ queryKey: getListAdminUsersQueryKey() }), client.invalidateQueries({ queryKey: getListAdminAccountsQueryKey() })]); } catch (err) { setError(err instanceof Error ? err.message : 'Funding could not be recorded.'); } };
-  const doReview = async (e: FormEvent) => { e.preventDefault(); setError(''); try { if (reviewKind === 'ledger') await requestReview.mutateAsync({ requestId: reviewId, data: { decision: reviewDecision, reason: reviewReason.trim(), transactionPin: reviewPin } }); else await review.mutateAsync({ transactionId: reviewId, data: { decision: reviewDecision, reason: reviewReason.trim(), transactionPin: reviewPin } }); setReviewId(''); setReviewReason(''); setReviewPin(''); await Promise.all([client.invalidateQueries({ queryKey: getListAdminTransactionsQueryKey() }), client.invalidateQueries({ queryKey: getListAdminLedgerRequestsQueryKey() })]); } catch (err) { setError(err instanceof Error ? err.message : 'The review could not be recorded.'); } };
+  const doReview = async (e: FormEvent) => { e.preventDefault(); setError(''); try { let affectedUserId: string | undefined; if (reviewKind === 'ledger') { const result = await requestReview.mutateAsync({ requestId: reviewId, data: { decision: reviewDecision, reason: reviewReason.trim(), transactionPin: reviewPin } }); affectedUserId = result.userId; } else { await review.mutateAsync({ transactionId: reviewId, data: { decision: reviewDecision, reason: reviewReason.trim(), transactionPin: reviewPin } }); } setReviewId(''); setReviewReason(''); setReviewPin(''); await Promise.all([client.invalidateQueries({ queryKey: getListAdminTransactionsQueryKey() }), client.invalidateQueries({ queryKey: getListAdminLedgerRequestsQueryKey() }), client.invalidateQueries({ queryKey: getGetAdminSummaryQueryKey() }), client.invalidateQueries({ queryKey: getListAdminUsersQueryKey() }), client.invalidateQueries({ queryKey: getListAdminAccountsQueryKey() }), ...(affectedUserId ? [client.invalidateQueries({ queryKey: getGetAdminUserDetailQueryKey(affectedUserId) })] : [])]); } catch (err) { setError(err instanceof Error ? err.message : 'The review could not be recorded.'); } };
   const pending = [...(transactions.data?.items || []), ...(adjustments.data?.items || [])];
   return <><Heading kicker="Account funding controls" title="User funding" subtitle="Prepare an audited wallet credit or debit. Above the second-approval threshold, the entry waits for a different administrator's decision." />
     <div className={`${box} mb-5 flex flex-wrap items-center gap-3 bg-[#eef5f0] p-4 text-[10px] leading-5 text-[#537477]`}><ShieldCheck size={17} />Funding cap: <b>{money(fundingCap, currency || 'USD')} per currency</b><span className="mx-1 h-4 border-l border-[#d3e2db]" />Second approval threshold: <b>{settings.data?.secondApprovalThreshold ? money(settings.data.secondApprovalThreshold, currency || 'USD') : money(100000000, currency || 'USD')}</b></div>
@@ -539,14 +675,14 @@ function SettingsPage() {
   const client = useQueryClient();
   const settings = useGetAdminSettings({ query: { queryKey: getGetAdminSettingsQueryKey() } });
   const update = useUpdateAdminSettings();
-  const [limit, setLimit] = useState(''); const [threshold, setThreshold] = useState(''); const [reason, setReason] = useState(''); const [pin, setPin] = useState(''); const [message, setMessage] = useState(''); const [error, setError] = useState('');
-  const saveSettings = async (e: FormEvent) => { e.preventDefault(); setError(''); setMessage(''); try { await update.mutateAsync({ data: { fundingLimit: limit, secondApprovalThreshold: threshold, reason: reason.trim(), transactionPin: pin } }); await client.invalidateQueries({ queryKey: getGetAdminSettingsQueryKey() }); setMessage('Funding controls saved.'); setReason(''); setPin(''); } catch (err) { setError(err instanceof Error ? err.message : 'Settings could not be updated.'); } };
+  const [limit, setLimit] = useState(''); const [threshold, setThreshold] = useState(''); const [unverifiedNotice, setUnverifiedNotice] = useState<string | null>(null); const [reason, setReason] = useState(''); const [pin, setPin] = useState(''); const [message, setMessage] = useState(''); const [error, setError] = useState('');
+  const saveSettings = async (e: FormEvent) => { e.preventDefault(); setError(''); setMessage(''); try { const result = await update.mutateAsync({ data: { fundingLimit: limit || settings.data?.fundingLimit || '', secondApprovalThreshold: threshold || settings.data?.secondApprovalThreshold || '', unverifiedDashboardMessage: (unverifiedNotice ?? settings.data?.unverifiedDashboardMessage ?? '').trim(), reason: reason.trim(), transactionPin: pin } }); setUnverifiedNotice(result.unverifiedDashboardMessage); await client.invalidateQueries({ queryKey: getGetAdminSettingsQueryKey() }); setMessage('Operational settings saved.'); setReason(''); setPin(''); } catch (err) { setError(err instanceof Error ? err.message : 'Settings could not be updated.'); } };
   return (
     <>
       <Heading
         kicker="Operational policy"
-        title="Settings & conversion quotes"
-        subtitle="Control funding policy. Transfer conversions use current Frankfurter rates, with Grey as a fallback."
+        title="Operations settings"
+        subtitle="Set funding controls, the customer identity notice, and review currency quote sources."
       />
       {settings.isError && <InlineError text="Operational settings could not be loaded." retry={() => settings.refetch()} />}
       {error && <p role="alert" className="mb-4 rounded-lg bg-[#fff2ed] p-3 text-[10px] text-[#a45247]">{error}</p>}
@@ -562,9 +698,11 @@ function SettingsPage() {
             <form onSubmit={saveSettings} className="space-y-3">
               <Field label="Maximum funding amount per currency"><input required className={input} inputMode="decimal" pattern="[0-9]+(\\.[0-9]{1,2})?" min="0.01" max="100000000" value={limit || settings.data?.fundingLimit || ''} onChange={e => setLimit(e.target.value)} /></Field>
               <Field label="Second administrator approval threshold"><input required className={input} inputMode="decimal" pattern="[0-9]+(\\.[0-9]{1,2})?" min="0.01" max="100000000" value={threshold || settings.data?.secondApprovalThreshold || ''} onChange={e => setThreshold(e.target.value)} /></Field>
+              <Field label="Default warning for new and unverified members"><textarea required minLength={1} maxLength={500} className={`${input} h-24 py-2`} value={unverifiedNotice ?? settings.data?.unverifiedDashboardMessage ?? ''} onChange={e => setUnverifiedNotice(e.target.value)} placeholder="Enter the message shown until identity verification is approved." /></Field>
+              <p className="-mt-1 text-[9px] leading-4 text-[#829294]">Shown on customer dashboards while identity is not approved. It clears automatically when verification is approved; separate account restrictions still apply.</p>
               <Field label="Audit reason"><textarea required minLength={5} maxLength={500} className={`${input} h-20 py-2`} value={reason} onChange={e => setReason(e.target.value)} /></Field>
               <Field label="Six-digit transaction PIN"><input required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} className={input} value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))} /></Field>
-              <button disabled={update.isPending || pin.length !== 6 || reason.trim().length < 5} className={`${button} w-full`}>{update.isPending ? 'Saving…' : 'Save funding policy'}</button>
+              <button disabled={settings.isLoading || update.isPending || pin.length !== 6 || reason.trim().length < 5 || !(unverifiedNotice ?? settings.data?.unverifiedDashboardMessage ?? '').trim()} className={`${button} w-full`}>{update.isPending ? 'Saving…' : 'Save settings'}</button>
             </form>
           </div>
         </Panel>
