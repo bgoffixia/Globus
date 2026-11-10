@@ -37,7 +37,7 @@ export interface InternationalTransferRequestInput {
      */
   recipientAccountName: string;
   /** @maxLength 254 */
-  recipientEmail: string;
+  recipientEmail?: string;
   /**
      * @minLength 4
      * @maxLength 34

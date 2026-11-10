@@ -21,6 +21,10 @@ export interface InternationalTransferRequest {
   routingCode: string | null;
   /** @nullable */
   swiftBic: string | null;
+  /** @nullable */
+  senderName: string | null;
+  /** @pattern ^[A-F0-9]{4}$ */
+  sourceWalletLast4: string;
   recipientAccountName: string;
   /** @nullable */
   recipientEmail: string | null;

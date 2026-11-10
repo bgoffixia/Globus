@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import {
   getGetAdminAccessQueryKey, getGetAdminSummaryQueryKey, getGetAdminSettingsQueryKey, getGetBankProfileQueryKey,
+  getGetAdminWalletCurrencyMigrationPreviewQueryKey,
   getGetAdminIdentityDocumentContentUrl,
   getGetAdminVaultSubscriptionProofUrl,
   getGetAdminTransactionDetailQueryKey, getGetAdminUserDetailQueryKey,
@@ -19,6 +20,7 @@ import {
   getListAdminTransactionsQueryKey, getListAdminTransactionStatusHistoryQueryKey,
   getListAdminUsersQueryKey,
   useCreateAdminFunding, useCreateAdminRestriction, useCreateAdminTransactionCorrection,
+  useConvertAdminWalletCurrenciesToUsd, useGetAdminWalletCurrencyMigrationPreview,
   useGetAdminAccess, useGetBankProfile,
   useGetAdminSettings, useGetAdminSummary, useGetAdminTransactionDetail,
   useGetAdminUserDetail, useListAdminAccounts, useListAdminAuditLogs,
@@ -36,7 +38,8 @@ import type {
   AdminRestriction, BankRestrictionType, ListAdminTransactionsParams, ListAdminUsersParams, TransactionType, Wallet,
 } from '@workspace/api-client-react';
 
-const currencies: ActiveCurrencyCode[] = ['USD', 'EUR', 'GBP', 'CAD', 'AUD'];
+const currencies: ActiveCurrencyCode[] = ['USD', 'EUR', 'GBP', 'CAD'];
+const historicalCurrencies: CurrencyCode[] = ['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD'];
 const currencyLabel: Record<CurrencyCode, string> = { USD: 'US dollar', EUR: 'Euro', GBP: 'Pound sterling', NGN: 'Nigerian naira', CAD: 'Canadian dollar', AUD: 'Australian dollar' };
 const nav = [
   { path: '/admin', label: 'Overview', icon: LayoutDashboard },
@@ -488,7 +491,7 @@ function AccountsPage({ controlsOnly = false, restrictedOnly = false, memberId, 
   return <div className="space-y-3">{!compact && <Heading kicker="Wallets are account records" title={title} subtitle="Each member has one wallet per currency. Wallets remain readable when restricted; incoming credits are permitted while sends and withdrawals are blocked." />}
     {memberId && memberDetail.data && <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#dce7e1] bg-[#f9fbf7] px-4 py-2.5 text-[9px]"><span className="font-semibold text-[#4b656b]">{nameOf(memberDetail.data.user)} · {memberDetail.data.user.customerId || memberDetail.data.user.email}</span><StatusPill status={memberDetail.data.user.accountStatus} /></div>}
     <Panel title={controlsOnly ? 'Wallet restrictions' : 'Member currency wallets'} eyebrow={`${memberId ? visibleAccounts.length : accounts.data?.total ?? 0} wallet records`}>
-      {!memberId && <div className="flex flex-wrap gap-2 border-b border-[#e9efec] bg-[#f8f9f4] p-4"><label className="relative min-w-[210px] flex-1"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8a9a9b]" /><input className={`${input} pl-9`} placeholder="Member, email or Customer ID" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} /></label><select className={`${input} w-auto min-w-[130px]`} value={currency} onChange={e => { setCurrency(e.target.value); setPage(1); }}><option value="">All currencies</option>{currencies.map(c => <option key={c} value={c}>{c}</option>)}</select><select className={`${input} w-auto min-w-[135px]`} value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}><option value="">All wallet states</option><option value="active">Active</option><option value="restricted">Restricted</option></select></div>}
+      {!memberId && <div className="flex flex-wrap gap-2 border-b border-[#e9efec] bg-[#f8f9f4] p-4"><label className="relative min-w-[210px] flex-1"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8a9a9b]" /><input className={`${input} pl-9`} placeholder="Member, email or Customer ID" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} /></label><select className={`${input} w-auto min-w-[130px]`} value={currency} onChange={e => { setCurrency(e.target.value); setPage(1); }}><option value="">All currencies</option>{historicalCurrencies.map(c => <option key={c} value={c}>{c}</option>)}</select><select className={`${input} w-auto min-w-[135px]`} value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}><option value="">All wallet states</option><option value="active">Active</option><option value="restricted">Restricted</option></select></div>}
       {accounts.isLoading || (memberId && memberDetail.isLoading) ? <Skeleton /> : accounts.isError ? <InlineError text="Wallet records could not be loaded." retry={() => accounts.refetch()} /> : visibleAccounts.length ? <><div className="overflow-x-auto"><table className={`w-full ${memberId ? 'min-w-[580px]' : 'min-w-[740px]'} text-left`}><thead className="bg-[#f7f8f4] text-[9px] uppercase tracking-[.12em] text-[#829191]"><tr>{(memberId ? ['Currency', 'Wallet balance', 'Status', 'Restriction reason', ...(controlsOnly ? [''] : [])] : ['Member', 'Customer ID', 'Currency', 'Wallet balance', 'Status', 'Restriction reason', '']).map((t, index) => <th key={`${t}-${index}`} className="px-4 py-3">{t}</th>)}</tr></thead><tbody>{visibleAccounts.map(a => <tr key={a.id} className="border-t border-[#edf1ee] text-[10px]">{!memberId && <><td className="px-4 py-3"><Link className="font-bold text-[#315b65] hover:underline" href={`/admin/users/${a.userId}`}>{a.memberName}</Link><p className="mt-1 text-[9px] text-[#829292]">{a.email}</p></td><td className="px-4 py-3 font-mono">{a.customerId || '—'}</td></>}<td className="px-4 py-3"><span className="font-mono font-bold">{a.currency}</span><span className="ml-2 text-[9px] text-[#899799]">{currencyLabel[a.currency]}</span></td><td className="px-4 py-3 font-mono font-semibold">{money(a.balance, a.currency)}</td><td className="px-4 py-3"><StatusPill status={a.status} /></td><td className="max-w-[180px] truncate px-4 py-3 text-[#7e8e91]">{a.restrictionReason || '—'}</td>{(!memberId || controlsOnly) && <td className="px-4 py-3"><button data-testid={`button-wallet-control-${a.id}`} className={quietButton} onClick={() => { setTarget(a); setNext(a.status === 'active' ? 'restricted' : 'active'); setReason(''); setNotes(''); setPin(''); setError(''); }}>{a.status === 'active' ? 'Freeze' : 'Unfreeze'}</button></td>}</tr>)}</tbody></table></div>{!memberId && <Pager page={page} pages={Math.ceil((accounts.data?.total ?? 0) / Math.max(1, accounts.data?.pageSize ?? 25))} onChange={setPage} />}</> : <Empty title="No wallets found" text="Adjust the filters to search the selected currency-wallet records." />}
     </Panel>
     {target && <Modal title={next === 'restricted' ? 'Freeze wallet' : 'Unfreeze wallet'} close={() => setTarget(null)}><p className="mb-4 rounded-lg bg-[#f4f7f2] p-3 text-[10px] leading-5 text-[#708487]">{target.memberName} · {target.currency} · {money(target.balance, target.currency)}. Frozen wallets remain readable and can receive credits, but cannot send or withdraw.</p><form onSubmit={save} className="space-y-3"><Field label="Reason"><textarea required minLength={5} maxLength={500} className={`${input} h-20 py-2`} value={reason} onChange={e => setReason(e.target.value)} /></Field><Field label="Administrative notes"><textarea maxLength={500} className={`${input} h-20 py-2`} value={notes} onChange={e => setNotes(e.target.value)} /></Field><Field label="Six-digit transaction PIN"><input required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} className={input} value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))} /></Field>{error && <p role="alert" className="text-[10px] text-[#a45247]">{error}</p>}<label className="flex items-start gap-2 rounded-lg bg-[#f6f7f1] p-3 text-[10px] text-[#718386]"><input type="checkbox" required className="mt-0.5 accent-[#438481]" />I confirm this wallet status change and understand it is recorded to the audit trail.</label><div className="flex justify-end gap-2"><button type="button" className={quietButton} onClick={() => setTarget(null)}>Cancel</button><button disabled={update.isPending || pin.length !== 6 || reason.trim().length < 5} className={button}>{update.isPending ? 'Saving…' : 'Confirm wallet change'}</button></div></form></Modal>}
@@ -763,7 +766,7 @@ function TransactionsPage({ memberId, compact = false }: { memberId?: string; co
     <Panel title="Search transactions" eyebrow={`${list.data?.total ?? 0} records`}>
       <div className="grid gap-3 border-b border-[#e9efec] bg-[#f8f9f4] p-4 sm:grid-cols-2 xl:grid-cols-4">
         <Field label="Search"><input data-testid="input-transaction-search" className={input} value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} placeholder="Reference or description" /></Field>{!memberId && <Field label="Customer"><input className={input} value={customer} onChange={e => { setCustomer(e.target.value); setPage(1); }} placeholder="Name, email or ID" /></Field>}
-        <Field label="Currency"><select className={input} value={currency} onChange={e => { setCurrency(e.target.value); setPage(1); }}><option value="">All currencies</option>{currencies.map(c => <option key={c} value={c}>{c}</option>)}</select></Field><Field label="Transaction type"><select className={input} value={type} onChange={e => { setType(e.target.value); setPage(1); }}><option value="">All types</option>{txTypes.map(t => <option key={t} value={t}>{human(t)}</option>)}</select></Field>
+        <Field label="Currency"><select className={input} value={currency} onChange={e => { setCurrency(e.target.value); setPage(1); }}><option value="">All currencies</option>{historicalCurrencies.map(c => <option key={c} value={c}>{c}</option>)}</select></Field><Field label="Transaction type"><select className={input} value={type} onChange={e => { setType(e.target.value); setPage(1); }}><option value="">All types</option>{txTypes.map(t => <option key={t} value={t}>{human(t)}</option>)}</select></Field>
         <Field label="Status"><select className={input} value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}><option value="">All statuses</option>{['pending', 'completed', 'failed', 'rejected', 'reversed'].map(s => <option key={s} value={s}>{human(s)}</option>)}</select></Field><Field label="From date"><input type="date" className={input} value={fromDate} onChange={e => { setFromDate(e.target.value); setPage(1); }} /></Field><Field label="To date"><input type="date" className={input} value={toDate} onChange={e => { setToDate(e.target.value); setPage(1); }} /></Field><div className="grid grid-cols-2 gap-2"><Field label="Minimum amount"><input className={input} inputMode="decimal" value={min} onChange={e => { setMin(e.target.value); setPage(1); }} placeholder="0.00" /></Field><Field label="Maximum amount"><input className={input} inputMode="decimal" value={max} onChange={e => { setMax(e.target.value); setPage(1); }} placeholder="0.00" /></Field></div>
       </div>
       {list.isLoading ? <Skeleton /> : list.isError ? <InlineError text="Transactions could not be loaded." retry={() => list.refetch()} /> : list.data?.items.length ? <><div className="overflow-x-auto"><table className="w-full min-w-[780px] text-left"><thead className="bg-[#f7f8f4] text-[9px] uppercase tracking-[.12em] text-[#829191]"><tr>{['Reference / description', 'Customer', 'Type', 'Currency & amount', 'Status', 'Recorded', ''].map(x => <th key={x} className="px-4 py-3">{x}</th>)}</tr></thead><tbody>{list.data.items.map(t => <tr key={t.id} className="border-t border-[#edf1ee] text-[10px] hover:bg-[#f8faf7]"><td className="px-4 py-3"><button onClick={() => { setDetailId(t.id); setError(''); }} className="font-mono font-bold text-[#396e73] hover:underline">{t.reference}</button><p className="mt-1 max-w-[220px] truncate text-[9px] text-[#829292]">{t.description}</p></td><td className="px-4 py-3 text-[#536d74]">{t.counterparty || 'Globus account'}</td><td className="px-4 py-3">{human(t.type)}</td><td className="px-4 py-3 font-mono font-semibold">{money(t.amount, t.currency)}</td><td className="px-4 py-3"><StatusPill status={t.status} /></td><td className="px-4 py-3 whitespace-nowrap text-[#788c8d]">{dateTime(t.createdAt)}</td><td className="px-4 py-3"><button className={quietButton} onClick={() => { setDetailId(t.id); setError(''); }}>Inspect</button></td></tr>)}</tbody></table></div><Pager page={page} pages={Math.ceil(list.data.total / list.data.pageSize)} onChange={setPage} /></> : <Empty title="No transactions found" text="The selected criteria do not match any transaction records." />}
@@ -906,7 +909,116 @@ function SettingsPage() {
           </div>
         </Panel>
       </form>
+      <div className="mt-5"><LegacyWalletCurrencyMigrationPanel /></div>
     </>
+  );
+}
+
+function LegacyWalletCurrencyMigrationPanel() {
+  const client = useQueryClient();
+  const preview = useGetAdminWalletCurrencyMigrationPreview({
+    query: { queryKey: getGetAdminWalletCurrencyMigrationPreviewQueryKey() },
+  });
+  const convert = useConvertAdminWalletCurrenciesToUsd();
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [reason, setReason] = useState('');
+  const [pin, setPin] = useState('');
+  const [confirmed, setConfirmed] = useState(false);
+  const [error, setError] = useState('');
+  const [resultMessage, setResultMessage] = useState('');
+  const eligible = preview.data?.items.filter(item => item.eligible) ?? [];
+  const selectable = eligible.slice(0, 500);
+  const selected = selectable.filter(item => selectedIds.includes(item.walletId));
+  const toggle = (walletId: string) => setSelectedIds(current =>
+    current.includes(walletId) ? current.filter(id => id !== walletId) : [...current, walletId],
+  );
+  const toggleAll = () => setSelectedIds(current =>
+    current.length === selectable.length ? [] : selectable.map(item => item.walletId),
+  );
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setError('');
+    setResultMessage('');
+    if (!selected.length) {
+      setError('Select at least one eligible wallet.');
+      return;
+    }
+    if (!window.confirm(`Convert ${selected.length} legacy wallet balance(s) using the displayed rates? This creates permanent audited ledger entries; original transactions remain unchanged.`)) return;
+    try {
+      const result = await convert.mutateAsync({
+        data: {
+          conversions: selected.map(item => ({
+            walletId: item.walletId,
+            sourceAmount: item.sourceAmount,
+            exchangeRate: item.exchangeRate ?? '0',
+            rateUpdatedAt: item.rateUpdatedAt ?? new Date().toISOString(),
+          })),
+          reason: reason.trim(),
+          transactionPin: pin,
+          confirmed: true,
+        },
+      });
+      setResultMessage(`${result.convertedCount} wallet balance(s) converted to USD. The original transaction history was preserved.`);
+      setSelectedIds([]);
+      setReason('');
+      setPin('');
+      setConfirmed(false);
+      await Promise.all([
+        client.invalidateQueries({ queryKey: getGetAdminWalletCurrencyMigrationPreviewQueryKey() }),
+        client.invalidateQueries({ queryKey: getGetAdminSummaryQueryKey() }),
+        client.invalidateQueries({ queryKey: getListAdminAccountsQueryKey() }),
+        client.invalidateQueries({ queryKey: getListAdminAuditLogsQueryKey() }),
+        client.invalidateQueries({ queryKey: getListAdminTransactionsQueryKey() }),
+      ]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'The conversion was not completed.');
+    }
+  };
+
+  return (
+    <Panel title="Convert retired-currency balances to USD" eyebrow="Audited conversion" note="Only balances in retired wallet currencies appear here. Rates are rechecked before posting; the original ledger history is preserved.">
+      <div className="space-y-4 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#e7e8d9] bg-[#faf9f0] p-3">
+          <p className="text-[10px] leading-4 text-[#72643d]">
+            {preview.data ? `${preview.data.eligibleCount} eligible · ${preview.data.blockedCount} blocked` : 'Loading wallet balances and current rates…'}
+            {eligible.length > 500 ? ' · Select up to 500 per batch' : ''}
+          </p>
+          <button type="button" className={quietButton} onClick={() => { setError(''); void preview.refetch(); }} disabled={preview.isFetching}>Refresh preview</button>
+        </div>
+        {preview.isError && <InlineError text="Legacy wallet balances could not be previewed." retry={() => void preview.refetch()} />}
+        {error && <p role="alert" className="rounded-lg bg-[#fff2ed] p-3 text-[10px] text-[#a45247]">{error}</p>}
+        {resultMessage && <p role="status" className="rounded-lg bg-[#eef7f0] p-3 text-[10px] text-[#47755e]">{resultMessage}</p>}
+        {preview.data && (
+          <div className="overflow-x-auto rounded-xl border border-[#e4ebe8]">
+            <table className="w-full min-w-[780px] text-left text-[10px]">
+              <thead className="bg-[#f7f8f4] text-[9px] uppercase tracking-[.1em] text-[#829191]"><tr>
+                <th className="px-3 py-2"><input aria-label="Select all eligible wallets" type="checkbox" checked={selectable.length > 0 && selected.length === selectable.length} onChange={toggleAll} /></th>
+                <th className="px-3 py-2">Member / wallet</th><th className="px-3 py-2">Source balance</th><th className="px-3 py-2">USD estimate</th><th className="px-3 py-2">Rate · source</th><th className="px-3 py-2">Status</th>
+              </tr></thead>
+              <tbody>{preview.data.items.map(item => <tr key={item.walletId} className="border-t border-[#edf1ee]">
+                <td className="px-3 py-2"><input type="checkbox" aria-label={`Select ${item.memberName} ${item.currency} wallet`} checked={selectedIds.includes(item.walletId)} disabled={!item.eligible || !selectable.some(row => row.walletId === item.walletId)} onChange={() => toggle(item.walletId)} /></td>
+                <td className="px-3 py-2"><b>{item.memberName}</b><p className="mt-0.5 text-[9px] text-[#829292]">{item.email} · {item.customerId || 'No Customer ID'} · {item.currency}</p></td>
+                <td className="px-3 py-2 font-mono">{money(item.sourceAmount, item.currency)}</td>
+                <td className="px-3 py-2 font-mono">{item.targetAmount ? money(item.targetAmount, 'USD') : '—'}</td>
+                <td className="px-3 py-2 font-mono">{item.exchangeRate ? `${item.exchangeRate} · ${item.rateProvider}` : 'Unavailable'}</td>
+                <td className="px-3 py-2">{item.eligible ? <Pill tone="good">Eligible</Pill> : <span className="text-[#a45247]">{item.blockReason}</span>}</td>
+              </tr>)}
+              {!preview.data.items.length && <tr><td colSpan={6} className="px-4 py-8 text-center text-[#819195]">No legacy wallet balances need conversion.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {selected.length > 0 && <form onSubmit={submit} className="grid gap-3 rounded-xl border border-[#dce7e5] bg-[#fbfcf9] p-4 sm:grid-cols-2">
+          <Field label="Reason for conversion"><textarea required minLength={5} maxLength={500} className={`${input} h-20 py-2`} value={reason} onChange={e => setReason(e.target.value)} placeholder="Document why these legacy balances are being converted." /></Field>
+          <div className="space-y-3">
+            <Field label="Administrator transaction PIN"><input required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="off" className={input} value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))} /></Field>
+            <label className="flex items-start gap-2 text-[9px] leading-4 text-[#647a7f]"><input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} className="mt-0.5" />I reviewed the displayed balances and rates. Each conversion will create a new audited transaction and will not alter prior entries.</label>
+            <button className={button} disabled={!confirmed || pin.length !== 6 || reason.trim().length < 5 || convert.isPending}>{convert.isPending ? 'Converting…' : `Convert ${selected.length} selected wallet(s)`}</button>
+          </div>
+          <p className="sm:col-span-2 text-[9px] text-[#829294]">Estimated total selected balance: {selected.map(item => `${money(item.sourceAmount, item.currency)} → ${money(item.targetAmount ?? '0', 'USD')}`).join(' · ')}</p>
+        </form>}
+      </div>
+    </Panel>
   );
 }
 

@@ -53,6 +53,9 @@ import type {
   AdminUserStatusInput,
   AdminVaultSubscriptionInput,
   AdminVaultSubscriptionResult,
+  AdminWalletCurrencyMigrationInput,
+  AdminWalletCurrencyMigrationPreview,
+  AdminWalletCurrencyMigrationResult,
   AdminWalletStatusInput,
   BadRequestResponse,
   BankDashboard,
@@ -60,6 +63,7 @@ import type {
   BankExchangeRateInput,
   BankExchangeRateQuote,
   BankNotification,
+  BankNotificationClearResult,
   BankProfile,
   BankProfileInput,
   BankPushConfig,
@@ -1375,6 +1379,80 @@ export function useListBankNotifications<TData = Awaited<ReturnType<typeof listB
 
 
 
+
+export const getClearBankNotificationsUrl = () => {
+
+
+
+
+  return `/api/bank/notifications`
+}
+
+/**
+ * @summary Delete all notifications belonging to the authenticated customer
+ */
+export const clearBankNotifications = async ( options?: Parameters<typeof customFetch>[1]): Promise<BankNotificationClearResult> => {
+
+  return customFetch<BankNotificationClearResult>(getClearBankNotificationsUrl(),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getClearBankNotificationsMutationKey = () => ['clearBankNotifications'] as const;
+
+export const getClearBankNotificationsMutationOptions = <TError = ErrorType<UnauthorizedResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof clearBankNotifications>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof clearBankNotifications>>, TError,void, TContext> => {
+
+const mutationKey = getClearBankNotificationsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof clearBankNotifications>>, void> = () => {
+
+
+          return  clearBankNotifications(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ClearBankNotificationsMutationResult = NonNullable<Awaited<ReturnType<typeof clearBankNotifications>>>
+
+    export type ClearBankNotificationsMutationError = ErrorType<UnauthorizedResponse>
+
+
+    /**
+ * @summary Delete all notifications belonging to the authenticated customer
+ */
+export const useClearBankNotifications = <TError = ErrorType<UnauthorizedResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof clearBankNotifications>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof clearBankNotifications>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getClearBankNotificationsMutationOptions(options));
+    }
 
 export const getMarkBankNotificationReadUrl = (notificationId: string,) => {
 
@@ -3841,6 +3919,171 @@ export function useListAdminAccounts<TData = Awaited<ReturnType<typeof listAdmin
 
 
 
+
+export const getGetAdminWalletCurrencyMigrationPreviewUrl = () => {
+
+
+
+
+  return `/api/bank/admin/wallet-currency-migration`
+}
+
+/**
+ * @summary Preview unsupported wallet balances and USD conversion quotes
+ */
+export const getAdminWalletCurrencyMigrationPreview = async ( options?: Parameters<typeof customFetch>[1]): Promise<AdminWalletCurrencyMigrationPreview> => {
+
+  return customFetch<AdminWalletCurrencyMigrationPreview>(getGetAdminWalletCurrencyMigrationPreviewUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminWalletCurrencyMigrationPreviewQueryKey = () => {
+    return [
+    `/api/bank/admin/wallet-currency-migration`
+    ] as const;
+    }
+
+
+export const getGetAdminWalletCurrencyMigrationPreviewQueryOptions = <TData = Awaited<ReturnType<typeof getAdminWalletCurrencyMigrationPreview>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminWalletCurrencyMigrationPreview>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminWalletCurrencyMigrationPreviewQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminWalletCurrencyMigrationPreview>>> = ({ signal }) => getAdminWalletCurrencyMigrationPreview({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminWalletCurrencyMigrationPreview>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminWalletCurrencyMigrationPreviewQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminWalletCurrencyMigrationPreview>>>
+export type GetAdminWalletCurrencyMigrationPreviewQueryError = ErrorType<UnauthorizedResponse | ForbiddenResponse>
+
+
+/**
+ * @summary Preview unsupported wallet balances and USD conversion quotes
+ */
+
+export function useGetAdminWalletCurrencyMigrationPreview<TData = Awaited<ReturnType<typeof getAdminWalletCurrencyMigrationPreview>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminWalletCurrencyMigrationPreview>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminWalletCurrencyMigrationPreviewQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getConvertAdminWalletCurrenciesToUsdUrl = () => {
+
+
+
+
+  return `/api/bank/admin/wallet-currency-migration`
+}
+
+/**
+ * @summary Convert eligible legacy wallet balances to USD with compensating ledger entries
+ */
+export const convertAdminWalletCurrenciesToUsd = async (adminWalletCurrencyMigrationInput: AdminWalletCurrencyMigrationInput, options?: Parameters<typeof customFetch>[1]): Promise<AdminWalletCurrencyMigrationResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<AdminWalletCurrencyMigrationResult>(getConvertAdminWalletCurrenciesToUsdUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(adminWalletCurrencyMigrationInput)
+  }
+);}
+
+
+
+
+
+export const getConvertAdminWalletCurrenciesToUsdMutationKey = () => ['convertAdminWalletCurrenciesToUsd'] as const;
+
+export const getConvertAdminWalletCurrenciesToUsdMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse | ServiceUnavailableResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof convertAdminWalletCurrenciesToUsd>>, TError,ConvertAdminWalletCurrenciesToUsdMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof convertAdminWalletCurrenciesToUsd>>, TError,ConvertAdminWalletCurrenciesToUsdMutationVariables, TContext> => {
+
+const mutationKey = getConvertAdminWalletCurrenciesToUsdMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof convertAdminWalletCurrenciesToUsd>>, ConvertAdminWalletCurrenciesToUsdMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  convertAdminWalletCurrenciesToUsd(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConvertAdminWalletCurrenciesToUsdMutationResult = NonNullable<Awaited<ReturnType<typeof convertAdminWalletCurrenciesToUsd>>>
+    export type ConvertAdminWalletCurrenciesToUsdMutationBody = BodyType<AdminWalletCurrencyMigrationInput>
+    export type ConvertAdminWalletCurrenciesToUsdMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse | ServiceUnavailableResponse>
+    export type ConvertAdminWalletCurrenciesToUsdMutationVariables = {data: BodyType<AdminWalletCurrencyMigrationInput>}
+
+    /**
+ * @summary Convert eligible legacy wallet balances to USD with compensating ledger entries
+ */
+export const useConvertAdminWalletCurrenciesToUsd = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse | ServiceUnavailableResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof convertAdminWalletCurrenciesToUsd>>, TError,ConvertAdminWalletCurrenciesToUsdMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof convertAdminWalletCurrenciesToUsd>>,
+        TError,
+        ConvertAdminWalletCurrenciesToUsdMutationVariables,
+        TContext
+      > => {
+      return useMutation(getConvertAdminWalletCurrenciesToUsdMutationOptions(options));
+    }
 
 export const getUpdateAdminWalletStatusUrl = (walletId: string,) => {
 

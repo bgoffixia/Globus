@@ -154,7 +154,7 @@ export async function getBankOperationEligibility(
   };
 }
 
-export const currencies = ["USD", "EUR", "GBP", "CAD", "AUD"] as const;
+export const currencies = ["USD", "EUR", "GBP", "CAD"] as const;
 export type BankCurrency = (typeof bankCurrencyEnum.enumValues)[number];
 
 const customerIdAlphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -469,7 +469,7 @@ export async function getWalletsForUser(userId: string) {
 
   return wallets
     .filter((wallet) => {
-      if (wallet.currency !== "NGN") return true;
+      if ((currencies as readonly string[]).includes(wallet.currency)) return true;
       return (
         (balanceByWallet.get(wallet.id) ?? 0n) !== 0n ||
         (pendingByWallet.get(wallet.id) ?? 0n) !== 0n ||

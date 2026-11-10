@@ -8,6 +8,7 @@ import {
   House,
   LayoutDashboard,
   LogOut,
+  LockKeyhole,
   Menu,
   ShieldCheck,
   UserRound,
@@ -25,6 +26,7 @@ import { NotificationsCenter } from '@/components/notifications-center';
 
 const primaryLinks = [
   { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
+  { href: '/private-vault', label: 'Private Vault', icon: LockKeyhole },
 ];
 
 const dashboardTools = [
@@ -48,7 +50,7 @@ export function BankShell({ children }: { children: ReactNode }) {
   const { signOut } = useClerk();
   const isDashboard = location === '/dashboard';
   const isProfile = location === '/profile' || location === '/settings';
-  const isSingleViewportPage = location === '/add-money' || location === '/calculator' || isProfile;
+  const isSingleViewportPage = location === '/add-money' || location === '/calculator' || location === '/private-vault' || isProfile;
   const adminAccess = useGetAdminAccess({
     query: { queryKey: getGetAdminAccessQueryKey(), retry: false },
   });
@@ -170,6 +172,7 @@ function pageLabel(path: string) {
     '/add-money': 'Deposit request',
     '/withdraw': 'Withdrawal request',
     '/profile': 'Profile',
+    '/private-vault': 'Private Vault',
     '/settings': 'Profile',
     '/admin': 'Operations',
   };

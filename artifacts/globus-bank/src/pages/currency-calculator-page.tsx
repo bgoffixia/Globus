@@ -10,7 +10,7 @@ import { digitsFor, formatAmount, formatRate } from '@/components/transfer/trans
 import { previewConversion } from '@/lib/currency-conversion';
 
 const currencies = destinationCurrencies;
-const transferWalletCurrencies = new Set(['USD', 'EUR', 'GBP', 'CAD', 'AUD']);
+const transferWalletCurrencies = new Set(['USD', 'EUR', 'GBP', 'CAD']);
 const inputClass = 'h-12 w-full rounded-xl border border-[#dfe6ec] bg-white px-3.5 text-[13px] font-semibold text-[#273e57] outline-none transition focus:border-[#62a3a6] focus:ring-2 focus:ring-[#62a3a6]/15';
 
 export function CurrencyCalculatorPage() {

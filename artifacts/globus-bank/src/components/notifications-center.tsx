@@ -6,6 +6,7 @@ import { useUser } from '@clerk/react';
 import {
   getGetBankPushConfigQueryKey,
   getListBankNotificationsQueryKey,
+  useClearBankNotifications,
   useDeleteBankPushSubscription,
   useGetBankPushConfig,
   useListBankNotifications,
@@ -147,6 +148,7 @@ export function NotificationsCenter() {
   });
   const push = useGetBankPushConfig({ query: { queryKey: getGetBankPushConfigQueryKey(), retry: false } });
   const markRead = useMarkBankNotificationRead();
+  const clearNotifications = useClearBankNotifications();
   const saveSubscription = useSaveBankPushSubscription();
   const deleteSubscription = useDeleteBankPushSubscription();
   const unreadCount = notifications.data?.filter(item => !item.readAt).length ?? 0;
@@ -213,6 +215,17 @@ export function NotificationsCenter() {
       setNotificationError('This notification could not be marked as read. Try again.');
     }
   };
+  const clearAll = async () => {
+    if (!notifications.data?.length) return;
+    if (!window.confirm('Delete all notifications from this account? This cannot be undone.')) return;
+    setNotificationError('');
+    try {
+      await clearNotifications.mutateAsync();
+      await queryClient.invalidateQueries({ queryKey: getListBankNotificationsQueryKey() });
+    } catch {
+      setNotificationError('Notifications could not be cleared. Try again.');
+    }
+  };
 
   return (
     <div className="relative">
@@ -221,9 +234,12 @@ export function NotificationsCenter() {
         {unreadCount > 0 && <span data-testid="badge-notification-unread-count" className="absolute -right-1 -top-1 grid h-[17px] min-w-[17px] place-items-center rounded-full border-2 border-[#f7f9fb] bg-[#b5574e] px-1 text-[8px] font-bold text-white">{unreadCount > 9 ? '9+' : unreadCount}</span>}
       </button>
       {open && <div ref={panelRef} id="notifications-panel" role="dialog" aria-label="Notifications center" onKeyDown={event => { if (event.key === 'Escape') setOpen(false); }} style={{ top: panelTop, maxHeight: `calc(100dvh - ${panelTop}px - 8px)` }} className="fixed left-1/2 z-[100] flex w-[min(380px,calc(100vw-1.5rem))] -translate-x-1/2 flex-col overflow-hidden rounded-2xl border border-[#dfe7ec] bg-white shadow-[0_20px_55px_rgba(19,46,76,.18)]" data-testid="notifications-panel">
-        <div className="flex shrink-0 items-center justify-between border-b border-[#edf0f3] px-4 py-3">
+          <div className="flex shrink-0 items-center justify-between border-b border-[#edf0f3] px-4 py-3">
           <div><h2 className="text-[12px] font-bold text-[#203851]">Notifications</h2><p className="mt-0.5 text-[9px] text-[#8290a0]">{unreadCount ? `${unreadCount} unread` : 'All caught up'}</p></div>
-          <button type="button" aria-label="Close notifications" onClick={() => setOpen(false)} data-testid="button-close-notifications" className="rounded-md px-2 py-1 text-[9px] font-bold text-[#61758a] hover:bg-[#f2f6f7]">Close</button>
+          <div className="flex items-center gap-2">
+            <button type="button" disabled={!notifications.data?.length || clearNotifications.isPending} onClick={() => void clearAll()} data-testid="button-clear-notifications" className="rounded-md px-2 py-1 text-[9px] font-bold text-[#a24940] hover:bg-[#fff1ef] disabled:opacity-40">{clearNotifications.isPending ? 'Clearing…' : 'Clear all'}</button>
+            <button type="button" aria-label="Close notifications" onClick={() => setOpen(false)} data-testid="button-close-notifications" className="rounded-md px-2 py-1 text-[9px] font-bold text-[#61758a] hover:bg-[#f2f6f7]">Close</button>
+          </div>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           {notificationError && <p role="alert" data-testid="status-notification-error" className="mx-4 mt-3 rounded-md bg-[#fff1ef] px-2 py-1.5 text-[8px] text-[#a24940]">{notificationError}</p>}

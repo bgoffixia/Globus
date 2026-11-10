@@ -37,6 +37,7 @@ import {
   GetBankVaultBillingResponse,
   GetBankVaultEmailPreferencesHeader,
   GetBankVaultEmailPreferencesResponse,
+  ClearBankNotificationsResponse,
   InitializeBankVaultPasscodeBody,
   InitializeBankVaultPasscodeResponse,
   RequestBankVaultSubscriptionHeader,
@@ -125,6 +126,7 @@ import {
   VAULT_PROOF_MAX_BYTES,
   VAULT_PROOF_CONTENT_TYPES,
 } from "../lib/vault-subscription-proof-storage";
+import { getExchangeRate } from "../lib/exchange-rates";
 import {
   getVaultPlanPriceMinor,
   getVaultSubscriptionPlan,
@@ -276,140 +278,6 @@ function normalizedFutureTransferMode(value: string): "successful" | "pending" |
   return "failed";
 }
 
-type FrankfurterRateReply = {
-  date?: unknown;
-  base?: unknown;
-  quote?: unknown;
-  rate?: unknown;
-};
-type GreyRateReply = {
-  status?: unknown;
-  data?: {
-    source_currency?: unknown;
-    destination_currency?: unknown;
-    source_destination_currency_rate?: unknown;
-  } | null;
-};
-type CachedExchangeRate = {
-  rate: string;
-  provider: "Frankfurter" | "Grey";
-  checkedAt: Date;
-  expiresAt: number;
-};
-const exchangeRateCache = new Map<string, CachedExchangeRate>();
-const exchangeRateLoads = new Map<string, Promise<CachedExchangeRate>>();
-const EXCHANGE_RATE_CACHE_MS = 15 * 60 * 1000;
-async function fetchFrankfurterExchangeRate(
-  sourceCurrency: string,
-  destinationCurrency: string,
-): Promise<CachedExchangeRate> {
-  const response = await fetch(
-    `https://api.frankfurter.dev/v2/rate/${encodeURIComponent(sourceCurrency)}/${encodeURIComponent(destinationCurrency)}`,
-    { signal: AbortSignal.timeout(10_000) },
-  );
-  if (!response.ok) throw new Error("Frankfurter rate provider returned an error.");
-
-  const payload = (await response.json()) as FrankfurterRateReply;
-  const numericRate = typeof payload.rate === "number" ? payload.rate : Number(payload.rate);
-  if (
-    payload.base !== sourceCurrency ||
-    payload.quote !== destinationCurrency ||
-    typeof payload.date !== "string" ||
-    !Number.isFinite(Date.parse(payload.date)) ||
-    !Number.isFinite(numericRate) ||
-    numericRate <= 0
-  ) {
-    throw new Error("Frankfurter could not quote this currency pair.");
-  }
-  return {
-    rate: numericRate.toFixed(10).replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, ""),
-    provider: "Frankfurter",
-    checkedAt: new Date(),
-    expiresAt: Date.now() + EXCHANGE_RATE_CACHE_MS,
-  };
-}
-
-async function fetchGreyExchangeRate(
-  sourceCurrency: string,
-  destinationCurrency: string,
-): Promise<CachedExchangeRate> {
-  const secretKey = process.env.GREY_API_SECRET_KEY;
-  if (!secretKey) throw new Error("Grey rate fallback is not configured.");
-
-  const response = await fetch("https://businessapi.grey.co/v1/currency/rate", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${secretKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      source_amount: 1000,
-      source_currency: sourceCurrency,
-      destination_currency: destinationCurrency,
-      transaction_type: "swap",
-    }),
-    signal: AbortSignal.timeout(10_000),
-  });
-  if (!response.ok) throw new Error("Grey rate provider returned an error.");
-
-  const payload = (await response.json()) as GreyRateReply;
-  const rawRate = payload.data?.source_destination_currency_rate;
-  const numericRate = typeof rawRate === "number" ? rawRate : Number(rawRate);
-  if (
-    payload.status !== "success" ||
-    !Number.isFinite(numericRate) ||
-    numericRate <= 0 ||
-    payload.data?.source_currency !== sourceCurrency ||
-    payload.data?.destination_currency !== destinationCurrency
-  ) {
-    throw new Error("Grey could not quote this currency pair.");
-  }
-  return {
-    rate: numericRate.toFixed(10).replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, ""),
-    provider: "Grey",
-    checkedAt: new Date(),
-    expiresAt: Date.now() + EXCHANGE_RATE_CACHE_MS,
-  };
-}
-
-async function getExchangeRate(
-  sourceCurrency: string,
-  destinationCurrency: string,
-): Promise<CachedExchangeRate> {
-  const cacheKey = `${sourceCurrency}:${destinationCurrency}`;
-  const cached = exchangeRateCache.get(cacheKey);
-  if (cached && cached.expiresAt > Date.now()) return cached;
-  const inflight = exchangeRateLoads.get(cacheKey);
-  if (inflight) return inflight;
-
-  const request = (async () => {
-    let frankfurterError: unknown;
-    try {
-      const result = await fetchFrankfurterExchangeRate(sourceCurrency, destinationCurrency);
-      exchangeRateCache.set(cacheKey, result);
-      return result;
-    } catch (error) {
-      frankfurterError = error;
-    }
-    try {
-      const result = await fetchGreyExchangeRate(sourceCurrency, destinationCurrency);
-      exchangeRateCache.set(cacheKey, result);
-      return result;
-    } catch (greyError) {
-      throw new AggregateError(
-        [frankfurterError, greyError],
-        "Neither exchange-rate source could quote this currency pair.",
-      );
-    }
-  })();
-  exchangeRateLoads.set(cacheKey, request);
-  try {
-    return await request;
-  } finally {
-    exchangeRateLoads.delete(cacheKey);
-  }
-}
-
 function rejectExternalTransfer(res: Response, kind: "deposit" | "payout"): boolean {
   res.status(410).json({
     error:
@@ -508,6 +376,11 @@ function internationalTransferRequestResponse(
     recipientBank: request.recipientBank,
     routingCode: request.routingCode,
     swiftBic: request.swiftBic,
+    senderName: request.senderName,
+    sourceWalletLast4: request.sourceWalletId
+      .replaceAll("-", "")
+      .slice(-4)
+      .toUpperCase(),
     recipientAccountName: request.recipientAccountName,
     recipientEmail,
     recipientAccountLast4: request.recipientAccountLast4,
@@ -1630,18 +1503,20 @@ router.post(
   const accountNumber = parsed.data.recipientAccountNumber
     .replace(/\s+/g, "")
     .toUpperCase();
-  const recipientEmail = parsed.data.recipientEmail.trim().toLowerCase();
-  let recipientEmailEncrypted: string;
-  try {
-    recipientEmailEncrypted = encryptPrivateData(
-      recipientEmail,
-      "transfer-recipient-email",
-    );
-  } catch {
-    res.status(503).json({
-      error: "Recipient notification storage is temporarily unavailable. The transfer was not submitted.",
-    });
-    return;
+  const recipientEmail = parsed.data.recipientEmail?.trim().toLowerCase() ?? "";
+  let recipientEmailEncrypted: string | null = null;
+  if (recipientEmail) {
+    try {
+      recipientEmailEncrypted = encryptPrivateData(
+        recipientEmail,
+        "transfer-recipient-email",
+      );
+    } catch {
+      res.status(503).json({
+        error: "Recipient notification storage is temporarily unavailable. The transfer was not submitted.",
+      });
+      return;
+    }
   }
   const transactionPinResult = await verifyTransactionPin(
     sender.id,
@@ -1808,6 +1683,9 @@ router.post(
         recipientBank: parsed.data.recipientBank.trim(),
         routingCode,
         swiftBic,
+        senderName:
+          [sender.firstName, sender.lastName].filter(Boolean).join(" ") ||
+          "Globus member",
         recipientAccountName: parsed.data.recipientAccountName.trim(),
         recipientAccountLast4: accountNumber.slice(-4),
         recipientEmailEncrypted,
@@ -1852,12 +1730,14 @@ router.post(
       body: notificationBody,
       reference,
     });
-    const recipientUsers = await tx
-      .select({ id: bankUsersTable.id })
-      .from(bankUsersTable)
-      .where(sql`lower(${bankUsersTable.email}) = ${recipientEmail}`)
-      .limit(1);
     const notifications = [senderNotification];
+    const recipientUsers = recipientEmail
+      ? await tx
+          .select({ id: bankUsersTable.id })
+          .from(bankUsersTable)
+          .where(sql`lower(${bankUsersTable.email}) = ${recipientEmail}`)
+          .limit(1)
+      : [];
     if (recipientUsers[0] && recipientUsers[0].id !== sender.id) {
       notifications.push(
         await storeNotification(tx, {
@@ -1879,7 +1759,7 @@ router.post(
   for (const notification of result.notifications) {
     void sendPushToUser(notification.userId, notification);
   }
-  if (result.notifications.length) {
+  if (result.request.recipientEmailEncrypted) {
     const emailSent = await notifyTransferRecipient({
       notificationId: result.notifications[0]?.id,
       senderUserId: sender.id,
@@ -3180,6 +3060,20 @@ router.get("/bank/notifications", async (req, res): Promise<void> => {
       notifications.map(notificationResponse),
     ),
   );
+});
+
+router.delete("/bank/notifications", async (req, res): Promise<void> => {
+  const authUserId = getAuth(req).userId;
+  if (!authUserId) {
+    res.status(401).json({ error: "Sign in to access your Globus account." });
+    return;
+  }
+  const user = await getOrCreateBankUser(authUserId);
+  const deleted = await db
+    .delete(bankNotificationsTable)
+    .where(eq(bankNotificationsTable.userId, user.id))
+    .returning({ id: bankNotificationsTable.id });
+  res.json(ClearBankNotificationsResponse.parse({ deletedCount: deleted.length }));
 });
 
 router.patch(

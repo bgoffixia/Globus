@@ -9,10 +9,15 @@ export interface TransactionReceiptPdfData {
   sourceAmount?: string;
   exchangeRate?: string;
   convertedAmount?: string;
+  senderName?: string;
+  senderWallet?: string;
   recipient?: string;
   recipientBank?: string;
   recipientCountry?: string;
   recipientAccount?: string;
+  routingNumber?: string;
+  swiftBic?: string;
+  remark?: string;
   route?: string;
   fee?: string;
 }
@@ -223,34 +228,6 @@ function drawReceipt(context: CanvasRenderingContext2D, logo: HTMLImageElement, 
   }
 
   let y = heroY + heroHeight + 40;
-  if (receipt.recipient || receipt.recipientBank || receipt.recipientCountry || receipt.recipientAccount) {
-    const recipientHeight = 154;
-    drawRoundedRect(context, left, y, contentWidth, recipientHeight, 18);
-    context.fillStyle = '#ffffff';
-    context.fill();
-    context.strokeStyle = '#e4e9eb';
-    context.lineWidth = 2;
-    context.stroke();
-
-    context.fillStyle = '#8291a0';
-    context.font = '700 16px Arial, sans-serif';
-    context.fillText('TRANSFER TO', left + 24, y + 33);
-    context.fillStyle = '#263f58';
-    context.font = '700 25px Arial, sans-serif';
-    context.fillText(receipt.recipient || 'Recipient', left + 24, y + 72);
-    context.fillStyle = '#7b8b9b';
-    context.font = '400 19px Arial, sans-serif';
-    const bankDetails = [receipt.recipientBank, receipt.recipientCountry].filter(Boolean).join(' · ');
-    if (bankDetails) context.fillText(wrapText(context, bankDetails, contentWidth - 48)[0] ?? '', left + 24, y + 108);
-    if (receipt.recipientAccount) {
-      context.fillStyle = '#526a80';
-      context.font = '600 18px monospace';
-      context.textAlign = 'right';
-      context.fillText(receipt.recipientAccount, right - 24, y + 72);
-      context.textAlign = 'left';
-    }
-    y += recipientHeight + 36;
-  }
 
   context.fillStyle = '#718599';
   context.font = '700 18px Arial, sans-serif';
@@ -260,10 +237,17 @@ function drawReceipt(context: CanvasRenderingContext2D, logo: HTMLImageElement, 
   const fields: Array<[string, string | undefined]> = [
     ['Reference', receipt.reference],
     ['Date and time', receipt.date],
-    ['Transfer route', receipt.route],
-    ['Counterparty', receipt.counterparty],
-    ['Fee', receipt.fee],
-    ['Description', receipt.description],
+    ['Sender', receipt.senderName],
+    ['Source wallet', receipt.senderWallet],
+    ['Destination bank', receipt.recipientBank],
+    ['Country', receipt.recipientCountry],
+    ['Recipient account / IBAN', receipt.recipientAccount],
+    ['Recipient name', receipt.recipient],
+    ['Routing number', receipt.routingNumber],
+    ['SWIFT / BIC', receipt.swiftBic],
+    ['Remark / description', receipt.remark ?? receipt.description],
+    ['Counterparty', receipt.recipient ? undefined : receipt.counterparty],
+    ['Fee', receipt.recipient ? undefined : receipt.fee],
   ];
   for (const [label, value] of fields) {
     if (!value) continue;

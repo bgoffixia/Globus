@@ -13,6 +13,7 @@ import {
   inArray,
   isNull,
   lte,
+  notInArray,
   or,
   sql,
 } from "drizzle-orm";
@@ -20,6 +21,9 @@ import {
   CreateAdminFundingBody,
   CreateAdminFundingParams,
   CreateAdminFundingResponse,
+  GetAdminWalletCurrencyMigrationPreviewResponse,
+  ConvertAdminWalletCurrenciesToUsdBody,
+  ConvertAdminWalletCurrenciesToUsdResponse,
   CreateAdminRestrictionBody,
   CreateAdminRestrictionResponse,
   CreateAdminTransactionCorrectionBody,
@@ -115,6 +119,8 @@ import { sendPasswordResetEmail } from "../lib/password-reset-email";
 import {
   balanceForWallet,
   bankOperationRestrictionError,
+  convertMinorAmount,
+  conversionRatesMatch,
   createReference,
   ensureBankUser,
   formatMinorAmount,
@@ -125,6 +131,7 @@ import {
   toBankTransaction,
   userWallet,
 } from "../lib/bank";
+import { getExchangeRate } from "../lib/exchange-rates";
 import {
   deleteIdentityDocumentObject,
   getIdentityDocumentFile,
@@ -603,7 +610,7 @@ router.get("/bank/admin/summary", requireAdmin, async (_req, res): Promise<void>
         .where(inArray(bankUsersTable.id, recentUserIds))
     : [];
   const userById = new Map(recentUsers.map((user) => [user.id, user]));
-  const currencies = ["USD", "EUR", "GBP", "CAD", "AUD"] as const;
+  const currencies = ["USD", "EUR", "GBP", "NGN", "CAD", "AUD"] as const;
   const amountFor = (currency: (typeof currencies)[number], side: string) =>
     ledgerTotals.find((row) => row.currency === currency && row.side === side)
       ?.amount ?? "0";
@@ -656,7 +663,7 @@ router.get("/bank/admin/accounts", requireAdmin, async (req, res): Promise<void>
   const pageSize = parsed.data.pageSize ?? 25;
   const filters = [];
   filters.push(sql`(
-    ${bankWalletsTable.currency} <> 'NGN'
+    ${bankWalletsTable.currency} in ('USD', 'EUR', 'GBP', 'CAD')
     OR coalesce((
       select sum(case when ${bankLedgerEntriesTable.side} = 'credit'
         then ${bankLedgerEntriesTable.amountMinor}
@@ -664,6 +671,15 @@ router.get("/bank/admin/accounts", requireAdmin, async (req, res): Promise<void>
       from ${bankLedgerEntriesTable}
       where ${bankLedgerEntriesTable.walletId} = ${bankWalletsTable.id}
     ), 0) <> 0
+    OR exists (
+      select 1
+      from ${bankSandboxRequestsTable} legacy_request
+      inner join ${bankTransactionsTable} legacy_tx
+        on legacy_request.transaction_id = legacy_tx.id
+      where legacy_request.status in ('pending_review', 'pending_provider_setup')
+        and (legacy_tx.from_wallet_id = ${bankWalletsTable.id}
+          or legacy_tx.to_wallet_id = ${bankWalletsTable.id})
+    )
   )`);
   const search = parsed.data.search?.trim();
   if (search) {
@@ -806,6 +822,514 @@ router.get("/bank/admin/accounts", requireAdmin, async (req, res): Promise<void>
     }),
   );
 });
+
+async function legacyWalletCurrencyMigrationPreview() {
+  const supportedCurrencies = ["USD", "EUR", "GBP", "CAD"] as const;
+  const rows = await db
+    .select({
+      walletId: bankWalletsTable.id,
+      userId: bankUsersTable.id,
+      customerId: bankUsersTable.customerId,
+      firstName: bankUsersTable.firstName,
+      lastName: bankUsersTable.lastName,
+      email: bankUsersTable.email,
+      accountStatus: bankUsersTable.accountStatus,
+      currency: bankWalletsTable.currency,
+      walletStatus: bankWalletsTable.status,
+    })
+    .from(bankWalletsTable)
+    .innerJoin(bankUsersTable, eq(bankWalletsTable.userId, bankUsersTable.id))
+    .where(notInArray(bankWalletsTable.currency, [...supportedCurrencies]))
+    .orderBy(asc(bankUsersTable.email), asc(bankWalletsTable.currency));
+  const walletIds = rows.map((row) => row.walletId);
+  const userIds = [...new Set(rows.map((row) => row.userId))];
+  if (!walletIds.length) return { items: [], eligibleCount: 0, blockedCount: 0 };
+
+  const now = new Date();
+  const [balances, pendingRows, reservedRows, restrictions] = await Promise.all([
+    db
+      .select({
+        walletId: bankLedgerEntriesTable.walletId,
+        amount: sql<string>`coalesce(sum(case when ${bankLedgerEntriesTable.side} = 'credit' then ${bankLedgerEntriesTable.amountMinor} else -${bankLedgerEntriesTable.amountMinor} end), 0)::text`,
+      })
+      .from(bankLedgerEntriesTable)
+      .where(inArray(bankLedgerEntriesTable.walletId, walletIds))
+      .groupBy(bankLedgerEntriesTable.walletId),
+    db
+      .select({
+        walletId: bankTransactionsTable.toWalletId,
+        amount: sql<string>`coalesce(sum(${bankSandboxRequestsTable.amountMinor}), 0)::text`,
+      })
+      .from(bankSandboxRequestsTable)
+      .innerJoin(
+        bankTransactionsTable,
+        eq(bankSandboxRequestsTable.transactionId, bankTransactionsTable.id),
+      )
+      .where(
+        and(
+          eq(bankSandboxRequestsTable.type, "deposit"),
+          inArray(bankSandboxRequestsTable.status, [
+            "pending_review",
+            "pending_provider_setup",
+          ]),
+          inArray(bankTransactionsTable.toWalletId, walletIds),
+        ),
+      )
+      .groupBy(bankTransactionsTable.toWalletId),
+    db
+      .select({
+        walletId: bankTransactionsTable.fromWalletId,
+        amount: sql<string>`coalesce(sum(${bankSandboxRequestsTable.amountMinor}), 0)::text`,
+      })
+      .from(bankSandboxRequestsTable)
+      .innerJoin(
+        bankTransactionsTable,
+        eq(bankSandboxRequestsTable.transactionId, bankTransactionsTable.id),
+      )
+      .where(
+        and(
+          eq(bankSandboxRequestsTable.type, "withdrawal"),
+          inArray(bankSandboxRequestsTable.status, [
+            "pending_review",
+            "pending_provider_setup",
+          ]),
+          inArray(bankTransactionsTable.fromWalletId, walletIds),
+        ),
+      )
+      .groupBy(bankTransactionsTable.fromWalletId),
+    db
+      .select({
+        userId: bankRestrictionsTable.userId,
+        walletId: bankRestrictionsTable.walletId,
+        type: bankRestrictionsTable.type,
+      })
+      .from(bankRestrictionsTable)
+      .where(
+        and(
+          inArray(bankRestrictionsTable.userId, userIds),
+          eq(bankRestrictionsTable.status, "active"),
+          lte(bankRestrictionsTable.effectiveAt, now),
+          or(
+            isNull(bankRestrictionsTable.expiresAt),
+            gt(bankRestrictionsTable.expiresAt, now),
+          ),
+        ),
+      ),
+  ]);
+  const balanceByWallet = new Map(
+    balances.map((row) => [row.walletId, BigInt(row.amount)]),
+  );
+  const pendingByWallet = new Map(
+    pendingRows.map((row) => [row.walletId, BigInt(row.amount)]),
+  );
+  const reservedByWallet = new Map(
+    reservedRows.map((row) => [row.walletId, BigInt(row.amount)]),
+  );
+  const relevantRows = rows.filter((row) =>
+    (balanceByWallet.get(row.walletId) ?? 0n) !== 0n ||
+    (pendingByWallet.get(row.walletId) ?? 0n) !== 0n ||
+    (reservedByWallet.get(row.walletId) ?? 0n) !== 0n,
+  );
+  const rates = new Map<
+    string,
+    Awaited<ReturnType<typeof getExchangeRate>> | null
+  >();
+  await Promise.all(
+    [...new Set(relevantRows.map((row) => row.currency))].map(async (currency) => {
+      try {
+        rates.set(currency, await getExchangeRate(currency, "USD"));
+      } catch {
+        rates.set(currency, null);
+      }
+    }),
+  );
+
+  const items = relevantRows.map((row) => {
+    const balance = balanceByWallet.get(row.walletId) ?? 0n;
+    const pending = pendingByWallet.get(row.walletId) ?? 0n;
+    const reserved = reservedByWallet.get(row.walletId) ?? 0n;
+    const restrictionsForWallet = restrictions.filter(
+      (restriction) =>
+        restriction.userId === row.userId &&
+        (!restriction.walletId || restriction.walletId === row.walletId),
+    );
+    const quote = rates.get(row.currency) ?? null;
+    let targetAmount: string | null = null;
+    let blockReason: string | null = null;
+    if (row.accountStatus !== "active") {
+      blockReason = "The customer account is not active.";
+    } else if (row.walletStatus !== "active" || restrictionsForWallet.length) {
+      blockReason = "An account or wallet restriction must be resolved first.";
+    } else if (pending > 0n || reserved > 0n) {
+      blockReason = "Resolve pending deposits or withdrawals first.";
+    } else if (balance <= 0n) {
+      blockReason = "There is no positive balance to convert.";
+    } else if (!quote) {
+      blockReason = "A supported exchange-rate quote is unavailable.";
+    } else {
+      const converted = convertMinorAmount(balance, quote.rate, "USD");
+      if (converted <= 0n) {
+        blockReason = "The balance converts to less than USD 0.01.";
+      } else {
+        targetAmount = formatMinorAmount(converted, "USD");
+      }
+    }
+    return {
+      walletId: row.walletId,
+      userId: row.userId,
+      customerId: row.customerId,
+      memberName:
+        [row.firstName, row.lastName].filter(Boolean).join(" ") || "Globus member",
+      email: row.email,
+      currency: row.currency,
+      sourceAmount: formatMinorAmount(balance, row.currency),
+      pending: formatMinorAmount(pending, row.currency),
+      reserved: formatMinorAmount(reserved, row.currency),
+      targetAmount,
+      exchangeRate: quote?.rate ?? null,
+      rateProvider: quote?.provider ?? null,
+      rateUpdatedAt: quote?.checkedAt.toISOString() ?? null,
+      eligible: blockReason === null,
+      blockReason,
+    };
+  });
+  return {
+    items,
+    eligibleCount: items.filter((item) => item.eligible).length,
+    blockedCount: items.filter((item) => !item.eligible).length,
+  };
+}
+
+router.get(
+  "/bank/admin/wallet-currency-migration",
+  requireAdmin,
+  async (_req, res): Promise<void> => {
+    const preview = await legacyWalletCurrencyMigrationPreview();
+    res.json(GetAdminWalletCurrencyMigrationPreviewResponse.parse(preview));
+  },
+);
+
+router.post(
+  "/bank/admin/wallet-currency-migration",
+  requireAdmin,
+  async (req, res): Promise<void> => {
+    const parsed = ConvertAdminWalletCurrenciesToUsdBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+    const walletIds = parsed.data.conversions.map((conversion) => conversion.walletId);
+    if (new Set(walletIds).size !== walletIds.length) {
+      res.status(400).json({ error: "A wallet may appear only once in a conversion request." });
+      return;
+    }
+    const actorUserId = getAuth(req).userId;
+    if (!actorUserId) {
+      res.status(401).json({ error: "Sign in with an authorized administrator account." });
+      return;
+    }
+    const actor = await ensureBankUser(actorUserId);
+    const pinResult = await verifyTransactionPin(actor.id, parsed.data.transactionPin);
+    if (pinResult !== "valid") {
+      respondWithTransactionPinError(res, pinResult);
+      return;
+    }
+
+    const preview = await legacyWalletCurrencyMigrationPreview();
+    const expectedById = new Map(
+      preview.items.map((item) => [item.walletId, item]),
+    );
+    const conversions = parsed.data.conversions;
+    if (conversions.some((conversion) => {
+      const current = expectedById.get(conversion.walletId);
+      return !current ||
+        !current.eligible ||
+        current.sourceAmount !== conversion.sourceAmount ||
+        !current.exchangeRate ||
+        !conversionRatesMatch(current.exchangeRate, conversion.exchangeRate);
+    })) {
+      res.status(409).json({
+        error: "Wallet balances, restrictions, or rates changed. Refresh the preview and confirm again.",
+      });
+      return;
+    }
+
+    const quotes = new Map<string, Awaited<ReturnType<typeof getExchangeRate>>>();
+    try {
+      await Promise.all(
+        [...new Set(conversions.map((conversion) => expectedById.get(conversion.walletId)!.currency))]
+          .map(async (currency) => quotes.set(currency, await getExchangeRate(currency, "USD"))),
+      );
+    } catch {
+      res.status(503).json({ error: "An exchange rate is unavailable. No balances were changed." });
+      return;
+    }
+    if (conversions.some((conversion) => {
+      const source = expectedById.get(conversion.walletId)!;
+      return !conversionRatesMatch(
+        source.exchangeRate ?? "",
+        quotes.get(source.currency)?.rate ?? "",
+      );
+    })) {
+      res.status(409).json({
+        error: "The exchange rate changed. Refresh the preview and confirm again.",
+      });
+      return;
+    }
+
+    const sourceAmounts = new Map(
+      conversions.map((conversion) => [
+        conversion.walletId,
+        parseAmountToMinor(conversion.sourceAmount),
+      ]),
+    );
+    const userIds = [...new Set(
+      conversions.map((conversion) => expectedById.get(conversion.walletId)!.userId),
+    )];
+    const result = await db.transaction(async (tx) => {
+      const sourceWalletRows = await tx
+        .select()
+        .from(bankWalletsTable)
+        .where(inArray(bankWalletsTable.id, walletIds));
+      const usdWalletRows = await tx
+        .select()
+        .from(bankWalletsTable)
+        .where(
+          and(
+            inArray(bankWalletsTable.userId, userIds),
+            eq(bankWalletsTable.currency, "USD"),
+          ),
+        );
+      const usdWalletByUser = new Map(usdWalletRows.map((wallet) => [wallet.userId, wallet]));
+      if (sourceWalletRows.length !== walletIds.length || userIds.some((id) => !usdWalletByUser.has(id))) {
+        return { error: "A source wallet or USD wallet is no longer available." } as const;
+      }
+      const lockedWalletIds = [
+        ...new Set([
+          ...walletIds,
+          ...usdWalletRows.map((wallet) => wallet.id),
+        ]),
+      ];
+      const lockedWallets = await tx
+        .select()
+        .from(bankWalletsTable)
+        .where(inArray(bankWalletsTable.id, lockedWalletIds))
+        .orderBy(asc(bankWalletsTable.id))
+        .for("update");
+      const lockedById = new Map(lockedWallets.map((wallet) => [wallet.id, wallet]));
+      const users = await tx
+        .select({
+          id: bankUsersTable.id,
+          customerId: bankUsersTable.customerId,
+          accountStatus: bankUsersTable.accountStatus,
+        })
+        .from(bankUsersTable)
+        .where(inArray(bankUsersTable.id, userIds));
+      const usersById = new Map(users.map((user) => [user.id, user]));
+      const now = new Date();
+      const activeRestrictions = await tx
+        .select({
+          userId: bankRestrictionsTable.userId,
+          walletId: bankRestrictionsTable.walletId,
+        })
+        .from(bankRestrictionsTable)
+        .where(
+          and(
+            inArray(bankRestrictionsTable.userId, userIds),
+            eq(bankRestrictionsTable.status, "active"),
+            lte(bankRestrictionsTable.effectiveAt, now),
+            or(
+              isNull(bankRestrictionsTable.expiresAt),
+              gt(bankRestrictionsTable.expiresAt, now),
+            ),
+          ),
+        );
+      const existingKeys = await tx
+        .select({ idempotencyKey: bankTransactionsTable.idempotencyKey })
+        .from(bankTransactionsTable)
+        .where(inArray(
+          bankTransactionsTable.idempotencyKey,
+          walletIds.map((id) => `legacy-currency-to-usd:${id}`),
+        ));
+      if (existingKeys.length) {
+        return { error: "At least one wallet has already been converted." } as const;
+      }
+      const pendingDeposits = await tx
+        .select({
+          walletId: bankTransactionsTable.toWalletId,
+          amount: sql<string>`coalesce(sum(${bankSandboxRequestsTable.amountMinor}), 0)::text`,
+        })
+        .from(bankSandboxRequestsTable)
+        .innerJoin(
+          bankTransactionsTable,
+          eq(bankSandboxRequestsTable.transactionId, bankTransactionsTable.id),
+        )
+        .where(
+          and(
+            eq(bankSandboxRequestsTable.type, "deposit"),
+            inArray(bankSandboxRequestsTable.status, [
+              "pending_review",
+              "pending_provider_setup",
+            ]),
+            inArray(bankTransactionsTable.toWalletId, walletIds),
+          ),
+        )
+        .groupBy(bankTransactionsTable.toWalletId);
+      const pendingByWallet = new Map(
+        pendingDeposits.map((row) => [row.walletId, BigInt(row.amount)]),
+      );
+
+      const prepared: Array<{
+        source: (typeof sourceWalletRows)[number];
+        target: (typeof usdWalletRows)[number];
+        owner: (typeof users)[number];
+        sourceMinor: bigint;
+        targetMinor: bigint;
+        rate: Awaited<ReturnType<typeof getExchangeRate>>;
+      }> = [];
+      for (const conversion of conversions) {
+        const source = lockedById.get(conversion.walletId);
+        const expected = expectedById.get(conversion.walletId)!;
+        const targetSnapshot = usdWalletByUser.get(expected.userId);
+        const target = targetSnapshot ? lockedById.get(targetSnapshot.id) : undefined;
+        const owner = usersById.get(expected.userId);
+        if (!source || !target || !owner) {
+          return { error: "A source wallet, USD wallet, or customer record is missing." } as const;
+        }
+        const blockedByRestriction = activeRestrictions.some(
+          (restriction) =>
+            restriction.userId === owner.id &&
+            (!restriction.walletId ||
+              restriction.walletId === source.id ||
+              restriction.walletId === target.id),
+        );
+        if (
+          owner.accountStatus !== "active" ||
+          source.status !== "active" ||
+          target.status !== "active" ||
+          blockedByRestriction
+        ) {
+          return { error: "An account or wallet restriction must be resolved before conversion." } as const;
+        }
+        const balance = await balanceForWallet(tx, source.id);
+        const reserved = await reservedForWallet(tx, source.id);
+        const sourceMinor = sourceAmounts.get(source.id)!;
+        if (
+          source.currency !== expected.currency ||
+          source.currency === "USD" ||
+          balance !== sourceMinor ||
+          sourceMinor <= 0n ||
+          reserved > 0n ||
+          (pendingByWallet.get(source.id) ?? 0n) > 0n
+        ) {
+          return { error: "A wallet balance or pending operation changed. Refresh the preview." } as const;
+        }
+        const rate = quotes.get(source.currency)!;
+        const targetMinor = convertMinorAmount(sourceMinor, rate.rate, "USD");
+        if (targetMinor <= 0n) {
+          return { error: "A balance converts to less than USD 0.01 and requires manual review." } as const;
+        }
+        prepared.push({ source, target, owner, sourceMinor, targetMinor, rate });
+      }
+
+      const created: Array<{
+        walletId: string;
+        customerId: string | null;
+        sourceCurrency: string;
+        sourceAmount: string;
+        targetAmount: string;
+        exchangeRate: string;
+        rateProvider: "Frankfurter" | "Grey";
+        reference: string;
+      }> = [];
+      for (const item of prepared) {
+        const reference = createReference();
+        const description = `Legacy ${item.source.currency} balance converted to USD. Rate ${item.rate.rate} from ${item.rate.provider}, quoted ${item.rate.checkedAt.toISOString()}. Reason: ${parsed.data.reason.trim()}`;
+        const [transaction] = await tx
+          .insert(bankTransactionsTable)
+          .values({
+            reference,
+            idempotencyKey: `legacy-currency-to-usd:${item.source.id}`,
+            initiatedByUserId: actor.id,
+            fromUserId: item.owner.id,
+            toUserId: item.owner.id,
+            fromWalletId: item.source.id,
+            toWalletId: item.target.id,
+            type: "exchange_request",
+            status: "completed",
+            currency: item.source.currency,
+            amountMinor: item.sourceMinor,
+            feeMinor: 0n,
+            counterparty: "Currency conversion",
+            description,
+            adminReference: "Legacy wallet conversion to USD",
+            adminNotes: parsed.data.reason.trim(),
+            mode: "internal_ledger",
+          })
+          .returning();
+        await tx.insert(bankLedgerEntriesTable).values([
+          {
+            transactionId: transaction.id,
+            walletId: item.source.id,
+            accountCode: `wallet:${item.source.id}`,
+            currency: item.source.currency,
+            side: "debit",
+            amountMinor: item.sourceMinor,
+          },
+          {
+            transactionId: transaction.id,
+            accountCode: `internal:fx-clearing:${item.source.currency}`,
+            currency: item.source.currency,
+            side: "credit",
+            amountMinor: item.sourceMinor,
+          },
+          {
+            transactionId: transaction.id,
+            accountCode: "internal:fx-clearing:USD",
+            currency: "USD",
+            side: "debit",
+            amountMinor: item.targetMinor,
+          },
+          {
+            transactionId: transaction.id,
+            walletId: item.target.id,
+            accountCode: `wallet:${item.target.id}`,
+            currency: "USD",
+            side: "credit",
+            amountMinor: item.targetMinor,
+          },
+        ]);
+        await tx.insert(bankAuditLogsTable).values({
+          actorUserId: actor.id,
+          targetUserId: item.owner.id,
+          action: "convert_legacy_wallet_to_usd",
+          reason: description,
+        });
+        created.push({
+          walletId: item.source.id,
+          customerId: item.owner.customerId,
+          sourceCurrency: item.source.currency,
+          sourceAmount: formatMinorAmount(item.sourceMinor, item.source.currency),
+          targetAmount: formatMinorAmount(item.targetMinor, "USD"),
+          exchangeRate: item.rate.rate,
+          rateProvider: item.rate.provider,
+          reference,
+        });
+      }
+      return { conversions: created } as const;
+    });
+    if ("error" in result) {
+      res.status(409).json({ error: result.error });
+      return;
+    }
+    res.json(
+      ConvertAdminWalletCurrenciesToUsdResponse.parse({
+        convertedCount: result.conversions.length,
+        conversions: result.conversions,
+      }),
+    );
+  },
+);
 
 router.patch(
   "/bank/admin/wallets/:walletId",

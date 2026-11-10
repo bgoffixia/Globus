@@ -19,6 +19,7 @@ import {
   InternationalTransferPage,
   ProviderRequestPage,
   ProfilePage,
+  PrivateVaultPage,
   TransactionsPage,
   WalletsPage,
   WalletDetailsPage,
@@ -268,6 +269,7 @@ function ClerkRoutes() {
         <Route path="/customer-id"><Redirect to="/profile" /></Route>
         <Route path="/receive"><Redirect to="/profile" /></Route>
         <Route path="/profile"><ProtectedPage><ProfilePage /></ProtectedPage></Route>
+        <Route path="/private-vault"><ProtectedPage><PrivateVaultPage /></ProtectedPage></Route>
         <Route path="/settings"><Redirect to="/profile" /></Route>
         <Route path="/admin/users/:userId"><ProtectedAdminPage /></Route>
         <Route path="/admin/users"><ProtectedAdminPage /></Route>

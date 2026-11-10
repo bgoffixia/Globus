@@ -56,6 +56,7 @@ export const bankInternationalTransferRequestsTable = pgTable(
     recipientBank: text("recipient_bank").notNull(),
     routingCode: text("routing_code"),
     swiftBic: text("swift_bic"),
+    senderName: text("sender_name"),
     recipientAccountName: text("recipient_account_name").notNull(),
     recipientAccountLast4: text("recipient_account_last4").notNull(),
     recipientEmailEncrypted: text("recipient_email_encrypted"),

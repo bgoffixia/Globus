@@ -98,7 +98,8 @@ import { countries } from '@/lib/countries';
 import { destinationCurrencyForCountry } from '@/lib/destination-currency';
 import { TransferReceiptModal } from '@/components/transfer/transfer-receipt';
 import { PrivateVaultPanel } from '@/components/private-vault-panel';
-const currencies = ['USD', 'EUR', 'GBP', 'CAD', 'AUD'] as const;
+const currencies = ['USD', 'EUR', 'GBP', 'CAD'] as const;
+const historicalCurrencies = ['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD'] as const;
 type Currency = typeof currencies[number];
 type ReceiptConversion = {
   sourceAmount: string;
@@ -180,7 +181,7 @@ export function HomePage() {
           </div>
           <div className="mt-8 flex min-w-0 flex-wrap gap-x-5 gap-y-3 text-[10px] font-medium text-[#68798d] sm:mt-11 sm:gap-x-7 sm:text-[11px]">
             <span className="inline-flex items-center gap-2"><ShieldCheck size={15} className="text-[#478b8e]" /> Globus account activity clearly identified</span>
-            <span className="inline-flex items-center gap-2"><Globe2 size={15} className="text-[#478b8e]" /> Five supported currencies</span>
+            <span className="inline-flex items-center gap-2"><Globe2 size={15} className="text-[#478b8e]" /> Four supported wallet currencies</span>
           </div>
         </div>
         <div className="relative mx-auto w-full min-w-0 max-w-[560px]">
@@ -274,7 +275,10 @@ export function DashboardPage() {
   const selectedWallet = dash?.wallets.find(wallet => wallet.currency === selectedCurrency)
     ?? dash?.wallets.find(wallet => wallet.currency === dash.referenceCurrency)
     ?? dash?.wallets[0];
-  const actionCurrency = (selectedWallet?.currency ?? dash?.referenceCurrency ?? 'USD') as Currency;
+  const selectedActionCurrency = selectedWallet?.currency ?? dash?.referenceCurrency ?? 'USD';
+  const actionCurrency = currencies.includes(selectedActionCurrency as Currency)
+    ? selectedActionCurrency as Currency
+    : 'USD';
   const recentTransactions = dash?.recentTransactions.filter(
     transaction => !selectedWallet || transaction.currency === selectedWallet.currency,
   ) ?? [];
@@ -282,7 +286,7 @@ export function DashboardPage() {
   if (query.isError) return <Failure title="Your overview isn’t available" retry={() => query.refetch()} />;
   return (
     <>
-      <PageHeading eyebrow="Your dashboard" title={`Good to see you${dash?.profile.firstName ? `, ${dash.profile.firstName}` : ''}.`} subtitle="Wallets, quick actions, and recent activity." />
+      <PageHeading eyebrow="Your dashboard" title={`Good to see you${dash?.profile.firstName ? `, ${dash.profile.firstName}` : ''}.`} subtitle="Wallets, quick actions, and recent activity." titleClassName="text-[14px] leading-5" />
 
       {dash?.verificationNotice && (
         <div role="status" className="mt-3 flex min-w-0 items-start gap-3 rounded-xl border border-[#eadbb0] bg-[#fbf7eb] px-3.5 py-3 text-[#725e34] sm:px-4">
@@ -516,7 +520,7 @@ export function TransactionsPage() {
       <PageHeading eyebrow="Account activity" title="Activity" subtitle="Search transactions recorded in your Globus account." />
       <div className="mt-7 flex flex-col gap-3 sm:flex-row">
         <label className="relative flex-1"><Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#8695a5]" /><input aria-label="Search transactions" data-testid="input-transaction-search" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search description, reference or recipient" className="h-12 w-full rounded-xl border border-[#dfe6ec] bg-white pl-11 pr-4 text-[12px] outline-none transition focus:border-[#6aa6aa]" /></label>
-        <select aria-label="Filter by currency" data-testid="select-transaction-currency" value={currency} onChange={event => setCurrency(event.target.value)} className="h-12 rounded-xl border border-[#dfe6ec] bg-white px-4 text-[12px] text-[#435872] outline-none focus:border-[#6aa6aa]"><option value="">All currencies</option>{currencies.map(item => <option key={item} value={item}>{item} · {currencyNames[item]}</option>)}</select>
+        <select aria-label="Filter by currency" data-testid="select-transaction-currency" value={currency} onChange={event => setCurrency(event.target.value)} className="h-12 rounded-xl border border-[#dfe6ec] bg-white px-4 text-[12px] text-[#435872] outline-none focus:border-[#6aa6aa]"><option value="">All currencies</option>{historicalCurrencies.map(item => <option key={item} value={item}>{item} · {currencyNames[item]}</option>)}</select>
       </div>
       <section className="mt-5 overflow-hidden rounded-[20px] border border-[#e1e8ee] bg-white">
         <div className="flex items-center justify-between border-b border-[#edf0f3] px-5 py-4 sm:px-7"><p className="text-[13px] font-bold text-[#28405c]">Transaction history</p><span className="text-[10px] font-semibold text-[#8291a1]">{query.data?.length ?? 0} entries</span></div>
@@ -639,7 +643,10 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
   const [copiedWalletReference, setCopiedWalletReference] = useState(false);
   const [result, setResult] = useState<{ reference: string; message: string; status: string } | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
-  const selectedWallet = walletsQuery.data?.find(wallet => wallet.currency === currency);
+  const activeWallets = (walletsQuery.data ?? []).filter(wallet =>
+    currencies.includes(wallet.currency as Currency),
+  );
+  const selectedWallet = activeWallets.find(wallet => wallet.currency === currency);
   const available = Number(selectedWallet?.available ?? 0);
   const currentPaymentMethod = type === 'deposit' ? depositMethod : withdrawalMethod;
   const destinationsForMethod = (savedPaymentMethodsQuery.data ?? []).filter(
@@ -790,9 +797,9 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
               <div><h2 className="text-[12px] font-bold text-[#2c425c]">Choose a wallet</h2><p className="mt-0.5 text-[10px] text-[#8391a0]">Select the wallet for this deposit request.</p></div>
               <WalletCards size={18} className="shrink-0 text-[#4d858a]" />
             </div>
-            {walletsQuery.data?.length ? (
+            {activeWallets.length ? (
               <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                {walletsQuery.data.map(wallet => (
+                {activeWallets.map(wallet => (
                   <button key={wallet.id} type="button" onClick={() => { setCurrency(wallet.currency as Currency); setDepositWalletSelected(true); setResult(null); setErrorMessage(''); }} className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-[#e1e8ed] bg-[#fbfcfd] px-3.5 py-3 text-left transition hover:border-[#71a8aa] hover:bg-[#f3f9f9]" data-testid={`button-select-deposit-wallet-${wallet.currency.toLowerCase()}`}>
                     <span className="flex min-w-0 items-center gap-2.5"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[#eaf4f4] text-[10px] font-extrabold text-[#397b80]">{wallet.currency}</span><span className="min-w-0"><b className="block truncate text-[10px] text-[#344b64]">{currencyNames[wallet.currency] ?? wallet.currency}</b><small className="mt-0.5 block text-[9px] text-[#8492a1]">{humanize(wallet.status)}</small></span></span>
                     <span className="shrink-0 text-[10px] font-bold text-[#344b64]">{formatMoney(Number(wallet.available), wallet.currency)}</span>
@@ -894,7 +901,7 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
       ) : !withdrawalWalletSelected || !selectedWallet ? (
         <section className="mt-4 rounded-2xl border border-[#e1e8ee] bg-white p-4 sm:p-5" data-testid="withdrawal-wallet-picker">
           <div className="mb-3 flex items-center justify-between gap-3"><div><h2 className="text-[12px] font-bold text-[#2c425c]">Select a source wallet</h2><p className="mt-0.5 text-[10px] text-[#8391a0]">Choose the wallet for your withdrawal request.</p></div><WalletCards size={18} className="shrink-0 text-[#4d858a]" /></div>
-          {walletsQuery.data?.length ? <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{walletsQuery.data.map(wallet => (
+          {activeWallets.length ? <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{activeWallets.map(wallet => (
             <button key={wallet.id} type="button" onClick={() => { setCurrency(wallet.currency as Currency); setWithdrawalWalletSelected(true); setResult(null); setErrorMessage(''); }} className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-[#e1e8ed] bg-[#fbfcfd] px-3.5 py-3 text-left transition hover:border-[#71a8aa] hover:bg-[#f3f9f9]" data-testid={`button-select-withdrawal-wallet-${wallet.currency.toLowerCase()}`}>
               <span className="flex min-w-0 items-center gap-2.5"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[#eaf4f4] text-[10px] font-extrabold text-[#397b80]">{wallet.currency}</span><span className="min-w-0"><b className="block truncate text-[10px] text-[#344b64]">{currencyNames[wallet.currency] ?? wallet.currency}</b><small className="mt-0.5 block text-[9px] text-[#8492a1]">{humanize(wallet.status)}</small></span></span>
               <span className="shrink-0 text-[10px] font-bold text-[#344b64]">{formatMoney(Number(wallet.available), wallet.currency)}</span>
@@ -990,7 +997,7 @@ export function ProfilePage() {
   const [identityError, setIdentityError] = useState('');
   const [identityUploadPending, setIdentityUploadPending] = useState(false);
   const [identityConsent, setIdentityConsent] = useState(false);
-  const [profileTab, setProfileTab] = useState<'overview' | 'details' | 'security' | 'verification' | 'vault'>('overview');
+  const [profileTab, setProfileTab] = useState<'overview' | 'details' | 'security' | 'verification'>('overview');
   const profile = query.data;
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -1195,7 +1202,6 @@ export function ProfilePage() {
     { id: 'details', label: 'Personal details' },
     { id: 'security', label: 'Security' },
     { id: 'verification', label: 'Verification' },
-    { id: 'vault', label: 'Private vault' },
   ] as const;
   return (
     <div className="flex h-full min-h-0 flex-col gap-2.5" data-testid="customer-profile-page">
@@ -1205,6 +1211,7 @@ export function ProfilePage() {
           <h1 className="mt-0.5 text-[19px] font-bold tracking-tight text-[#17314f] sm:text-[22px]">Profile</h1>
           <p className="text-[9px] text-[#7c8b9a]">Manage your personal details and account security.</p>
         </div>
+        <Link href="/private-vault" data-testid="link-profile-private-vault" className="inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border border-[#d6e8e9] bg-white px-3 text-[9px] font-bold text-[#377d83] hover:bg-[#eff8f8]"><LockKeyhole size={13} />Private Vault</Link>
         <div className="flex shrink-0 items-center gap-2 rounded-xl border border-[#e1e8ee] bg-white px-3 py-2">
           <div>
             <p className="text-[7px] font-bold uppercase tracking-[.13em] text-[#718296]">Customer ID</p>
@@ -1356,8 +1363,21 @@ export function ProfilePage() {
           </>
         )}
         </section>}
-        {profileTab === 'vault' && <PrivateVaultPanel />}
       </div>
+    </div>
+  );
+}
+
+export function PrivateVaultPage() {
+  return (
+    <div className="mx-auto min-w-0 max-w-[1040px] space-y-4" data-testid="private-vault-page">
+      <PageHeading
+        eyebrow="Private account controls"
+        title="Private Vault"
+        subtitle="Review and manage your future wallet settings behind a separate passcode."
+        titleClassName="text-[24px] leading-tight sm:text-[28px]"
+      />
+      <PrivateVaultPanel />
     </div>
   );
 }
@@ -2124,8 +2144,8 @@ export function DisclosurePage({ path }: { path: string }) {
   );
 }
 
-function PageHeading({ eyebrow, title, subtitle }: { eyebrow: string; title: string; subtitle: string }) {
-  return <div className="min-w-0 max-w-full"><p className="text-[10px] font-bold uppercase tracking-[.17em] text-[#548d92]">{eyebrow}</p><h1 className="bank-display mt-2 max-w-full break-words text-[clamp(2rem,4vw,3rem)] font-semibold leading-[1.08] text-[#1a334f]">{title}</h1><p className="mt-2 max-w-[760px] break-words text-[12px] leading-5 text-[#76879a]">{subtitle}</p></div>;
+function PageHeading({ eyebrow, title, subtitle, titleClassName }: { eyebrow: string; title: string; subtitle: string; titleClassName?: string }) {
+  return <div className="min-w-0 max-w-full"><p className="text-[10px] font-bold uppercase tracking-[.17em] text-[#548d92]">{eyebrow}</p><h1 className={`bank-display mt-2 max-w-full break-words font-semibold text-[#1a334f] ${titleClassName ?? 'text-[clamp(2rem,4vw,3rem)] leading-[1.08]'}`}>{title}</h1><p className="mt-2 max-w-[760px] break-words text-[12px] leading-5 text-[#76879a]">{subtitle}</p></div>;
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {

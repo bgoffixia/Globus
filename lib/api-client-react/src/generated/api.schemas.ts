@@ -33,7 +33,6 @@ export const ActiveCurrencyCode = {
   EUR: 'EUR',
   GBP: 'GBP',
   CAD: 'CAD',
-  AUD: 'AUD',
 } as const;
 
 /**
@@ -118,7 +117,7 @@ export interface InternationalTransferRequestInput {
      */
   recipientAccountName: string;
   /** @maxLength 254 */
-  recipientEmail: string;
+  recipientEmail?: string;
   /**
      * @minLength 4
      * @maxLength 34
@@ -175,6 +174,10 @@ export interface InternationalTransferRequest {
   routingCode: string | null;
   /** @nullable */
   swiftBic: string | null;
+  /** @nullable */
+  senderName: string | null;
+  /** @pattern ^[A-F0-9]{4}$ */
+  sourceWalletLast4: string;
   recipientAccountName: string;
   /** @nullable */
   recipientEmail: string | null;
@@ -512,6 +515,11 @@ export interface BankNotification {
   /** @nullable */
   readAt: string | null;
   createdAt: string;
+}
+
+export interface BankNotificationClearResult {
+  /** @minimum 0 */
+  deletedCount: number;
 }
 
 export interface BankPushConfig {
@@ -1444,6 +1452,100 @@ export interface AdminAccountPage {
   total: number;
   page: number;
   pageSize: number;
+}
+
+/**
+ * @nullable
+ */
+export type AdminWalletCurrencyMigrationItemRateProvider = typeof AdminWalletCurrencyMigrationItemRateProvider[keyof typeof AdminWalletCurrencyMigrationItemRateProvider] | null;
+
+
+export const AdminWalletCurrencyMigrationItemRateProvider = {
+  Frankfurter: 'Frankfurter',
+  Grey: 'Grey',
+} as const;
+
+export interface AdminWalletCurrencyMigrationItem {
+  walletId: string;
+  userId: string;
+  /** @nullable */
+  customerId: string | null;
+  memberName: string;
+  email: string;
+  currency: CurrencyCode;
+  sourceAmount: string;
+  pending: string;
+  reserved: string;
+  /** @nullable */
+  targetAmount: string | null;
+  /** @nullable */
+  exchangeRate: string | null;
+  /** @nullable */
+  rateProvider: AdminWalletCurrencyMigrationItemRateProvider;
+  /** @nullable */
+  rateUpdatedAt: string | null;
+  eligible: boolean;
+  /** @nullable */
+  blockReason: string | null;
+}
+
+export interface AdminWalletCurrencyMigrationPreview {
+  items: AdminWalletCurrencyMigrationItem[];
+  /** @minimum 0 */
+  eligibleCount: number;
+  /** @minimum 0 */
+  blockedCount: number;
+}
+
+export type AdminWalletCurrencyMigrationInputConversionsItem = {
+  walletId: string;
+  /** @pattern ^[0-9]+(\.[0-9]{1,2})?$ */
+  sourceAmount: string;
+  /** @pattern ^[0-9]+(\.[0-9]{1,10})?$ */
+  exchangeRate: string;
+  rateUpdatedAt: string;
+};
+
+export interface AdminWalletCurrencyMigrationInput {
+  /**
+     * @minItems 1
+     * @maxItems 500
+     */
+  conversions: AdminWalletCurrencyMigrationInputConversionsItem[];
+  /**
+     * @minLength 5
+     * @maxLength 500
+     */
+  reason: string;
+  /** @pattern ^[0-9]{6}$ */
+  transactionPin: string;
+  confirmed: true;
+}
+
+export type AdminWalletCurrencyMigrationResultItemRateProvider = typeof AdminWalletCurrencyMigrationResultItemRateProvider[keyof typeof AdminWalletCurrencyMigrationResultItemRateProvider];
+
+
+export const AdminWalletCurrencyMigrationResultItemRateProvider = {
+  Frankfurter: 'Frankfurter',
+  Grey: 'Grey',
+} as const;
+
+export interface AdminWalletCurrencyMigrationResultItem {
+  walletId: string;
+  /** @nullable */
+  customerId: string | null;
+  sourceCurrency: CurrencyCode;
+  sourceAmount: string;
+  targetAmount: string;
+  exchangeRate: string;
+  rateProvider: AdminWalletCurrencyMigrationResultItemRateProvider;
+  reference: string;
+}
+
+export interface AdminWalletCurrencyMigrationResult {
+  /** @minimum 0 */
+  convertedCount: number;
+  conversions: AdminWalletCurrencyMigrationResultItem[];
 }
 
 export type AdminWalletStatusInputStatus = typeof AdminWalletStatusInputStatus[keyof typeof AdminWalletStatusInputStatus];

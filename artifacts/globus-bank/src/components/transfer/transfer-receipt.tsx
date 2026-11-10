@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ArrowLeftRight, BadgeCheck, CalendarDays, Clock3, Download, Hash, ImageDown, Landmark, Printer, ShieldCheck, X } from 'lucide-react';
+import { ArrowLeftRight, BadgeCheck, CalendarDays, Clock3, Download, Hash, ImageDown, Printer, ShieldCheck, X } from 'lucide-react';
 import type { BankTransaction, InternationalTransferRequest } from '@workspace/api-client-react';
 import { destinationCurrencyDigits } from '@/lib/destination-currency';
 import { downloadTransactionReceiptPdf, saveTransactionReceiptPng } from '@/lib/transaction-receipt-pdf';
@@ -11,7 +11,21 @@ export type ReceiptConversion = {
   destinationAmount: string;
   destinationCurrency: string;
 };
-export type ReceiptTransaction = BankTransaction & { conversion?: ReceiptConversion; recipient?: { name: string; bank: string; country: string; route: string; account: string; transferType: string } };
+export type ReceiptTransaction = BankTransaction & {
+  conversion?: ReceiptConversion;
+  sender?: { name: string; walletLast4: string };
+  recipient?: {
+    name: string;
+    bank: string;
+    country: string;
+    route: string;
+    account: string;
+    transferType: string;
+    routingCode: string | null;
+    swiftBic: string | null;
+    remark: string;
+  };
+};
 
 export function digitsFor(currency: string): number {
   try { return destinationCurrencyDigits(currency); } catch { return 2; }
@@ -70,7 +84,21 @@ export function receiptFromRequest(r: InternationalTransferRequest): ReceiptTran
     mode: 'internal_ledger',
     createdAt: r.createdAt,
     conversion: { sourceAmount: r.sourceAmount, sourceCurrency: r.sourceCurrency, exchangeRate: r.exchangeRate, destinationAmount: r.destinationAmount, destinationCurrency: r.destinationCurrency },
-    recipient: { name: r.recipientAccountName, bank: r.recipientBank, country: r.destinationCountry, route: typeLabel, account: `****${r.recipientAccountLast4}`, transferType: r.transferType },
+    sender: {
+      name: r.senderName || 'Globus member',
+      walletLast4: r.sourceWalletLast4,
+    },
+    recipient: {
+      name: r.recipientAccountName,
+      bank: r.recipientBank,
+      country: r.destinationCountry,
+      route: typeLabel,
+      account: `••••••${r.recipientAccountLast4}`,
+      transferType: r.transferType,
+      routingCode: r.routingCode,
+      swiftBic: r.swiftBic,
+      remark: r.remark,
+    },
   } as ReceiptTransaction;
 }
 
@@ -135,10 +163,14 @@ export function TransferReceiptModal({ transaction, onClose, title }: { transact
     exchangeRate: conversion ? `1 ${conversion.sourceCurrency} = ${formatRate(conversion.exchangeRate)} ${conversion.destinationCurrency}` : undefined,
     convertedAmount: conversion ? formatAmount(conversion.destinationAmount, conversion.destinationCurrency) : undefined,
     recipient: transaction.recipient?.name,
+    senderName: transaction.sender?.name,
+    senderWallet: transaction.sender ? `••••••${transaction.sender.walletLast4}` : undefined,
     recipientBank: transaction.recipient?.bank,
     recipientCountry: transaction.recipient?.country,
     recipientAccount: transaction.recipient?.account,
-    route: transaction.recipient?.route,
+    routingNumber: transaction.recipient?.transferType === 'local_routing' ? transaction.recipient.routingCode ?? undefined : undefined,
+    swiftBic: transaction.recipient?.transferType === 'international_wire' ? transaction.recipient.swiftBic ?? undefined : undefined,
+    remark: transaction.recipient?.remark || transaction.description || heading,
     fee: formatAmount(transaction.fee, transaction.currency),
   });
 
@@ -168,10 +200,10 @@ export function TransferReceiptModal({ transaction, onClose, title }: { transact
     }
   };
 
-  const Row = ({ label, value, testId, strong }: { label: string; value: string; testId?: string; strong?: boolean }) => (
+  const Row = ({ label, value, testId, strong, mono }: { label: string; value: string; testId?: string; strong?: boolean; mono?: boolean }) => (
     <div className="flex items-start justify-between gap-4 border-b border-[#e9edf0] py-2 last:border-0">
       <dt className="shrink-0 text-[10px] font-medium text-[#8291a0]">{label}</dt>
-      <dd data-testid={testId} className={`min-w-0 break-words text-right text-[10px] ${strong ? 'font-bold text-[#246d69]' : 'font-semibold text-[#344b63]'}`}>{value}</dd>
+      <dd data-testid={testId} className={`min-w-0 break-words text-right text-[10px] ${mono ? 'font-mono' : ''} ${strong ? 'font-bold text-[#246d69]' : 'font-semibold text-[#344b63]'}`}>{value}</dd>
     </div>
   );
 
@@ -210,25 +242,27 @@ export function TransferReceiptModal({ transaction, onClose, title }: { transact
               </div>
             </header>
             <div className="px-5 pb-3 sm:px-6">
-              {transaction.recipient && <section className="rounded-xl border border-[#e4e9eb] bg-white p-3">
-                <p className="text-[8px] font-bold uppercase tracking-[.16em] text-[#8291a0]">Transfer to</p>
-                <div className="mt-2 flex items-center gap-2.5">
-                  <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#eef5f5] text-[#397b7b]"><Landmark size={15} /></div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-[11px] font-bold text-[#263f58]">{transaction.recipient.name}</p>
-                    <p className="mt-0.5 truncate text-[9px] text-[#7b8b9b]">{transaction.recipient.bank} · {transaction.recipient.country}</p>
-                  </div>
-                  <p className="shrink-0 font-mono text-[9px] font-semibold text-[#526a80]">{transaction.recipient.account}</p>
-                </div>
-              </section>}
-              <div className="mt-3 flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[.14em] text-[#718599]"><Hash size={11} className="text-[#528c89]" />Transaction details</div>
-              <dl className="mt-1">
+              <section className="rounded-xl border border-[#e4e9eb] bg-white px-3">
+              <div className="flex items-center gap-1.5 border-b border-[#e9edf0] py-2 text-[8px] font-bold uppercase tracking-[.14em] text-[#718599]"><Hash size={11} className="text-[#528c89]" />Transaction details</div>
+              <dl>
                 <Row label="Reference" value={transaction.reference} testId="text-receipt-reference" strong />
-                <Row label="Date and time" value={formatDateTime(transaction.createdAt)} />
-                <Row label={transaction.recipient ? 'Transfer route' : 'Counterparty'} value={transaction.recipient?.route || transaction.counterparty || 'Globus account'} />
-                <Row label="Fee" value={formatAmount(transaction.fee, transaction.currency)} />
-                <Row label="Description" value={transaction.description || heading} />
+                {transaction.sender && <>
+                  <Row label="Sender" value={transaction.sender.name} />
+                  <Row label="Source wallet" value={`••••••${transaction.sender.walletLast4}`} mono />
+                </>}
+                {transaction.recipient ? <>
+                  <Row label="Destination bank" value={transaction.recipient.bank} />
+                  <Row label="Country" value={transaction.recipient.country} />
+                  <Row label="Recipient account / IBAN" value={transaction.recipient.account} mono />
+                  <Row label="Recipient name" value={transaction.recipient.name} />
+                  {transaction.recipient.transferType === 'local_routing' && transaction.recipient.routingCode && <Row label="Routing number" value={transaction.recipient.routingCode} mono />}
+                  {transaction.recipient.transferType === 'international_wire' && transaction.recipient.swiftBic && <Row label="SWIFT / BIC" value={transaction.recipient.swiftBic} mono />}
+                  <Row label="Remark / description" value={transaction.recipient.remark || transaction.description || heading} />
+                </> : <Row label="Counterparty" value={transaction.counterparty || 'Globus account'} />}
+                <Row label="Date / time" value={formatDateTime(transaction.createdAt)} />
+                {!transaction.recipient && <Row label="Fee" value={formatAmount(transaction.fee, transaction.currency)} />}
               </dl>
+              </section>
               <div className="mt-3 flex items-center gap-2 border-t border-dashed border-[#dfe6e9] pt-3">
                 <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#edf5f1] text-[#4a826d]"><ShieldCheck size={13} /></div>
                 <p className="text-[9px] leading-4 text-[#7d8c98]">Recorded by Globus Bank <span className="mx-1 text-[#c1cbd0]">·</span> Keep this receipt for your records</p>

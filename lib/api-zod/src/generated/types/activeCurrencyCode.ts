@@ -14,5 +14,4 @@ export const ActiveCurrencyCode = {
   EUR: 'EUR',
   GBP: 'GBP',
   CAD: 'CAD',
-  AUD: 'AUD',
 } as const;
