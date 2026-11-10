@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { LockKeyhole, ShieldCheck } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -24,7 +24,6 @@ export function PrivateVaultPanel() {
   const status = useGetBankVaultStatus({ query: { queryKey: getGetBankVaultStatusQueryKey(), retry: false, refetchInterval: 60_000 } });
   const initialize = useInitializeBankVaultPasscode();
   const unlock = useUnlockBankVault();
-  const requestSubscription = useRequestBankVaultSubscription();
   const [sessionToken, setSessionToken] = useState('');
   const [expiresAt, setExpiresAt] = useState('');
   const [passcode, setPasscode] = useState('');
@@ -35,6 +34,10 @@ export function PrivateVaultPanel() {
   const [bannerTheme, setBannerTheme] = useState<BankVaultEmailPreferences['bannerTheme']>('navy');
   const [bannerHeadline, setBannerHeadline] = useState('A Globus transfer notice');
   const [includeSupportLink, setIncludeSupportLink] = useState(false);
+  const lastSubscriptionStatus = useRef<string | undefined>(undefined);
+  const requestSubscription = useRequestBankVaultSubscription({
+    request: sessionToken ? { headers: { 'X-Globus-Vault-Session': sessionToken } } : undefined,
+  });
   useEffect(() => () => {
     void queryClient.cancelQueries({ queryKey: getListBankVaultWalletControlsQueryKey() });
     void queryClient.cancelQueries({ queryKey: getGetBankVaultEmailPreferencesQueryKey() });
@@ -45,7 +48,7 @@ export function PrivateVaultPanel() {
   const controls = useListBankVaultWalletControls({
     query: {
       queryKey: getListBankVaultWalletControlsQueryKey(),
-      enabled: !!sessionToken,
+      enabled: !!sessionToken && !!status.data?.subscriptionActive,
       retry: false,
     },
     request: sessionToken ? { headers: { 'X-Globus-Vault-Session': sessionToken } } : undefined,
@@ -53,7 +56,7 @@ export function PrivateVaultPanel() {
   const emailPreferences = useGetBankVaultEmailPreferences({
     query: {
       queryKey: getGetBankVaultEmailPreferencesQueryKey(),
-      enabled: !!sessionToken,
+      enabled: !!sessionToken && !!status.data?.subscriptionActive,
       retry: false,
     },
     request: sessionToken ? { headers: { 'X-Globus-Vault-Session': sessionToken } } : undefined,
@@ -93,6 +96,21 @@ export function PrivateVaultPanel() {
     }, remaining);
     return () => window.clearTimeout(timeout);
   }, [expiresAt, queryClient, sessionToken]);
+  useEffect(() => {
+    const currentStatus = status.data?.subscriptionStatus;
+    if (!currentStatus) return;
+    const previousStatus = lastSubscriptionStatus.current;
+    lastSubscriptionStatus.current = currentStatus;
+    if (previousStatus && previousStatus !== currentStatus && currentStatus !== 'pending' && sessionToken) {
+      void queryClient.cancelQueries({ queryKey: getListBankVaultWalletControlsQueryKey() });
+      void queryClient.cancelQueries({ queryKey: getGetBankVaultEmailPreferencesQueryKey() });
+      queryClient.removeQueries({ queryKey: getListBankVaultWalletControlsQueryKey() });
+      queryClient.removeQueries({ queryKey: getGetBankVaultEmailPreferencesQueryKey() });
+      setSessionToken('');
+      setExpiresAt('');
+      setMessage('Vault access changed. Enter your passcode again to continue.');
+    }
+  }, [queryClient, sessionToken, status.data?.subscriptionStatus]);
 
   const submitPasscode = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -103,7 +121,7 @@ export function PrivateVaultPanel() {
         await initialize.mutateAsync({ data: { passcode } });
         await queryClient.invalidateQueries({ queryKey: getGetBankVaultStatusQueryKey() });
         setPasscode('');
-        setMessage('Private vault set up. Unlock it to manage wallet controls.');
+        setMessage('Vault passcode set. Unlock to request access or use approved controls.');
       } else {
         const result = await unlock.mutateAsync({ data: { passcode } });
         setSessionToken(result.sessionToken);
@@ -201,29 +219,7 @@ export function PrivateVaultPanel() {
       </div>
       {status.isLoading ? <div className="mt-4 h-10 animate-pulse rounded-lg bg-[#f0f4f6]" /> :
         status.isError ? <div className="mt-4 flex items-center justify-between rounded-lg border border-[#eadfda] bg-[#fff8f6] px-3 py-2 text-[10px] text-[#a24940]"><span>Vault status is unavailable.</span><button type="button" data-testid="button-retry-vault-status" onClick={() => void status.refetch()} className="font-bold underline">Try again</button></div> :
-          !status.data?.subscriptionActive ? (
-            <div className="mt-4 rounded-xl border border-[#e8e1cc] bg-[#fbf8ef] p-4" data-testid="vault-subscription-access">
-              <p className="text-[10px] font-bold uppercase tracking-[.12em] text-[#8a784c]">Vault access · {status.data?.subscriptionStatus || 'inactive'}</p>
-              <p className="mt-2 max-w-2xl text-[10px] leading-5 text-[#786e55]">
-                {status.data?.subscriptionStatus === 'pending'
-                  ? 'Your access request is waiting for administrator review.'
-                  : status.data?.subscriptionStatus === 'rejected'
-                    ? 'Your last request was declined. You may submit a new request for review.'
-                    : status.data?.subscriptionStatus === 'expired'
-                      ? 'Vault access has expired. Request administrator approval to restore access.'
-                      : 'Request administrator approval to use the Private Vault. This app does not collect subscription payments.'}
-              </p>
-              <button
-                type="button"
-                disabled={status.data?.subscriptionStatus === 'pending' || requestSubscription.isPending}
-                onClick={() => void submitSubscriptionRequest()}
-                data-testid="button-vault-subscribe"
-                className="mt-3 h-9 rounded-lg bg-[#173858] px-4 text-[10px] font-bold text-white disabled:opacity-50"
-              >
-                {requestSubscription.isPending ? 'Sending request…' : status.data?.subscriptionStatus === 'pending' ? 'Request pending' : 'Request subscription'}
-              </button>
-            </div>
-          ) : !status.data?.configured ? (
+          !status.data?.configured ? (
             <form onSubmit={submitPasscode} className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-end" data-testid="form-vault-setup">
               <label className="min-w-0 flex-1 text-[9px] font-bold text-[#5c7085]">Create a four-digit vault passcode
                 <input required pattern="[0-9]{4}" inputMode="numeric" autoComplete="new-password" maxLength={4} value={passcode} onChange={event => setPasscode(event.target.value.replace(/\D/g, '').slice(0, 4))} className={`${fieldClass} mt-1`} data-testid="input-vault-passcode" />
@@ -237,6 +233,38 @@ export function PrivateVaultPanel() {
               </label>
               <button type="submit" disabled={loading || passcode.length !== 4} data-testid="button-vault-unlock" className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[#173858] px-4 text-[10px] font-bold text-white disabled:opacity-50"><LockKeyhole size={13} />{unlock.isPending ? 'Unlocking…' : 'Unlock vault'}</button>
             </form>
+          ) : !status.data?.subscriptionActive ? (
+            <div className="mt-4 rounded-xl border border-[#e8e1cc] bg-[#fbf8ef] p-4" data-testid="vault-subscription-access">
+              <p className="text-[10px] font-bold uppercase tracking-[.12em] text-[#8a784c]">Vault access · {status.data?.subscriptionStatus || 'inactive'}</p>
+              <p className="mt-2 max-w-2xl text-[10px] leading-5 text-[#786e55]">
+                {status.data?.subscriptionStatus === 'pending'
+                  ? 'Your access request is waiting for administrator review.'
+                  : status.data?.subscriptionStatus === 'rejected'
+                    ? 'Your last request was declined. You may submit a new request for review.'
+                    : status.data?.subscriptionStatus === 'expired'
+                      ? 'Vault access has expired. Request administrator approval to restore access.'
+                      : 'Passcode confirmed. Request administrator approval to use the Private Vault. This app does not collect subscription payments.'}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={status.data?.subscriptionStatus === 'pending' || requestSubscription.isPending}
+                  onClick={() => void submitSubscriptionRequest()}
+                  data-testid="button-vault-subscribe"
+                  className="h-9 rounded-lg bg-[#173858] px-4 text-[10px] font-bold text-white disabled:opacity-50"
+                >
+                  {requestSubscription.isPending ? 'Sending request…' : status.data?.subscriptionStatus === 'pending' ? 'Request pending' : 'Request subscription'}
+                </button>
+                <button
+                  type="button"
+                  onClick={lockVault}
+                  data-testid="button-vault-lock-before-access"
+                  className="h-9 rounded-lg border border-[#d4e1e4] bg-white px-4 text-[10px] font-bold text-[#466577]"
+                >
+                  Lock vault
+                </button>
+              </div>
+            </div>
           ) : (
             <div className="mt-4">
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#d9e8e9] bg-[#f3f8f8] px-3 py-2">

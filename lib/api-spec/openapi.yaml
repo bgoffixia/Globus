@@ -99,15 +99,23 @@ paths:
     post:
       operationId: requestBankVaultSubscription
       tags: [bank]
-      summary: Request manual administrator approval for private vault access
+      summary: Request private vault access after passcode confirmation
+      parameters:
+        - name: X-Globus-Vault-Session
+          in: header
+          required: true
+          schema: { type: string, minLength: 32, maxLength: 128 }
       responses:
         "200":
           description: Current private vault subscription request state
           content:
             application/json:
               schema: { $ref: "#/components/schemas/BankVaultStatus" }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
   /bank/vault/email-preferences:
     get:
       operationId: getBankVaultEmailPreferences

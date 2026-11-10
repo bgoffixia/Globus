@@ -35,6 +35,7 @@ import {
   GetBankVaultEmailPreferencesResponse,
   InitializeBankVaultPasscodeBody,
   InitializeBankVaultPasscodeResponse,
+  RequestBankVaultSubscriptionHeader,
   RequestBankVaultSubscriptionResponse,
   ListBankNotificationsResponse,
   ListBankVaultWalletControlsHeader,
@@ -128,7 +129,7 @@ import {
 } from "../lib/password-reset";
 import {
   initializeVaultPasscode,
-  hasActiveVaultSubscription,
+  isVaultPasscodeSessionValid,
   isVaultSessionActive,
   resolveFutureTransferStatus,
   unlockVault,
@@ -2420,7 +2421,19 @@ router.post("/bank/vault/subscription", vaultSubscriptionRequestLimiter, async (
     res.status(401).json({ error: "Sign in to request private vault access." });
     return;
   }
+  const sessionToken = req.get("X-Globus-Vault-Session") ?? "";
+  const parsedHeader = RequestBankVaultSubscriptionHeader.safeParse({
+    "X-Globus-Vault-Session": sessionToken,
+  });
+  if (!parsedHeader.success) {
+    res.status(400).json({ error: parsedHeader.error.message });
+    return;
+  }
   const user = await getOrCreateBankUser(authUserId);
+  if (!(await isVaultPasscodeSessionValid(user.id, sessionToken))) {
+    res.status(403).json({ error: "Enter your private vault passcode before requesting access." });
+    return;
+  }
   const result = await db.transaction(async (tx) => {
     const [lockedUser] = await tx
       .select()
@@ -2492,10 +2505,6 @@ router.post(
       return;
     }
     const user = await getOrCreateBankUser(authUserId);
-    if (!hasActiveVaultSubscription(user)) {
-      res.status(403).json({ error: "Request administrator approval for private vault access first." });
-      return;
-    }
     const initialized = await initializeVaultPasscode(
       user.id,
       parsed.data.passcode,
@@ -2534,16 +2543,10 @@ router.post(
       return;
     }
     const user = await getOrCreateBankUser(authUserId);
-    if (!hasActiveVaultSubscription(user)) {
-      res.status(403).json({ error: "Private vault access is not active for this account." });
-      return;
-    }
     const result = await unlockVault(user.id, parsed.data.passcode);
     if (result.result !== "valid") {
       if (result.result === "not_configured") {
         res.status(409).json({ error: "Set up a private vault passcode first." });
-      } else if (result.result === "subscription_required") {
-        res.status(403).json({ error: "Private vault access is not active for this account." });
       } else if (result.result === "locked") {
         res.status(429).json({ error: "Too many incorrect passcodes. Try again in 15 minutes." });
       } else if (result.result === "invalid") {

@@ -90,8 +90,17 @@ export const InitializeBankVaultPasscodeResponse = zod.object({
 
 
 /**
- * @summary Request manual administrator approval for private vault access
+ * @summary Request private vault access after passcode confirmation
  */
+export const requestBankVaultSubscriptionHeaderXGlobusVaultSessionMin = 32;
+export const requestBankVaultSubscriptionHeaderXGlobusVaultSessionMax = 128;
+
+
+
+export const RequestBankVaultSubscriptionHeader = zod.object({
+  "X-Globus-Vault-Session": zod.string().min(requestBankVaultSubscriptionHeaderXGlobusVaultSessionMin).max(requestBankVaultSubscriptionHeaderXGlobusVaultSessionMax)
+})
+
 export const RequestBankVaultSubscriptionResponse = zod.object({
   "configured": zod.boolean(),
   "subscriptionStatus": zod.enum(['inactive', 'pending', 'active', 'rejected', 'expired']),

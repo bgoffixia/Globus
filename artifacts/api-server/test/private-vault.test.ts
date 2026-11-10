@@ -10,6 +10,7 @@ import {
 import {
   initializeVaultPasscode,
   hasActiveVaultSubscription,
+  isVaultPasscodeSessionValid,
   isVaultSessionActive,
   resolveFutureTransferStatus,
   unlockVault,
@@ -69,9 +70,6 @@ test("private data encryption is authenticated and purpose-specific", () => {
 
 test("private vault passcodes unlock a short session and revoke it when changed", async () => {
   await db.insert(bankUsersTable).values({ id: userId, email });
-  assert.equal(await initializeVaultPasscode(userId, "1357"), false);
-  assert.equal((await unlockVault(userId, "1357")).result, "subscription_required");
-  await db.update(bankUsersTable).set({ vaultSubscriptionStatus: "active" }).where(eq(bankUsersTable.id, userId));
   assert.equal(await initializeVaultPasscode(userId, "1357"), true);
   assert.equal(await initializeVaultPasscode(userId, "2468"), false);
 
@@ -86,6 +84,9 @@ test("private vault passcodes unlock a short session and revoke it when changed"
   const opened = await unlockVault(userId, "1357");
   assert.equal(opened.result, "valid");
   if (opened.result !== "valid") return;
+  assert.equal(await isVaultPasscodeSessionValid(userId, opened.sessionToken), true);
+  assert.equal(await isVaultSessionActive(userId, opened.sessionToken), false);
+  await db.update(bankUsersTable).set({ vaultSubscriptionStatus: "active" }).where(eq(bankUsersTable.id, userId));
   assert.equal(await isVaultSessionActive(userId, opened.sessionToken), true);
 
   assert.equal(

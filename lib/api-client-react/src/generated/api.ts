@@ -559,7 +559,7 @@ export const getRequestBankVaultSubscriptionUrl = () => {
 }
 
 /**
- * @summary Request manual administrator approval for private vault access
+ * @summary Request private vault access after passcode confirmation
  */
 export const requestBankVaultSubscription = async ( options?: Parameters<typeof customFetch>[1]): Promise<BankVaultStatus> => {
 
@@ -578,7 +578,7 @@ export const requestBankVaultSubscription = async ( options?: Parameters<typeof 
 
 export const getRequestBankVaultSubscriptionMutationKey = () => ['requestBankVaultSubscription'] as const;
 
-export const getRequestBankVaultSubscriptionMutationOptions = <TError = ErrorType<UnauthorizedResponse | ConflictResponse>,
+export const getRequestBankVaultSubscriptionMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse | TooManyRequestsResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestBankVaultSubscription>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof requestBankVaultSubscription>>, TError,void, TContext> => {
 
@@ -607,13 +607,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type RequestBankVaultSubscriptionMutationResult = NonNullable<Awaited<ReturnType<typeof requestBankVaultSubscription>>>
 
-    export type RequestBankVaultSubscriptionMutationError = ErrorType<UnauthorizedResponse | ConflictResponse>
+    export type RequestBankVaultSubscriptionMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse | TooManyRequestsResponse>
 
 
     /**
- * @summary Request manual administrator approval for private vault access
+ * @summary Request private vault access after passcode confirmation
  */
-export const useRequestBankVaultSubscription = <TError = ErrorType<UnauthorizedResponse | ConflictResponse>,
+export const useRequestBankVaultSubscription = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse | TooManyRequestsResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestBankVaultSubscription>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof requestBankVaultSubscription>>,

@@ -20,7 +20,6 @@ export type VaultPasscodeResult =
   | "valid"
   | "invalid"
   | "not_configured"
-  | "subscription_required"
   | "locked"
   | "missing_user";
 
@@ -113,17 +112,11 @@ export async function initializeVaultPasscode(
       .select({
         id: bankUsersTable.id,
         configured: bankUsersTable.vaultPasscodeHash,
-        subscriptionStatus: bankUsersTable.vaultSubscriptionStatus,
-        subscriptionExpiresAt: bankUsersTable.vaultSubscriptionExpiresAt,
       })
       .from(bankUsersTable)
       .where(eq(bankUsersTable.id, userId))
       .for("update");
     if (!user) return false;
-    if (!hasActiveVaultSubscription({
-      vaultSubscriptionStatus: user.subscriptionStatus,
-      vaultSubscriptionExpiresAt: user.subscriptionExpiresAt,
-    })) return false;
     if (user.configured) return false;
     await tx
       .update(bankUsersTable)
@@ -151,17 +144,11 @@ export async function unlockVault(
         hash: bankUsersTable.vaultPasscodeHash,
         attempts: bankUsersTable.vaultPasscodeFailedAttempts,
         lockedUntil: bankUsersTable.vaultPasscodeLockedUntil,
-        subscriptionStatus: bankUsersTable.vaultSubscriptionStatus,
-        subscriptionExpiresAt: bankUsersTable.vaultSubscriptionExpiresAt,
       })
       .from(bankUsersTable)
       .where(eq(bankUsersTable.id, userId))
       .for("update");
     if (!user) return { result: "missing_user" as const };
-    if (!hasActiveVaultSubscription({
-      vaultSubscriptionStatus: user.subscriptionStatus,
-      vaultSubscriptionExpiresAt: user.subscriptionExpiresAt,
-    })) return { result: "subscription_required" as const };
     if (!user.hash) return { result: "not_configured" as const };
     const now = new Date();
     if (user.lockedUntil && user.lockedUntil > now) {
@@ -207,19 +194,10 @@ export async function unlockVault(
   });
 }
 
-export async function isVaultSessionActive(
+async function hasValidVaultPasscodeSession(
   userId: string,
   sessionToken: string,
 ): Promise<boolean> {
-  const [user] = await db
-    .select({
-      vaultSubscriptionStatus: bankUsersTable.vaultSubscriptionStatus,
-      vaultSubscriptionExpiresAt: bankUsersTable.vaultSubscriptionExpiresAt,
-    })
-    .from(bankUsersTable)
-    .where(eq(bankUsersTable.id, userId))
-    .limit(1);
-  if (!user || !hasActiveVaultSubscription(user)) return false;
   const tokenHash = createHash("sha256").update(sessionToken).digest("hex");
   const [session] = await db
     .select({ id: bankVaultSessionsTable.id })
@@ -233,6 +211,29 @@ export async function isVaultSessionActive(
     )
     .limit(1);
   return !!session;
+}
+
+export async function isVaultPasscodeSessionValid(
+  userId: string,
+  sessionToken: string,
+): Promise<boolean> {
+  return hasValidVaultPasscodeSession(userId, sessionToken);
+}
+
+export async function isVaultSessionActive(
+  userId: string,
+  sessionToken: string,
+): Promise<boolean> {
+  const [user] = await db
+    .select({
+      vaultSubscriptionStatus: bankUsersTable.vaultSubscriptionStatus,
+      vaultSubscriptionExpiresAt: bankUsersTable.vaultSubscriptionExpiresAt,
+    })
+    .from(bankUsersTable)
+    .where(eq(bankUsersTable.id, userId))
+    .limit(1);
+  if (!user || !hasActiveVaultSubscription(user)) return false;
+  return hasValidVaultPasscodeSession(userId, sessionToken);
 }
 
 export async function updateVaultPasscode(
