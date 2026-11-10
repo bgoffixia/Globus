@@ -1513,7 +1513,7 @@ router.post(
       );
     } catch {
       res.status(503).json({
-        error: "Recipient notification storage is temporarily unavailable. The transfer was not submitted.",
+        error: "The optional recipient email could not be secured. The transfer was not submitted; remove the email or try again.",
       });
       return;
     }

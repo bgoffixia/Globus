@@ -4,15 +4,15 @@ import {
   createHash,
   randomBytes,
 } from "node:crypto";
+import { decodeAes256Key } from "./encryption-key";
 
 const KEY_ENV_NAME = "BANK_DETAILS_ENCRYPTION_KEY";
 
 function encryptionKey(): Buffer {
   const encodedKey = process.env[KEY_ENV_NAME];
   if (!encodedKey) throw new Error("Private data encryption is not configured.");
-  const key = Buffer.from(encodedKey, "base64url");
-  if (key.length !== 32 || key.toString("base64url") !== encodedKey) {
-    key.fill(0);
+  const key = decodeAes256Key(encodedKey);
+  if (!key) {
     throw new Error("Private data encryption is not configured.");
   }
   return key;

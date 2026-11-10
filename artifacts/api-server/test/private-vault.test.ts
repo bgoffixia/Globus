@@ -47,8 +47,25 @@ after(async () => {
 test("private data encryption is authenticated and purpose-specific", () => {
   const previousKey = process.env[encryptionKeyEnv];
   const key = randomBytes(32);
-  process.env[encryptionKeyEnv] = key.toString("base64url");
   try {
+    const encodedKeys = [
+      key.toString("base64url"),
+      key.toString("base64"),
+      key.toString("base64").replace(/=+$/, ""),
+      key.toString("hex"),
+    ];
+    for (const encodedKey of encodedKeys) {
+      process.env[encryptionKeyEnv] = encodedKey;
+      const roundTrip = encryptPrivateData(
+        "encoding-check",
+        "recipient-email",
+      );
+      assert.equal(
+        decryptPrivateData(roundTrip, "recipient-email"),
+        "encoding-check",
+      );
+    }
+    process.env[encryptionKeyEnv] = key.toString("base64url");
     const encrypted = encryptPrivateData("recipient@example.test", "recipient-email");
     assert.notEqual(encrypted, "recipient@example.test");
     assert.equal(

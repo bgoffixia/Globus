@@ -1,4 +1,5 @@
 import { createCipheriv, randomBytes } from "node:crypto";
+import { decodeAes256Key } from "./encryption-key";
 
 const KEY_ENV_NAME = "BANK_DETAILS_ENCRYPTION_KEY";
 const BANK_ACCOUNT_AAD = Buffer.from("globus-bank-saved-account:v1", "utf8");
@@ -22,11 +23,10 @@ export function encryptBankAccountNumber(value: string): string {
   const encodedKey = process.env[KEY_ENV_NAME];
   if (!encodedKey) throw new BankDetailsEncryptionUnavailableError();
 
-  const key = Buffer.from(encodedKey, "base64url");
-  if (key.length !== 32 || key.toString("base64url") !== encodedKey) {
-    key.fill(0);
+  const key = decodeAes256Key(encodedKey);
+  if (!key) {
     throw new BankDetailsEncryptionUnavailableError(
-      `${KEY_ENV_NAME} must contain a 32-byte base64url key.`,
+      `${KEY_ENV_NAME} must encode exactly 32 bytes as base64url, base64, or hex.`,
     );
   }
 
