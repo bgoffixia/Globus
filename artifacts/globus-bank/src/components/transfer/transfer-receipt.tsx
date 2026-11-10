@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { BadgeCheck, Clock3, Download, ImageDown, Printer, X } from 'lucide-react';
+import { ArrowLeftRight, BadgeCheck, CalendarDays, Clock3, Download, Hash, ImageDown, Landmark, Printer, ShieldCheck, X } from 'lucide-react';
 import type { BankTransaction, InternationalTransferRequest } from '@workspace/api-client-react';
 import { destinationCurrencyDigits } from '@/lib/destination-currency';
 import { downloadTransactionReceiptPdf, saveTransactionReceiptPng } from '@/lib/transaction-receipt-pdf';
@@ -85,6 +85,7 @@ export function TransferReceiptModal({ transaction, onClose, title }: { transact
   onCloseRef.current = onClose;
   const conversion = parseReceiptConversion(transaction);
   const completed = transaction.status === 'completed';
+  const pending = transaction.status === 'pending';
   const isTransfer = transaction.type === 'external_transfer';
   const heading = title ?? (isTransfer ? 'Routed transfer' : humanizeStatus(transaction.type));
 
@@ -134,7 +135,11 @@ export function TransferReceiptModal({ transaction, onClose, title }: { transact
     exchangeRate: conversion ? `1 ${conversion.sourceCurrency} = ${formatRate(conversion.exchangeRate)} ${conversion.destinationCurrency}` : undefined,
     convertedAmount: conversion ? formatAmount(conversion.destinationAmount, conversion.destinationCurrency) : undefined,
     recipient: transaction.recipient?.name,
+    recipientBank: transaction.recipient?.bank,
+    recipientCountry: transaction.recipient?.country,
+    recipientAccount: transaction.recipient?.account,
     route: transaction.recipient?.route,
+    fee: formatAmount(transaction.fee, transaction.currency),
   });
 
   const downloadPdf = async () => {
@@ -164,59 +169,79 @@ export function TransferReceiptModal({ transaction, onClose, title }: { transact
   };
 
   const Row = ({ label, value, testId, strong }: { label: string; value: string; testId?: string; strong?: boolean }) => (
-    <div className="flex justify-between gap-4 py-2"><dt className="shrink-0 text-[#8492a1]">{label}</dt><dd data-testid={testId} className={`min-w-0 break-words text-right ${strong ? 'text-[13px] font-bold text-[#245b62]' : 'font-semibold text-[#3b5169]'}`}>{value}</dd></div>
+    <div className="flex items-start justify-between gap-4 border-b border-[#e9edf0] py-2 last:border-0">
+      <dt className="shrink-0 text-[10px] font-medium text-[#8291a0]">{label}</dt>
+      <dd data-testid={testId} className={`min-w-0 break-words text-right text-[10px] ${strong ? 'font-bold text-[#246d69]' : 'font-semibold text-[#344b63]'}`}>{value}</dd>
+    </div>
   );
 
   return (
-    <div className="receipt-backdrop fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-[#10243c]/60 p-2 backdrop-blur-sm sm:p-3" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <section role="dialog" aria-modal="true" aria-labelledby="receipt-title" data-testid="dialog-transfer-receipt" className="receipt-dialog relative flex w-full max-w-[440px] flex-col overflow-hidden rounded-[22px] bg-[#fcfbf8] shadow-[0_30px_80px_rgba(10,30,55,.35)]">
+    <div className="receipt-backdrop fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-[#dce5eb]/85 p-2 backdrop-blur-sm sm:p-3" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <section role="dialog" aria-modal="true" aria-labelledby="receipt-title" data-testid="dialog-transfer-receipt" className="receipt-dialog relative flex w-full max-w-[460px] flex-col overflow-hidden rounded-[20px] border border-[#d9e2e7] bg-[#fffefa] shadow-[0_22px_65px_rgba(14,40,61,.22)]">
         <div data-testid="receipt-document-frame" className="receipt-document-frame w-full shrink-0" style={{ height: `${receiptFit.height}px` }}>
-          <article ref={printRef} className="receipt-print w-full" style={{ transform: `scale(${receiptFit.scale})`, transformOrigin: 'top center' }}>
-            <header className="relative overflow-hidden bg-[#132f51] px-6 pb-6 pt-5 text-white">
-              <div className="absolute -right-12 -top-16 h-44 w-44 rounded-full border border-white/10" />
-              <div className="absolute -right-4 -top-8 h-28 w-28 rounded-full border border-white/10" />
-              <div className="relative flex items-center justify-between">
-                <img src={`${import.meta.env.BASE_URL}globus-wordmark-transparent.png`} alt="Globus Bank" className="h-auto w-[104px] brightness-0 invert" />
-                <button ref={closeRef} type="button" aria-label="Close receipt" data-testid="button-close-receipt" onClick={onClose} className="receipt-screen-only grid h-9 w-9 place-items-center rounded-lg text-[#c9d7e2] hover:bg-white/10"><X size={17} /></button>
+          <article ref={printRef} className="receipt-print w-full bg-[#fffefa] text-[#203a54]" style={{ transform: `scale(${receiptFit.scale})`, transformOrigin: 'top center' }}>
+            <header className="px-5 pb-4 pt-4 sm:px-6">
+              <div className="flex items-center justify-between border-b border-[#e8ecee] pb-3">
+                <img src={`${import.meta.env.BASE_URL}globus-wordmark-transparent.png`} alt="Globus Bank" className="h-auto w-[104px]" />
+                <button ref={closeRef} type="button" aria-label="Close receipt" data-testid="button-close-receipt" onClick={onClose} className="receipt-screen-only grid h-8 w-8 place-items-center rounded-full border border-[#e1e8eb] text-[#607589] transition hover:bg-[#f1f6f7]"><X size={15} /></button>
               </div>
-              <p className="relative mt-5 text-[10px] font-bold uppercase tracking-[.18em] text-[#a8d3d6]">Globus transaction receipt</p>
-              <h2 id="receipt-title" className="bank-display relative mt-1 text-[20px] font-semibold">{heading}</h2>
-              <p data-testid="text-receipt-amount" className="bank-display relative mt-3 text-[32px] font-semibold tracking-[-.04em]">{formatAmount(transaction.amount, transaction.currency)}</p>
-              <span data-testid="text-receipt-status" className={`relative mt-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold ${completed ? 'bg-[#2c6b5a] text-[#d9f2e6]' : 'bg-[#6b5a2c] text-[#f6e8c4]'}`}>
-                {completed ? <BadgeCheck size={13} /> : <Clock3 size={13} />}
-                {completed ? 'Recorded in Globus' : `${humanizeStatus(transaction.status)} · awaiting administrator review`}
-              </span>
-            </header>
-            <div className="px-6 pb-2 pt-4">
-              {conversion && (
-                <div className="mb-3 rounded-xl border border-[#dce8ea] bg-[#f1f7f7] p-4">
-                  <p className="text-[9px] font-bold uppercase tracking-[.14em] text-[#4f878c]">{completed ? 'Converted total' : 'Converted total (if approved)'}</p>
-                  <p data-testid="text-receipt-converted-total" className="bank-display mt-1 text-[22px] font-semibold text-[#1d3a56]">{formatAmount(conversion.destinationAmount, conversion.destinationCurrency)}</p>
-                  <p data-testid="text-receipt-exchange-rate" className="mt-1 font-mono text-[10px] text-[#5d7488]">1 {conversion.sourceCurrency} = {formatRate(conversion.exchangeRate)} {conversion.destinationCurrency}</p>
+              <div className="mt-3 flex items-end justify-between gap-3">
+                <div>
+                  <p className="text-[9px] font-bold uppercase tracking-[.18em] text-[#478783]">Globus Bank · transaction record</p>
+                  <h2 id="receipt-title" className="bank-display mt-1 text-[19px] font-bold tracking-[-.045em] text-[#183450]">Payment receipt</h2>
+                  <p className="mt-0.5 text-[10px] text-[#7d8d9b]">{heading}</p>
                 </div>
-              )}
-              <dl className="divide-y divide-dashed divide-[#e2e8ec] text-[11px]">
-                <div className="flex justify-between gap-4 py-2"><dt className="text-[#8492a1]">Reference</dt><dd data-testid="text-receipt-reference" className="break-all text-right font-mono font-semibold text-[#3b5169]">{transaction.reference}</dd></div>
-                {conversion && <Row label="Source amount" value={formatAmount(conversion.sourceAmount, conversion.sourceCurrency)} testId="text-receipt-source-amount" />}
-                {transaction.recipient && <>
-                  <Row label="Recipient" value={transaction.recipient.name} />
-                  <Row label="Bank" value={`${transaction.recipient.bank} · ${transaction.recipient.account}`} />
-                  <Row label="Destination" value={transaction.recipient.country} />
-                  <Row label="Route" value={transaction.recipient.route} />
-                </>}
-                {!transaction.recipient && <Row label="Counterparty" value={transaction.counterparty || 'Globus account'} />}
+                <span data-testid="text-receipt-status" className={`mb-0.5 inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-bold ${completed ? 'border-[#d5e7dc] bg-[#eff7f2] text-[#47755f]' : pending ? 'border-[#eadfbf] bg-[#fbf7eb] text-[#8b7440]' : 'border-[#f1d8d5] bg-[#fbefed] text-[#9c4d46]'}`}>
+                  {completed ? <BadgeCheck size={11} /> : <Clock3 size={11} />}
+                  {completed ? 'RECORDED' : pending ? 'PENDING REVIEW' : humanizeStatus(transaction.status).toUpperCase()}
+                </span>
+              </div>
+              <div className="relative mt-3 overflow-hidden rounded-[15px] bg-[#173858] p-4 text-white">
+                <div className="absolute -right-8 -top-12 h-32 w-32 rounded-full border border-white/[.09]" />
+                <div className="absolute -right-3 -top-7 h-20 w-20 rounded-full border border-[#d6bb70]/30" />
+                <p className="relative text-[9px] font-bold uppercase tracking-[.16em] text-[#a9d6d3]">Transaction amount</p>
+                <p data-testid="text-receipt-amount" className="bank-display relative mt-1 text-[25px] font-bold tracking-[-.04em]">{formatAmount(transaction.amount, transaction.currency)}</p>
+                {conversion && <div className="relative mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-2 border-t border-white/15 pt-3">
+                  <div className="min-w-0"><p className="text-[8px] font-bold uppercase tracking-[.12em] text-[#a9c0d1]">Source amount</p><p data-testid="text-receipt-source-amount" className="mt-0.5 truncate text-[11px] font-semibold">{formatAmount(conversion.sourceAmount, conversion.sourceCurrency)}</p></div>
+                  <ArrowLeftRight size={13} className="text-[#d4bc76]" />
+                  <div className="min-w-0 text-right"><p className="text-[8px] font-bold uppercase tracking-[.12em] text-[#a9c0d1]">{completed ? 'Converted total' : 'Expected converted'}</p><p data-testid="text-receipt-converted-total" className="mt-0.5 truncate text-[11px] font-semibold">{formatAmount(conversion.destinationAmount, conversion.destinationCurrency)}</p></div>
+                </div>}
+                {conversion && <p data-testid="text-receipt-exchange-rate" className="relative mt-2 text-[9px] text-[#c2d2dd]">Rate: 1 {conversion.sourceCurrency} = {formatRate(conversion.exchangeRate)} {conversion.destinationCurrency}</p>}
+              </div>
+            </header>
+            <div className="px-5 pb-3 sm:px-6">
+              {transaction.recipient && <section className="rounded-xl border border-[#e4e9eb] bg-white p-3">
+                <p className="text-[8px] font-bold uppercase tracking-[.16em] text-[#8291a0]">Transfer to</p>
+                <div className="mt-2 flex items-center gap-2.5">
+                  <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#eef5f5] text-[#397b7b]"><Landmark size={15} /></div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[11px] font-bold text-[#263f58]">{transaction.recipient.name}</p>
+                    <p className="mt-0.5 truncate text-[9px] text-[#7b8b9b]">{transaction.recipient.bank} · {transaction.recipient.country}</p>
+                  </div>
+                  <p className="shrink-0 font-mono text-[9px] font-semibold text-[#526a80]">{transaction.recipient.account}</p>
+                </div>
+              </section>}
+              <div className="mt-3 flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[.14em] text-[#718599]"><Hash size={11} className="text-[#528c89]" />Transaction details</div>
+              <dl className="mt-1">
+                <Row label="Reference" value={transaction.reference} testId="text-receipt-reference" strong />
+                <Row label="Date and time" value={formatDateTime(transaction.createdAt)} />
+                <Row label={transaction.recipient ? 'Transfer route' : 'Counterparty'} value={transaction.recipient?.route || transaction.counterparty || 'Globus account'} />
+                <Row label="Fee" value={formatAmount(transaction.fee, transaction.currency)} />
                 <Row label="Description" value={transaction.description || heading} />
-                <Row label="Recorded" value={formatDateTime(transaction.createdAt)} />
-                <Row label="Status" value={humanizeStatus(transaction.status)} />
               </dl>
+              <div className="mt-3 flex items-center gap-2 border-t border-dashed border-[#dfe6e9] pt-3">
+                <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#edf5f1] text-[#4a826d]"><ShieldCheck size={13} /></div>
+                <p className="text-[9px] leading-4 text-[#7d8c98]">Recorded by Globus Bank <span className="mx-1 text-[#c1cbd0]">·</span> Keep this receipt for your records</p>
+                <CalendarDays size={12} className="ml-auto shrink-0 text-[#8da0ab]" />
+              </div>
             </div>
           </article>
         </div>
-        <div ref={actionsRef} className="receipt-actions shrink-0 border-t border-[#ecefef] px-3 py-2.5 sm:px-5">
+        <div ref={actionsRef} className="receipt-actions shrink-0 border-t border-[#e7ecee] bg-[#fafbf9] px-3 py-2.5 sm:px-5">
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <button type="button" data-testid="button-save-receipt-png" aria-label="Save receipt PNG to device or gallery" disabled={exporting !== null || !completed} onClick={downloadPng} className="inline-flex items-center gap-1.5 rounded-lg border border-[#dfe7eb] bg-white px-2.5 py-2 text-[9px] font-bold text-[#4a667e] hover:bg-[#f5f8f9] disabled:cursor-not-allowed disabled:opacity-50"><ImageDown size={13} />{exporting === 'png' ? 'Preparing image…' : 'Save PNG'}</button>
-            <button type="button" data-testid="button-download-receipt-pdf" disabled={exporting !== null || !completed} onClick={downloadPdf} className="inline-flex items-center gap-1.5 rounded-lg border border-[#dfe7eb] bg-white px-2.5 py-2 text-[9px] font-bold text-[#4a667e] hover:bg-[#f5f8f9] disabled:cursor-not-allowed disabled:opacity-50"><Download size={13} />{exporting === 'pdf' ? 'Preparing PDF…' : 'Download PDF'}</button>
-            <button type="button" onClick={() => window.print()} className="inline-flex items-center gap-1.5 rounded-lg bg-[#142f51] px-3 py-2 text-[9px] font-bold text-white hover:bg-[#1b4269]"><Printer size={13} /> Print</button>
+            <button type="button" data-testid="button-save-receipt-png" aria-label="Save receipt PNG to device or gallery" disabled={exporting !== null || !completed} onClick={downloadPng} className="inline-flex items-center gap-1.5 rounded-lg border border-[#dbe4e8] bg-white px-2.5 py-2 text-[9px] font-bold text-[#456179] hover:bg-[#f4f8f9] disabled:cursor-not-allowed disabled:opacity-50"><ImageDown size={13} />{exporting === 'png' ? 'Preparing image…' : 'Save PNG'}</button>
+            <button type="button" data-testid="button-download-receipt-pdf" disabled={exporting !== null || !completed} onClick={downloadPdf} className="inline-flex items-center gap-1.5 rounded-lg border border-[#dbe4e8] bg-white px-2.5 py-2 text-[9px] font-bold text-[#456179] hover:bg-[#f4f8f9] disabled:cursor-not-allowed disabled:opacity-50"><Download size={13} />{exporting === 'pdf' ? 'Preparing PDF…' : 'Download PDF'}</button>
+            <button type="button" onClick={() => window.print()} className="inline-flex items-center gap-1.5 rounded-lg bg-[#173858] px-3 py-2 text-[9px] font-bold text-white hover:bg-[#21496c]"><Printer size={13} /> Print</button>
           </div>
           {downloadError && <p role="alert" data-testid="status-receipt-download-error" className="mt-1 text-right text-[9px] text-[#a24940]">{downloadError}</p>}
           <p className="mt-1 text-right text-[8px] text-[#8794a2]">On supported phones, choose “Save Image” to add the PNG to your gallery.</p>

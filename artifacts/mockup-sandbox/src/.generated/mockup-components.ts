@@ -6,5 +6,7 @@ export const modules: ModuleMap = {
   "./components/mockups/globus-auth/BankGradeSignIn.tsx": () => import("../components/mockups/globus-auth/BankGradeSignIn.tsx"),
   "./components/mockups/globus-auth/BankGradeSignUp.tsx": () => import("../components/mockups/globus-auth/BankGradeSignUp.tsx"),
   "./components/mockups/globus-auth/CurrentSignIn.tsx": () => import("../components/mockups/globus-auth/CurrentSignIn.tsx"),
-  "./components/mockups/globus-auth/CurrentSignUp.tsx": () => import("../components/mockups/globus-auth/CurrentSignUp.tsx")
+  "./components/mockups/globus-auth/CurrentSignUp.tsx": () => import("../components/mockups/globus-auth/CurrentSignUp.tsx"),
+  "./components/mockups/globus-receipt/BankPaymentReceipt.tsx": () => import("../components/mockups/globus-receipt/BankPaymentReceipt.tsx"),
+  "./components/mockups/globus-receipt/Current.tsx": () => import("../components/mockups/globus-receipt/Current.tsx")
 };

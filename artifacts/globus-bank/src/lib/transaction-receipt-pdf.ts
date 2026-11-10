@@ -10,7 +10,11 @@ export interface TransactionReceiptPdfData {
   exchangeRate?: string;
   convertedAmount?: string;
   recipient?: string;
+  recipientBank?: string;
+  recipientCountry?: string;
+  recipientAccount?: string;
   route?: string;
+  fee?: string;
 }
 
 const PAGE_WIDTH = 1240;
@@ -47,6 +51,28 @@ function wrapText(context: CanvasRenderingContext2D, text: string, maxWidth: num
 
   if (line) lines.push(line);
   return lines;
+}
+
+function drawRoundedRect(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+) {
+  const r = Math.min(radius, width / 2, height / 2);
+  context.beginPath();
+  context.moveTo(x + r, y);
+  context.lineTo(x + width - r, y);
+  context.quadraticCurveTo(x + width, y, x + width, y + r);
+  context.lineTo(x + width, y + height - r);
+  context.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+  context.lineTo(x + r, y + height);
+  context.quadraticCurveTo(x, y + height, x, y + height - r);
+  context.lineTo(x, y + r);
+  context.quadraticCurveTo(x, y, x + r, y);
+  context.closePath();
 }
 
 function concatBytes(chunks: Uint8Array[]) {
@@ -110,76 +136,176 @@ function createPdfFromJpeg(imageBytes: Uint8Array) {
 }
 
 function drawReceipt(context: CanvasRenderingContext2D, logo: HTMLImageElement, receipt: TransactionReceiptPdfData) {
-  context.fillStyle = '#ffffff';
+  const left = PAGE_MARGIN;
+  const right = PAGE_WIDTH - PAGE_MARGIN;
+  const contentWidth = right - left;
+  context.fillStyle = '#f3f6f7';
   context.fillRect(0, 0, PAGE_WIDTH, PAGE_HEIGHT);
 
-  const logoHeight = 72;
-  const logoWidth = Math.min(430, logo.naturalWidth / logo.naturalHeight * logoHeight);
-  context.drawImage(logo, PAGE_MARGIN, 72, logoWidth, logoHeight);
+  drawRoundedRect(context, left - 22, 52, contentWidth + 44, PAGE_HEIGHT - 104, 26);
+  context.fillStyle = '#fffefa';
+  context.fill();
+  context.strokeStyle = '#dce5e8';
+  context.lineWidth = 2;
+  context.stroke();
 
-  context.fillStyle = '#518c91';
-  context.font = '700 21px Arial, sans-serif';
-  context.fillText('INTERNAL LEDGER RECEIPT', PAGE_MARGIN, 210);
+  const logoHeight = 66;
+  const logoWidth = Math.min(370, logo.naturalWidth / logo.naturalHeight * logoHeight);
+  context.drawImage(logo, left, 88, logoWidth, logoHeight);
 
-  context.fillStyle = '#203851';
-  context.font = '700 48px Arial, sans-serif';
-  context.fillText('Transaction receipt', PAGE_MARGIN, 265);
+  const completed = receipt.status.toLowerCase() === 'completed';
+  const statusText = completed ? 'RECORDED' : receipt.status.toUpperCase();
+  context.font = '700 18px Arial, sans-serif';
+  const statusWidth = context.measureText(statusText).width + 34;
+  drawRoundedRect(context, right - statusWidth, 102, statusWidth, 38, 19);
+  context.fillStyle = completed ? '#eff7f2' : '#fbf7eb';
+  context.fill();
+  context.fillStyle = completed ? '#47755f' : '#8b7440';
+  context.textBaseline = 'middle';
+  context.fillText(statusText, right - statusWidth + 17, 121);
+  context.textBaseline = 'alphabetic';
 
-  context.fillStyle = '#64798e';
-  context.font = '400 24px Arial, sans-serif';
-  const activityLines = wrapText(context, receipt.activity, TEXT_WIDTH);
-  activityLines.forEach((line, index) => context.fillText(line, PAGE_MARGIN, 305 + index * 34));
-
-  const amountY = 392 + Math.max(0, activityLines.length - 1) * 34;
-  context.fillStyle = '#203851';
-  context.font = '700 58px Arial, sans-serif';
-  context.fillText(receipt.amount, PAGE_MARGIN, amountY);
-
-  const badgeText = receipt.status.toUpperCase();
-  context.font = '700 19px Arial, sans-serif';
-  const badgeWidth = context.measureText(badgeText).width + 42;
-  context.fillStyle = receipt.status.toLowerCase() === 'completed' ? '#eaf5ef' : '#f5f1e7';
-  context.fillRect(PAGE_MARGIN, amountY + 34, badgeWidth, 42);
-  context.fillStyle = receipt.status.toLowerCase() === 'completed' ? '#417f69' : '#927944';
-  context.fillText(badgeText, PAGE_MARGIN + 21, amountY + 62);
-
-  let y = amountY + 142;
-  context.strokeStyle = '#dfe7eb';
+  context.strokeStyle = '#e6ecee';
   context.lineWidth = 2;
   context.beginPath();
-  context.moveTo(PAGE_MARGIN, y);
-  context.lineTo(PAGE_WIDTH - PAGE_MARGIN, y);
+  context.moveTo(left, 180);
+  context.lineTo(right, 180);
   context.stroke();
-  y += 58;
 
-  const fields = [
+  context.fillStyle = '#478783';
+  context.font = '700 19px Arial, sans-serif';
+  context.fillText('GLOBUS BANK · TRANSACTION RECORD', left, 232);
+  context.fillStyle = '#183450';
+  context.font = '700 48px Arial, sans-serif';
+  context.fillText('Payment receipt', left, 292);
+  context.fillStyle = '#7d8d9b';
+  context.font = '400 23px Arial, sans-serif';
+  const activityLines = wrapText(context, receipt.activity, contentWidth);
+  activityLines.slice(0, 2).forEach((line, index) => context.fillText(line, left, 330 + index * 31));
+
+  const heroY = 370 + (Math.min(activityLines.length, 2) - 1) * 30;
+  const heroHeight = receipt.sourceAmount && receipt.convertedAmount ? 310 : 215;
+  drawRoundedRect(context, left, heroY, contentWidth, heroHeight, 24);
+  context.fillStyle = '#173858';
+  context.fill();
+
+  context.fillStyle = '#a9d6d3';
+  context.font = '700 18px Arial, sans-serif';
+  context.fillText('TRANSACTION AMOUNT', left + 34, heroY + 48);
+  context.fillStyle = '#ffffff';
+  context.font = '700 58px Arial, sans-serif';
+  context.fillText(receipt.amount, left + 34, heroY + 116);
+
+  if (receipt.sourceAmount && receipt.convertedAmount) {
+    context.strokeStyle = 'rgba(255,255,255,.18)';
+    context.beginPath();
+    context.moveTo(left + 34, heroY + 144);
+    context.lineTo(right - 34, heroY + 144);
+    context.stroke();
+
+    const halfWidth = (contentWidth - 96) / 2;
+    context.fillStyle = '#a9c0d1';
+    context.font = '700 16px Arial, sans-serif';
+    context.fillText('SOURCE AMOUNT', left + 34, heroY + 180);
+    context.fillText('CONVERTED TOTAL', left + 34 + halfWidth + 28, heroY + 180);
+    context.fillStyle = '#ffffff';
+    context.font = '600 25px Arial, sans-serif';
+    context.fillText(receipt.sourceAmount, left + 34, heroY + 218);
+    context.textAlign = 'right';
+    context.fillText(receipt.convertedAmount, right - 34, heroY + 218);
+    context.textAlign = 'left';
+
+    if (receipt.exchangeRate) {
+      context.fillStyle = '#c2d2dd';
+      context.font = '400 18px Arial, sans-serif';
+      context.fillText(`Rate: ${receipt.exchangeRate}`, left + 34, heroY + 270);
+    }
+  }
+
+  let y = heroY + heroHeight + 40;
+  if (receipt.recipient || receipt.recipientBank || receipt.recipientCountry || receipt.recipientAccount) {
+    const recipientHeight = 154;
+    drawRoundedRect(context, left, y, contentWidth, recipientHeight, 18);
+    context.fillStyle = '#ffffff';
+    context.fill();
+    context.strokeStyle = '#e4e9eb';
+    context.lineWidth = 2;
+    context.stroke();
+
+    context.fillStyle = '#8291a0';
+    context.font = '700 16px Arial, sans-serif';
+    context.fillText('TRANSFER TO', left + 24, y + 33);
+    context.fillStyle = '#263f58';
+    context.font = '700 25px Arial, sans-serif';
+    context.fillText(receipt.recipient || 'Recipient', left + 24, y + 72);
+    context.fillStyle = '#7b8b9b';
+    context.font = '400 19px Arial, sans-serif';
+    const bankDetails = [receipt.recipientBank, receipt.recipientCountry].filter(Boolean).join(' · ');
+    if (bankDetails) context.fillText(wrapText(context, bankDetails, contentWidth - 48)[0] ?? '', left + 24, y + 108);
+    if (receipt.recipientAccount) {
+      context.fillStyle = '#526a80';
+      context.font = '600 18px monospace';
+      context.textAlign = 'right';
+      context.fillText(receipt.recipientAccount, right - 24, y + 72);
+      context.textAlign = 'left';
+    }
+    y += recipientHeight + 36;
+  }
+
+  context.fillStyle = '#718599';
+  context.font = '700 18px Arial, sans-serif';
+  context.fillText('TRANSACTION DETAILS', left, y);
+  y += 24;
+
+  const fields: Array<[string, string | undefined]> = [
     ['Reference', receipt.reference],
-    ['Source amount', receipt.sourceAmount ?? ''],
-    ['Exchange rate', receipt.exchangeRate ?? ''],
-    ['Total converted amount', receipt.convertedAmount ?? ''],
-    ['Recipient', receipt.recipient ?? ''],
-    ['Route', receipt.route ?? ''],
+    ['Date and time', receipt.date],
+    ['Transfer route', receipt.route],
+    ['Counterparty', receipt.counterparty],
+    ['Fee', receipt.fee],
     ['Description', receipt.description],
-    ['Date', receipt.date],
-    ['Counterparty label', receipt.counterparty],
   ];
   for (const [label, value] of fields) {
     if (!value) continue;
-    context.fillStyle = '#8492a1';
-    context.font = '700 16px Arial, sans-serif';
-    const labelLines = wrapText(context, label.toUpperCase(), 210);
-    labelLines.forEach((line, index) => context.fillText(line, PAGE_MARGIN, y + index * 25));
+    context.strokeStyle = '#e9edf0';
+    context.lineWidth = 1;
+    context.beginPath();
+    context.moveTo(left, y);
+    context.lineTo(right, y);
+    context.stroke();
+    y += 32;
 
-    context.fillStyle = '#40566e';
-    context.font = label === 'Reference' ? '700 22px monospace' : '600 22px Arial, sans-serif';
-    const lines = wrapText(context, value, TEXT_WIDTH - 240);
-    lines.forEach((line, index) => context.fillText(line, PAGE_MARGIN + 240, y + index * 30));
-    y += Math.max(lines.length * 30, labelLines.length * 25) + 22;
+    context.fillStyle = '#8291a0';
+    context.font = '500 18px Arial, sans-serif';
+    context.fillText(label, left, y);
+
+    context.fillStyle = label === 'Reference' ? '#246d69' : '#344b63';
+    context.font = label === 'Reference' ? '700 19px monospace' : '600 19px Arial, sans-serif';
+    const valueLines = wrapText(context, value, contentWidth - 250);
+    valueLines.slice(0, label === 'Description' ? 3 : 2).forEach((line, index) => {
+      context.textAlign = 'right';
+      context.fillText(line, right, y + index * 26);
+    });
+    context.textAlign = 'left';
+    y += Math.max(40, Math.min(valueLines.length, label === 'Description' ? 3 : 2) * 26) + 12;
   }
 
-  context.fillStyle = '#8795a2';
-  context.font = '400 16px Arial, sans-serif';
-  context.fillText('Globus Bank · Internal ledger record', PAGE_MARGIN, PAGE_HEIGHT - 72);
+  const footerY = Math.min(Math.max(y + 22, PAGE_HEIGHT - 132), PAGE_HEIGHT - 76);
+  context.strokeStyle = '#dfe6e9';
+  context.setLineDash([6, 6]);
+  context.beginPath();
+  context.moveTo(left, footerY - 26);
+  context.lineTo(right, footerY - 26);
+  context.stroke();
+  context.setLineDash([]);
+  context.fillStyle = '#4a826d';
+  context.font = '700 18px Arial, sans-serif';
+  context.fillText('GLOBUS BANK', left, footerY + 5);
+  context.fillStyle = '#7d8c98';
+  context.font = '400 17px Arial, sans-serif';
+  context.textAlign = 'right';
+  context.fillText('Keep this receipt for your records', right, footerY + 5);
+  context.textAlign = 'left';
 }
 
 export async function downloadTransactionReceiptPdf(

@@ -1,0 +1,79 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap');
+
+:root {
+  --background: 210 30% 97%;
+  --foreground: 218 44% 17%;
+  --border: 214 26% 88%;
+  --input: 214 26% 88%;
+  --ring: 190 60% 41%;
+  --card: 0 0% 100%;
+  --card-foreground: 218 44% 17%;
+  --primary: 219 57% 20%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 205 33% 93%;
+  --secondary-foreground: 218 44% 17%;
+  --muted: 211 30% 94%;
+  --muted-foreground: 215 17% 48%;
+  --accent: 190 60% 41%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 2 63% 53%;
+  --destructive-foreground: 0 0% 100%;
+  --sidebar: 220 53% 16%;
+  --sidebar-foreground: 212 24% 87%;
+  --app-font-sans: 'DM Sans', sans-serif;
+  --app-font-mono: 'DM Mono', monospace;
+  --radius: 0.8rem;
+}
+
+.dark {
+  --background: 220 42% 10%;
+  --foreground: 210 30% 93%;
+  --border: 218 27% 24%;
+  --input: 218 27% 24%;
+  --ring: 190 60% 51%;
+  --card: 220 38% 13%;
+  --card-foreground: 210 30% 93%;
+  --primary: 190 60% 51%;
+  --primary-foreground: 220 42% 10%;
+  --secondary: 218 30% 19%;
+  --secondary-foreground: 210 30% 93%;
+  --muted: 218 30% 19%;
+  --muted-foreground: 215 16% 67%;
+  --accent: 190 60% 51%;
+  --accent-foreground: 220 42% 10%;
+  --destructive: 2 61% 57%;
+  --destructive-foreground: 0 0% 100%;
+  --sidebar: 220 48% 8%;
+  --sidebar-foreground: 212 24% 87%;
+}
+
+html,
+body,
+#root {
+  min-width: 0;
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--app-font-sans);
+}
+
+.bank-display {
+  font-family: Manrope, var(--app-font-sans);
+  letter-spacing: -0.035em;
+}
+
+.receipt-dialog {
+  max-height: min(80dvh, calc(100dvh - 1.5rem));
+}
+
+.receipt-document-frame {
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.receipt-print {
+  flex: none;
+}
