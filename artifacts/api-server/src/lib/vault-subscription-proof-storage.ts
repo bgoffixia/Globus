@@ -42,7 +42,7 @@ export async function createVaultSubscriptionProofUploadUrl(
   const objectId = randomUUID();
   const directory = ownerDirectory(userId);
   const objectName = `vault-subscription-proofs/${directory}/${objectId}`;
-  const { bucketName } = parseBucketObjectPath(
+  const { bucketName, objectName: privateObjectName } = parseBucketObjectPath(
     `${privateObjectDirectory()}/${objectName}`,
   );
   const response = await fetch(`${sidecarEndpoint}/object-storage/signed-object-url`, {
@@ -50,7 +50,7 @@ export async function createVaultSubscriptionProofUploadUrl(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       bucket_name: bucketName,
-      object_name: objectName,
+      object_name: privateObjectName,
       method: "PUT",
       expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
     }),
