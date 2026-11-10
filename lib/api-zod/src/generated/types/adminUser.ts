@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AdminUserAccountStatus } from './adminUserAccountStatus';
+import type { AdminUserVaultSubscriptionPlan } from './adminUserVaultSubscriptionPlan';
 import type { AdminUserVaultSubscriptionStatus } from './adminUserVaultSubscriptionStatus';
 import type { AdminUserVerificationStatus } from './adminUserVerificationStatus';
 
@@ -40,6 +41,22 @@ export interface AdminUser {
   vaultSubscriptionExpiresAt?: Date | null;
   /** @nullable */
   vaultSubscriptionReason?: string | null;
+  /** @nullable */
+  vaultSubscriptionPlan?: AdminUserVaultSubscriptionPlan;
+  /**
+     * @nullable
+     * @pattern ^[0-9]+$
+     */
+  vaultSubscriptionAmountMinor?: string | null;
+  vaultSubscriptionProofAvailable?: boolean;
+  /** @nullable */
+  vaultSubscriptionProofContentType?: string | null;
+  /** @nullable */
+  vaultSubscriptionProofSizeBytes?: number | null;
+  /** @nullable */
+  vaultSubscriptionProofFileName?: string | null;
+  /** @nullable */
+  vaultSubscriptionProofUploadedAt?: Date | null;
   walletCount: number;
   createdAt: Date;
 }

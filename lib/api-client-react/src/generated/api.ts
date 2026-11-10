@@ -66,10 +66,13 @@ import type {
   BankPushSubscriptionInput,
   BankPushSubscriptionResult,
   BankTransaction,
+  BankVaultBilling,
   BankVaultEmailPreferences,
   BankVaultEmailPreferencesInput,
   BankVaultPasscodeInput,
   BankVaultPasscodeUpdateInput,
+  BankVaultProofUploadInput,
+  BankVaultProofUploadResult,
   BankVaultSession,
   BankVaultStatus,
   BankVaultWalletControl,
@@ -622,6 +625,171 @@ export const useRequestBankVaultSubscription = <TError = ErrorType<BadRequestRes
         TContext
       > => {
       return useMutation(getRequestBankVaultSubscriptionMutationOptions(options));
+    }
+
+export const getGetBankVaultBillingUrl = () => {
+
+
+
+
+  return `/api/bank/vault/billing`
+}
+
+/**
+ * @summary Read private vault manual payment instructions and access plans
+ */
+export const getBankVaultBilling = async ( options?: Parameters<typeof customFetch>[1]): Promise<BankVaultBilling> => {
+
+  return customFetch<BankVaultBilling>(getGetBankVaultBillingUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetBankVaultBillingQueryKey = () => {
+    return [
+    `/api/bank/vault/billing`
+    ] as const;
+    }
+
+
+export const getGetBankVaultBillingQueryOptions = <TData = Awaited<ReturnType<typeof getBankVaultBilling>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBankVaultBilling>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetBankVaultBillingQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getBankVaultBilling>>> = ({ signal }) => getBankVaultBilling({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getBankVaultBilling>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetBankVaultBillingQueryResult = NonNullable<Awaited<ReturnType<typeof getBankVaultBilling>>>
+export type GetBankVaultBillingQueryError = ErrorType<UnauthorizedResponse | ForbiddenResponse>
+
+
+/**
+ * @summary Read private vault manual payment instructions and access plans
+ */
+
+export function useGetBankVaultBilling<TData = Awaited<ReturnType<typeof getBankVaultBilling>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBankVaultBilling>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetBankVaultBillingQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateBankVaultSubscriptionProofUploadUrlUrl = () => {
+
+
+
+
+  return `/api/bank/vault/subscription/proof-upload-url`
+}
+
+/**
+ * @summary Create a private upload URL for subscription payment proof
+ */
+export const createBankVaultSubscriptionProofUploadUrl = async (bankVaultProofUploadInput: BankVaultProofUploadInput, options?: Parameters<typeof customFetch>[1]): Promise<BankVaultProofUploadResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<BankVaultProofUploadResult>(getCreateBankVaultSubscriptionProofUploadUrlUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(bankVaultProofUploadInput)
+  }
+);}
+
+
+
+
+
+export const getCreateBankVaultSubscriptionProofUploadUrlMutationKey = () => ['createBankVaultSubscriptionProofUploadUrl'] as const;
+
+export const getCreateBankVaultSubscriptionProofUploadUrlMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse | TooManyRequestsResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createBankVaultSubscriptionProofUploadUrl>>, TError,CreateBankVaultSubscriptionProofUploadUrlMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createBankVaultSubscriptionProofUploadUrl>>, TError,CreateBankVaultSubscriptionProofUploadUrlMutationVariables, TContext> => {
+
+const mutationKey = getCreateBankVaultSubscriptionProofUploadUrlMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createBankVaultSubscriptionProofUploadUrl>>, CreateBankVaultSubscriptionProofUploadUrlMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createBankVaultSubscriptionProofUploadUrl(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateBankVaultSubscriptionProofUploadUrlMutationResult = NonNullable<Awaited<ReturnType<typeof createBankVaultSubscriptionProofUploadUrl>>>
+    export type CreateBankVaultSubscriptionProofUploadUrlMutationBody = BodyType<BankVaultProofUploadInput>
+    export type CreateBankVaultSubscriptionProofUploadUrlMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse | TooManyRequestsResponse>
+    export type CreateBankVaultSubscriptionProofUploadUrlMutationVariables = {data: BodyType<BankVaultProofUploadInput>}
+
+    /**
+ * @summary Create a private upload URL for subscription payment proof
+ */
+export const useCreateBankVaultSubscriptionProofUploadUrl = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse | TooManyRequestsResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createBankVaultSubscriptionProofUploadUrl>>, TError,CreateBankVaultSubscriptionProofUploadUrlMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createBankVaultSubscriptionProofUploadUrl>>,
+        TError,
+        CreateBankVaultSubscriptionProofUploadUrlMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateBankVaultSubscriptionProofUploadUrlMutationOptions(options));
     }
 
 export const getGetBankVaultEmailPreferencesUrl = () => {
@@ -5128,6 +5296,83 @@ export const useUpdateAdminUserVaultSubscription = <TError = ErrorType<BadReques
       > => {
       return useMutation(getUpdateAdminUserVaultSubscriptionMutationOptions(options));
     }
+
+export const getGetAdminVaultSubscriptionProofUrl = (userId: string,) => {
+
+
+
+
+  return `/api/bank/admin/users/${userId}/vault-subscription/proof`
+}
+
+/**
+ * @summary Download a pending private vault subscription payment proof
+ */
+export const getAdminVaultSubscriptionProof = async (userId: string, options?: Parameters<typeof customFetch>[1]): Promise<Blob> => {
+
+  return customFetch<Blob>(getGetAdminVaultSubscriptionProofUrl(userId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminVaultSubscriptionProofQueryKey = (userId: string,) => {
+    return [
+    `/api/bank/admin/users/${userId}/vault-subscription/proof`
+    ] as const;
+    }
+
+
+export const getGetAdminVaultSubscriptionProofQueryOptions = <TData = Awaited<ReturnType<typeof getAdminVaultSubscriptionProof>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>>(userId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminVaultSubscriptionProof>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminVaultSubscriptionProofQueryKey(userId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminVaultSubscriptionProof>>> = ({ signal }) => getAdminVaultSubscriptionProof(userId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: userId !== null && userId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminVaultSubscriptionProof>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminVaultSubscriptionProofQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminVaultSubscriptionProof>>>
+export type GetAdminVaultSubscriptionProofQueryError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
+
+
+/**
+ * @summary Download a pending private vault subscription payment proof
+ */
+
+export function useGetAdminVaultSubscriptionProof<TData = Awaited<ReturnType<typeof getAdminVaultSubscriptionProof>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>>(
+ userId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminVaultSubscriptionProof>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminVaultSubscriptionProofQueryOptions(userId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getGetAdminIdentityDocumentContentUrl = (documentId: string,) => {
 

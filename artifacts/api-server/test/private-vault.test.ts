@@ -23,6 +23,12 @@ import {
   hashPrivateToken,
 } from "../src/lib/private-data";
 import { getPushConfig } from "../src/lib/transfer-notifications";
+import {
+  addVaultSubscriptionMonths,
+  getVaultPlanPriceMinor,
+  getVaultSubscriptionPlan,
+  minorAmountToDecimal,
+} from "../src/lib/vault-subscription";
 
 const encryptionKeyEnv = "BANK_DETAILS_ENCRYPTION_KEY";
 const sessionSecretEnv = "SESSION_SECRET";
@@ -111,6 +117,25 @@ test("vault subscription states and per-wallet transfer choices preserve ledger 
   assert.equal(resolveFutureTransferStatus("reject", true), "failed");
   assert.equal(resolveFutureTransferStatus("hold", true), "pending");
   assert.equal(resolveFutureTransferStatus("normal", true), "completed");
+});
+
+test("manual Vault plans keep their configured NGN prices and fixed calendar terms", () => {
+  const prices = {
+    vaultPlan1mPriceMinor: "1200000",
+    vaultPlan3mPriceMinor: "2200000",
+    vaultPlan1yPriceMinor: "7900000",
+  };
+  assert.equal(getVaultPlanPriceMinor(prices, "1m"), "1200000");
+  assert.equal(getVaultPlanPriceMinor(prices, "3m"), "2200000");
+  assert.equal(getVaultPlanPriceMinor(prices, "1y"), "7900000");
+  assert.equal(minorAmountToDecimal("7900000"), "79000.00");
+  assert.equal(getVaultSubscriptionPlan("1y")?.durationMonths, 12);
+
+  const monthEnd = addVaultSubscriptionMonths(
+    new Date("2026-01-31T12:00:00.000Z"),
+    1,
+  );
+  assert.equal(monthEnd.toISOString(), "2026-02-28T12:00:00.000Z");
 });
 
 test("Webpushr exposes only the site key after all server secrets are configured", () => {

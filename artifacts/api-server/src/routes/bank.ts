@@ -11,6 +11,8 @@ import {
   CompleteRequiredPasswordResetResponse,
   CreateIdentityDocumentUploadUrlBody,
   CreateIdentityDocumentUploadUrlResponse,
+  CreateBankVaultSubscriptionProofUploadUrlBody,
+  CreateBankVaultSubscriptionProofUploadUrlResponse,
   CreateExternalTransferBody,
   CreateExternalTransferResponse,
   CreateIncomingExternalTransferBody,
@@ -31,6 +33,8 @@ import {
   GetBankProfileResponse,
   GetBankPushConfigResponse,
   GetBankVaultStatusResponse,
+  GetBankVaultBillingHeader,
+  GetBankVaultBillingResponse,
   GetBankVaultEmailPreferencesHeader,
   GetBankVaultEmailPreferencesResponse,
   InitializeBankVaultPasscodeBody,
@@ -113,6 +117,20 @@ import {
   sealIdentityDocumentUpload,
   validateUploadedIdentityDocument,
 } from "../lib/identityDocumentStorage";
+import {
+  createVaultSubscriptionProofUploadUrl,
+  deleteVaultSubscriptionProof,
+  getVaultSubscriptionProofFile,
+  validateVaultSubscriptionProof,
+  VAULT_PROOF_MAX_BYTES,
+  VAULT_PROOF_CONTENT_TYPES,
+} from "../lib/vault-subscription-proof-storage";
+import {
+  getVaultPlanPriceMinor,
+  getVaultSubscriptionPlan,
+  isVaultSubscriptionPlanCode,
+  minorAmountToDecimal,
+} from "../lib/vault-subscription";
 import {
   updateTransactionPin as saveTransactionPin,
   verifyTransactionPin,
@@ -200,6 +218,28 @@ const vaultSubscriptionRequestLimiter = rateLimit({
   message: { error: "Too many private vault access requests. Try again later." },
 });
 
+async function getOrCreateAdminSettings() {
+  const [existing] = await db
+    .select()
+    .from(bankAdminSettingsTable)
+    .where(eq(bankAdminSettingsTable.id, "operations"))
+    .limit(1);
+  if (existing) return existing;
+  const [created] = await db
+    .insert(bankAdminSettingsTable)
+    .values({ id: "operations" })
+    .onConflictDoNothing()
+    .returning();
+  if (created) return created;
+  const [retried] = await db
+    .select()
+    .from(bankAdminSettingsTable)
+    .where(eq(bankAdminSettingsTable.id, "operations"))
+    .limit(1);
+  if (!retried) throw new Error("Private vault billing settings are unavailable.");
+  return retried;
+}
+
 function bankVaultStatusPayload(user: typeof bankUsersTable.$inferSelect) {
   const subscriptionStatus = vaultSubscriptionStatus(
     user.vaultSubscriptionStatus,
@@ -211,6 +251,10 @@ function bankVaultStatusPayload(user: typeof bankUsersTable.$inferSelect) {
     subscriptionActive: subscriptionStatus === "active",
     requestedAt: user.vaultSubscriptionRequestedAt?.toISOString() ?? null,
     expiresAt: user.vaultSubscriptionExpiresAt?.toISOString() ?? null,
+    planCode: user.vaultSubscriptionPlan,
+    amountMinor: user.vaultSubscriptionAmountMinor,
+    proofUploadedAt:
+      user.vaultSubscriptionProofUploadedAt?.toISOString() ?? null,
   };
 }
 
@@ -2415,6 +2459,180 @@ router.get("/bank/vault/status", async (req, res): Promise<void> => {
   );
 });
 
+router.get("/bank/vault/billing", async (req, res): Promise<void> => {
+  const authUserId = getAuth(req).userId;
+  if (!authUserId) {
+    res.status(401).json({ error: "Sign in to view Private Vault access plans." });
+    return;
+  }
+  const sessionToken = req.get("X-Globus-Vault-Session") ?? "";
+  const parsedHeader = GetBankVaultBillingHeader.safeParse({
+    "X-Globus-Vault-Session": sessionToken,
+  });
+  if (!parsedHeader.success) {
+    res.status(403).json({ error: "Unlock your Private Vault to view access plans." });
+    return;
+  }
+  const user = await getOrCreateBankUser(authUserId);
+  if (!(await isVaultPasscodeSessionValid(user.id, sessionToken))) {
+    res.status(403).json({ error: "Your Private Vault session expired. Unlock it again." });
+    return;
+  }
+  const settings = await getOrCreateAdminSettings();
+  res.json(
+    GetBankVaultBillingResponse.parse({
+      configured: Boolean(
+        settings.vaultPaymentMethod.trim() &&
+          settings.vaultPaymentInstructions.trim(),
+      ),
+      paymentMethod: settings.vaultPaymentMethod,
+      bankName: settings.vaultPaymentBankName,
+      accountName: settings.vaultPaymentAccountName,
+      accountNumber: settings.vaultPaymentAccountNumber,
+      instructions: settings.vaultPaymentInstructions,
+      plans: (["1m", "3m", "1y"] as const).map((code) => {
+        const plan = getVaultSubscriptionPlan(code);
+        if (!plan) throw new Error("Vault subscription plan is unavailable.");
+        return {
+          code,
+          label: plan.label,
+          durationMonths: plan.durationMonths,
+          priceMinor: getVaultPlanPriceMinor(settings, code),
+          currency: "NGN" as const,
+        };
+      }),
+    }),
+  );
+});
+
+router.post(
+  "/bank/vault/subscription/proof-upload-url",
+  vaultSubscriptionRequestLimiter,
+  async (req, res): Promise<void> => {
+    const authUserId = getAuth(req).userId;
+    if (!authUserId) {
+      res.status(401).json({ error: "Sign in to upload subscription payment proof." });
+      return;
+    }
+    const sessionToken = req.get("X-Globus-Vault-Session") ?? "";
+    const parsedHeader = RequestBankVaultSubscriptionHeader.safeParse({
+      "X-Globus-Vault-Session": sessionToken,
+    });
+    const parsed = CreateBankVaultSubscriptionProofUploadUrlBody.safeParse(req.body);
+    if (!parsedHeader.success || !parsed.success) {
+      res.status(400).json({
+        error: !parsedHeader.success
+          ? parsedHeader.error.message
+          : parsed.error?.message ?? "Enter valid payment proof details.",
+      });
+      return;
+    }
+    if (
+      !isVaultSubscriptionPlanCode(parsed.data.planCode) ||
+      !VAULT_PROOF_CONTENT_TYPES.includes(
+        parsed.data.contentType as (typeof VAULT_PROOF_CONTENT_TYPES)[number],
+      ) ||
+      parsed.data.sizeBytes > VAULT_PROOF_MAX_BYTES
+    ) {
+      res.status(400).json({ error: "Upload a PDF, JPG, or PNG file up to 10 MB." });
+      return;
+    }
+    const user = await getOrCreateBankUser(authUserId);
+    if (!(await isVaultPasscodeSessionValid(user.id, sessionToken))) {
+      res.status(403).json({ error: "Your Private Vault session expired. Unlock it again." });
+      return;
+    }
+    const settings = await getOrCreateAdminSettings();
+    if (
+      !settings.vaultPaymentMethod.trim() ||
+      !settings.vaultPaymentInstructions.trim()
+    ) {
+      res.status(409).json({
+        error: "Manual payment instructions are not configured yet. Try again later.",
+      });
+      return;
+    }
+    const priceMinor = getVaultPlanPriceMinor(settings, parsed.data.planCode);
+    if (!/^[0-9]+$/.test(priceMinor) || BigInt(priceMinor) <= 0n) {
+      res.status(409).json({ error: "This access plan is temporarily unavailable." });
+      return;
+    }
+    const filename = parsed.data.fileName
+      .trim()
+      .replace(/[\u0000-\u001f\u007f]/g, "")
+      .slice(-120);
+    if (!filename) {
+      res.status(400).json({ error: "Choose a valid proof filename." });
+      return;
+    }
+    let signedUpload: { uploadUrl: string; objectPath: string };
+    try {
+      signedUpload = await createVaultSubscriptionProofUploadUrl(user.id);
+    } catch (error) {
+      req.log.error({ error }, "Could not create private vault proof upload URL");
+      res.status(503).json({ error: "Private proof upload is temporarily unavailable." });
+      return;
+    }
+    const result = await db.transaction(async (tx) => {
+      const [lockedUser] = await tx
+        .select()
+        .from(bankUsersTable)
+        .where(eq(bankUsersTable.id, user.id))
+        .for("update");
+      if (!lockedUser) return { missing: true as const };
+      const currentStatus = vaultSubscriptionStatus(
+        lockedUser.vaultSubscriptionStatus,
+        lockedUser.vaultSubscriptionExpiresAt,
+      );
+      if (currentStatus === "active" || currentStatus === "pending") {
+        return { conflict: true as const, oldPath: signedUpload.objectPath };
+      }
+      if (!(await isVaultPasscodeSessionValid(user.id, sessionToken))) {
+        return { expired: true as const, oldPath: signedUpload.objectPath };
+      }
+      const oldPath = lockedUser.vaultSubscriptionProofObjectPath;
+      await tx
+        .update(bankUsersTable)
+        .set({
+          vaultSubscriptionPlan: parsed.data.planCode,
+          vaultSubscriptionAmountMinor: priceMinor,
+          vaultSubscriptionProofObjectPath: signedUpload.objectPath,
+          vaultSubscriptionProofContentType: parsed.data.contentType,
+          vaultSubscriptionProofSizeBytes: parsed.data.sizeBytes,
+          vaultSubscriptionProofFileName: filename,
+          vaultSubscriptionProofUploadedAt: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(bankUsersTable.id, user.id));
+      return { oldPath };
+    });
+    if ("missing" in result) {
+      void deleteVaultSubscriptionProof(signedUpload.objectPath, user.id).catch(() => {});
+      res.status(404).json({ error: "The Globus account could not be found." });
+      return;
+    }
+    if ("conflict" in result || "expired" in result) {
+      void deleteVaultSubscriptionProof(signedUpload.objectPath, user.id).catch(() => {});
+      res.status("expired" in result ? 403 : 409).json({
+        error: "expired" in result
+          ? "Your Private Vault session expired. Unlock it again."
+          : "An active or pending subscription cannot be changed.",
+      });
+      return;
+    }
+    if (result.oldPath && result.oldPath !== signedUpload.objectPath) {
+      void deleteVaultSubscriptionProof(result.oldPath, user.id).catch((error) =>
+        req.log.error({ error }, "Could not remove replaced private vault proof"),
+      );
+    }
+    res.json(
+      CreateBankVaultSubscriptionProofUploadUrlResponse.parse({
+        uploadUrl: signedUpload.uploadUrl,
+      }),
+    );
+  },
+);
+
 router.post("/bank/vault/subscription", vaultSubscriptionRequestLimiter, async (req, res): Promise<void> => {
   const authUserId = getAuth(req).userId;
   if (!authUserId) {
@@ -2434,6 +2652,54 @@ router.post("/bank/vault/subscription", vaultSubscriptionRequestLimiter, async (
     res.status(403).json({ error: "Enter your private vault passcode before requesting access." });
     return;
   }
+  const currentStatus = vaultSubscriptionStatus(
+    user.vaultSubscriptionStatus,
+    user.vaultSubscriptionExpiresAt,
+  );
+  if (currentStatus === "active" || currentStatus === "pending") {
+    res.status(409).json({
+      error: currentStatus === "pending"
+        ? "Your private vault access request is already awaiting administrator review."
+        : "Private vault access is already active for this account.",
+    });
+    return;
+  }
+  const requestedPlan = user.vaultSubscriptionPlan;
+  const requestedAmountMinor = user.vaultSubscriptionAmountMinor;
+  if (
+    !user.vaultSubscriptionProofObjectPath ||
+    !user.vaultSubscriptionProofContentType ||
+    !user.vaultSubscriptionProofSizeBytes ||
+    !requestedPlan ||
+    !requestedAmountMinor ||
+    !isVaultSubscriptionPlanCode(requestedPlan)
+  ) {
+    res.status(400).json({ error: "Choose a plan and upload payment proof before submitting." });
+    return;
+  }
+  try {
+    const proofFile = getVaultSubscriptionProofFile(
+      user.vaultSubscriptionProofObjectPath,
+      user.id,
+    );
+    const validProof = await validateVaultSubscriptionProof(
+      proofFile,
+      user.vaultSubscriptionProofContentType,
+      user.vaultSubscriptionProofSizeBytes,
+    );
+    if (!validProof) {
+      res.status(400).json({
+        error: "The uploaded proof could not be verified. Upload a valid PDF, JPG, or PNG up to 10 MB.",
+      });
+      return;
+    }
+  } catch (error) {
+    req.log.warn({ error }, "Private vault payment proof validation failed");
+    res.status(400).json({
+      error: "The uploaded proof could not be verified. Upload it again and retry.",
+    });
+    return;
+  }
   const result = await db.transaction(async (tx) => {
     const [lockedUser] = await tx
       .select()
@@ -2446,7 +2712,16 @@ router.post("/bank/vault/subscription", vaultSubscriptionRequestLimiter, async (
       lockedUser.vaultSubscriptionExpiresAt,
     );
     if (currentStatus === "active" || currentStatus === "pending") {
-      return { conflict: true as const, user: lockedUser };
+      return { conflict: true as const, status: currentStatus };
+    }
+    if (
+      lockedUser.vaultSubscriptionProofObjectPath !== user.vaultSubscriptionProofObjectPath ||
+      lockedUser.vaultSubscriptionPlan !== user.vaultSubscriptionPlan
+    ) {
+      return { changed: true as const };
+    }
+    if (!(await isVaultPasscodeSessionValid(user.id, sessionToken))) {
+      return { expired: true as const };
     }
     const now = new Date();
     const [updated] = await tx
@@ -2458,6 +2733,7 @@ router.post("/bank/vault/subscription", vaultSubscriptionRequestLimiter, async (
         vaultSubscriptionReviewedByUserId: null,
         vaultSubscriptionReason: null,
         vaultSubscriptionExpiresAt: null,
+        vaultSubscriptionProofUploadedAt: now,
         updatedAt: now,
       })
       .where(eq(bankUsersTable.id, user.id))
@@ -2466,13 +2742,13 @@ router.post("/bank/vault/subscription", vaultSubscriptionRequestLimiter, async (
       actorUserId: user.id,
       targetUserId: user.id,
       action: "request_private_vault_subscription",
-      reason: "Member requested manual administrator approval for private vault access.",
+      reason: `Member submitted payment proof for the ${requestedPlan} plan at NGN ${minorAmountToDecimal(requestedAmountMinor)}.`,
     });
     const notification = await storeNotification(tx, {
       userId: user.id,
       category: "security",
-      title: "Private Vault access requested",
-      body: "Your access request is awaiting administrator review. No payment was collected in the app.",
+      title: "Private Vault payment proof received",
+      body: "Your subscription request and payment proof are awaiting administrator review.",
     });
     return { user: updated, notification };
   });
@@ -2481,9 +2757,17 @@ router.post("/bank/vault/subscription", vaultSubscriptionRequestLimiter, async (
     return;
   }
   if ("conflict" in result) {
-    res.status(409).json({ error: result.user.vaultSubscriptionStatus === "pending"
+    res.status(409).json({ error: result.status === "pending"
       ? "Your private vault access request is already awaiting review."
       : "Private vault access is already active for this account." });
+    return;
+  }
+  if ("changed" in result) {
+    res.status(409).json({ error: "Your proof upload changed. Upload it again before submitting." });
+    return;
+  }
+  if ("expired" in result) {
+    res.status(403).json({ error: "Your Private Vault session expired. Unlock it again." });
     return;
   }
   void sendPushToUser(user.id, result.notification);
@@ -2622,7 +2906,7 @@ router.get(
       return;
     }
     const user = await getOrCreateBankUser(authUserId);
-    if (!(await isVaultSessionActive(user.id, sessionToken))) {
+    if (!(await isVaultPasscodeSessionValid(user.id, sessionToken))) {
       res.status(403).json({ error: "Your private vault session expired. Unlock it again." });
       return;
     }
@@ -2746,7 +3030,7 @@ router.get(
       return;
     }
     const user = await getOrCreateBankUser(authUserId);
-    if (!(await isVaultSessionActive(user.id, sessionToken))) {
+    if (!(await isVaultPasscodeSessionValid(user.id, sessionToken))) {
       res.status(403).json({ error: "Your private vault session expired. Unlock it again." });
       return;
     }

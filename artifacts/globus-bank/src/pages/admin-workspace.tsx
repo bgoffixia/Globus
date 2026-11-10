@@ -11,6 +11,7 @@ import {
 import {
   getGetAdminAccessQueryKey, getGetAdminSummaryQueryKey, getGetAdminSettingsQueryKey, getGetBankProfileQueryKey,
   getGetAdminIdentityDocumentContentUrl,
+  getGetAdminVaultSubscriptionProofUrl,
   getGetAdminTransactionDetailQueryKey, getGetAdminUserDetailQueryKey,
   getListAdminAccountsQueryKey, getListAdminAuditLogsQueryKey,
   getListAdminIdentityDocumentsQueryKey, getListAdminLedgerRequestsQueryKey,
@@ -57,6 +58,7 @@ const quietButton = 'inline-flex items-center justify-center gap-2 rounded-[9px]
 function date(value?: string | null) { return value ? new Date(value).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '—'; }
 function dateTime(value?: string | null) { return value ? new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '—'; }
 function money(value: string | number, currency: string) { try { return new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: 2 }).format(Number(value)); } catch { return `${currency} ${value}`; } }
+function moneyMinor(value?: string | null, currency = 'NGN') { return value && /^\d+$/.test(value) ? money(Number(value) / 100, currency) : '—'; }
 function human(value?: string | null) { return (value || 'unknown').replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase()); }
 function ledgerPostingState(entries: Array<{ currency: string; side: 'debit' | 'credit'; amount: string }>) {
   if (!entries.length) return 'not_posted' as const;
@@ -209,8 +211,10 @@ function Overview() {
   const summary = useGetAdminSummary({ query: { queryKey: getGetAdminSummaryQueryKey(), retry: false } });
   const adminProfile = useGetBankProfile({ query: { queryKey: getGetBankProfileQueryKey() } });
   const requests = useListAdminLedgerRequests(undefined, { query: { queryKey: getListAdminLedgerRequestsQueryKey() } });
+  const vaultRequestParams: ListAdminUsersParams = { vaultSubscriptionStatus: 'pending', page: 1, limit: 1 };
+  const vaultRequests = useListAdminUsers(vaultRequestParams, { query: { queryKey: getListAdminUsersQueryKey(vaultRequestParams), staleTime: 30_000 } });
   const recent = summary.data?.recentActions || [];
-  return <><Heading kicker="Administrator workspace" title="Operations overview" subtitle="A clear view of account activity, member accounts and decisions waiting for review." action={<Link href="/admin/users" className={button}><Users size={14} />Manage a member</Link>} />
+  return <><Heading kicker="Administrator workspace" title="Operations overview" subtitle="A clear view of account activity, member accounts and decisions waiting for review." action={<div className="flex flex-wrap gap-2"><Link href="/admin/users?vault=pending" className={quietButton}><FileClock size={14} />Vault requests {typeof vaultRequests.data?.total === 'number' ? `· ${vaultRequests.data.total}` : ''}</Link><Link href="/admin/users" className={button}><Users size={14} />Manage a member</Link></div>} />
     {summary.isError && <InlineError text="Summary totals could not be loaded." retry={() => summary.refetch()} />}
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[
       ['Registered members', summary.data?.registeredUsers, Users, 'All member profiles'],
@@ -235,7 +239,7 @@ function Overview() {
 }
 
 function UsersPage() {
-  const [search, setSearch] = useState(''); const [page, setPage] = useState(1); const [status, setStatus] = useState(''); const [vaultStatus, setVaultStatus] = useState('');
+  const [search, setSearch] = useState(''); const [page, setPage] = useState(1); const [status, setStatus] = useState(''); const [vaultStatus, setVaultStatus] = useState(() => new URLSearchParams(window.location.search).get('vault') || '');
   const params: ListAdminUsersParams = useMemo(() => ({ ...(search.trim() ? { search: search.trim() } : {}), ...(status ? { accountStatus: status as ListAdminUsersParams['accountStatus'] } : {}), ...(vaultStatus ? { vaultSubscriptionStatus: vaultStatus as ListAdminUsersParams['vaultSubscriptionStatus'] } : {}), page, limit: 25 }), [search, page, status, vaultStatus]);
   const users = useListAdminUsers(params, { query: { queryKey: getListAdminUsersQueryKey(params) } });
   return <><Heading kicker="People & access" title="Member directory" subtitle="Search member records by name, email or Customer ID. Phone details are masked in this broad list." />
@@ -263,7 +267,7 @@ function MemberDetail({ userId }: { userId: string }) {
   const [form, setForm] = useState({ reason: '', notes: '', transactionPin: '', firstName: '', lastName: '', phone: '', country: '', decision: 'approved', userMessage: '', confirmed: false, expiresAt: '' });
   const [message, setMessage] = useState(''); const [error, setError] = useState('');
   const refresh = async () => { await Promise.all([client.invalidateQueries({ queryKey: getGetAdminUserDetailQueryKey(userId) }), client.invalidateQueries({ queryKey: getListAdminUsersQueryKey() }), client.invalidateQueries({ queryKey: getGetAdminSummaryQueryKey() })]); };
-  const open = (kind: typeof modal) => { if (kind === 'profile' && detail.data) setForm({ ...form, firstName: u?.firstName || '', lastName: u?.lastName || '', phone: detail.data.phone || '', country: u?.country || '', reason: '', transactionPin: '', confirmed: false }); else if (kind === 'status') setForm({ ...form, reason: '', notes: '', transactionPin: '', decision: u?.accountStatus === 'active' ? 'suspended' : 'active', confirmed: false }); else if (kind === 'vault-subscription') setForm({ ...form, reason: '', notes: '', decision: u?.vaultSubscriptionStatus === 'active' ? 'inactive' : 'active', expiresAt: '', confirmed: false }); else setForm({ ...form, reason: '', notes: '', transactionPin: '', confirmed: false }); setError(''); setModal(kind); };
+  const open = (kind: typeof modal) => { if (kind === 'profile' && detail.data) setForm({ ...form, firstName: u?.firstName || '', lastName: u?.lastName || '', phone: detail.data.phone || '', country: u?.country || '', reason: '', transactionPin: '', confirmed: false }); else if (kind === 'status') setForm({ ...form, reason: '', notes: '', transactionPin: '', decision: u?.accountStatus === 'active' ? 'suspended' : 'active', confirmed: false }); else if (kind === 'vault-subscription') setForm({ ...form, reason: '', notes: '', decision: u?.vaultSubscriptionStatus === 'active' ? 'inactive' : u?.vaultSubscriptionStatus === 'pending' && !u.vaultSubscriptionProofAvailable ? 'rejected' : 'active', expiresAt: '', confirmed: false }); else setForm({ ...form, reason: '', notes: '', transactionPin: '', confirmed: false }); setError(''); setModal(kind); };
   const submit = async (e: FormEvent) => { e.preventDefault(); if (!u || !modal) return; setError(''); try {
     let successMessage = 'Change saved and added to administrative history.';
     if (modal === 'status') await statusMutation.mutateAsync({ userId, data: { accountStatus: form.decision as 'active' | 'restricted' | 'suspended', reason: form.reason.trim(), notes: form.notes.trim() || undefined } });
@@ -286,7 +290,9 @@ function MemberDetail({ userId }: { userId: string }) {
         },
       });
       successMessage = form.decision === 'active'
-        ? 'Private Vault access approved and recorded.'
+        ? u.vaultSubscriptionProofAvailable
+          ? 'Subscription plan approved and access activated for its selected term.'
+          : 'Private Vault access granted and recorded.'
         : form.decision === 'rejected'
           ? 'Private Vault access request declined and recorded.'
           : 'Private Vault access removed and recorded.';
@@ -327,7 +333,7 @@ function MemberDetail({ userId }: { userId: string }) {
            <Panel title="Transaction PIN" eyebrow="Account security"><div className="flex flex-wrap items-center justify-between gap-3 p-4"><div><p className="text-[9px] leading-4 text-[#718588]">PIN values are never visible to administrators.</p><p className="mt-1 text-[9px] font-semibold">Status: {detail.data.transactionPinConfigured ? 'Configured' : 'Not configured'}</p></div><button disabled={!detail.data.transactionPinConfigured} onClick={() => open('pin')} className={quietButton}>Reset PIN</button></div></Panel>
            <Panel title="Password access" eyebrow="Account security"><div className="flex flex-wrap items-center justify-between gap-3 p-4"><p className="max-w-lg text-[9px] leading-4 text-[#718588]">A reset ends active sessions and emails a secure recovery link. Administrators never view or assign passwords.</p><button onClick={() => open('password-reset')} className={quietButton}>Require password reset</button></div></Panel>
          </div>
-          <Panel title="Private Vault access" eyebrow="Manual subscription review" action={<StatusPill status={u.vaultSubscriptionStatus || 'inactive'} />}><div className="flex flex-wrap items-center justify-between gap-3 p-4"><div className="min-w-0 text-[9px] leading-4 text-[#718588]"><p>{u.vaultSubscriptionStatus === 'pending' ? `Requested ${u.vaultSubscriptionRequestedAt ? dateTime(u.vaultSubscriptionRequestedAt) : 'recently'}.` : u.vaultSubscriptionExpiresAt ? `Access expires ${dateTime(u.vaultSubscriptionExpiresAt)}.` : 'Access is managed by administrator approval. No payment is collected in this app.'}</p>{u.vaultSubscriptionReason && <p className="mt-1">Last decision: {u.vaultSubscriptionReason}</p>}</div><button onClick={() => open('vault-subscription')} className={quietButton}>{u.vaultSubscriptionStatus === 'pending' ? 'Review request' : u.vaultSubscriptionStatus === 'active' ? 'Manage access' : 'Grant access'}</button></div></Panel>
+           <Panel title="Private Vault access" eyebrow="Manual subscription review" action={<StatusPill status={u.vaultSubscriptionStatus || 'inactive'} />}><div className="flex flex-wrap items-center justify-between gap-3 p-4"><div className="min-w-0 text-[9px] leading-4 text-[#718588]"><p>{u.vaultSubscriptionStatus === 'pending' ? `Request received ${u.vaultSubscriptionRequestedAt ? dateTime(u.vaultSubscriptionRequestedAt) : 'recently'}.` : u.vaultSubscriptionExpiresAt ? `Access expires ${dateTime(u.vaultSubscriptionExpiresAt)}.` : 'Access is managed by manual payment review or an explicitly recorded administrator grant.'}</p>{u.vaultSubscriptionPlan && u.vaultSubscriptionStatus !== 'inactive' && <p className="mt-1">Plan: {human(u.vaultSubscriptionPlan)} · {moneyMinor(u.vaultSubscriptionAmountMinor)}</p>}{u.vaultSubscriptionProofAvailable && <div className="mt-2 flex flex-wrap items-center gap-2"><span>Proof: {u.vaultSubscriptionProofFileName || 'Uploaded file'} · {u.vaultSubscriptionProofContentType === 'application/pdf' ? 'PDF' : u.vaultSubscriptionProofContentType === 'image/png' ? 'PNG' : 'JPG'} · {u.vaultSubscriptionProofSizeBytes ? `${(u.vaultSubscriptionProofSizeBytes / 1024 / 1024).toFixed(2)} MB` : ''}</span><button type="button" onClick={() => window.open(getGetAdminVaultSubscriptionProofUrl(userId), '_blank', 'noopener,noreferrer')} className="font-bold text-[#397b80] underline">Download proof securely</button></div>}{u.vaultSubscriptionReason && <p className="mt-1">Last decision: {u.vaultSubscriptionReason}</p>}</div><button onClick={() => open('vault-subscription')} className={quietButton}>{u.vaultSubscriptionStatus === 'pending' ? 'Review request' : u.vaultSubscriptionStatus === 'active' ? 'Manage access' : 'Grant access'}</button></div></Panel>
          <Panel title="Administrative history" eyebrow={`${detail.data.administrativeHistory.length} recent events · immutable audit trail`}>{detail.data.administrativeHistory.length ? <div className="divide-y divide-[#edf0ed]">{detail.data.administrativeHistory.map(a => <div key={a.id} className="flex flex-wrap justify-between gap-2 px-4 py-2.5"><div><b className="text-[9px]">{human(a.action)}</b><p className="mt-0.5 text-[9px] text-[#75898b]">{a.actorName} · {a.reason}</p></div><span className="text-[8px] text-[#839394]">{dateTime(a.createdAt)}</span></div>)}</div> : <Empty title="No administrative actions" text="Account decisions and profile changes will appear here." />}</Panel>
        </div>}
        {activeTab === 'accounts' && <MemberAccountsOverview user={u} wallets={detail.data.wallets} />}
@@ -351,12 +357,15 @@ function MemberDetail({ userId }: { userId: string }) {
          <Field label="Decision"><select className={input} value={form.decision} onChange={e => setForm({ ...form, decision: e.target.value })}><option value="approved">Approve</option><option value="rejected">Reject</option><option value="additional_information_required">Request additional information</option></select></Field>
          {form.decision === 'additional_information_required' && <Field label="Message to member"><textarea className={`${input} h-20 py-2`} required value={form.userMessage} onChange={e => setForm({ ...form, userMessage: e.target.value })} /></Field>}
        </>}
-        {modal === 'vault-subscription' && <>
-          <p className="rounded-lg border border-[#eadfbe] bg-[#fbf7eb] p-3 text-[10px] leading-5 text-[#806b3d]">This is a manual access decision. The app does not verify payment or collect subscription fees.</p>
-          <Field label="Access decision"><select className={input} value={form.decision} onChange={e => setForm({ ...form, decision: e.target.value })}><option value="active">Approve access</option><option value="rejected">Decline request</option><option value="inactive">Remove access</option></select></Field>
-          {form.decision === 'active' && <Field label="Optional access expiry"><input type="datetime-local" className={input} value={form.expiresAt} onChange={e => setForm({ ...form, expiresAt: e.target.value })} /></Field>}
-          <label className="flex items-start gap-2 text-[10px] leading-5 text-[#546b70]"><input type="checkbox" checked={form.confirmed} onChange={e => setForm({ ...form, confirmed: e.target.checked })} className="mt-1" required /><span>I confirm this Private Vault access decision.</span></label>
-        </>}
+         {modal === 'vault-subscription' && <>
+           <p className="rounded-lg border border-[#e2e9df] bg-[#f6f8f1] p-3 text-[10px] leading-5 text-[#63766e]">Manual review only. The app does not collect payment or connect a checkout provider. A payment-proof file is deleted after a final approve/reject decision; the decision and audit history remain.</p>
+           {u.vaultSubscriptionStatus === 'pending' && u.vaultSubscriptionProofAvailable && <div className="rounded-xl border border-[#dce8e4] bg-white p-3 text-[10px] leading-5"><p className="font-bold text-[#344f5b]">Payment request · {human(u.vaultSubscriptionPlan)}</p><p className="text-[#6d8186]">{moneyMinor(u.vaultSubscriptionAmountMinor)} · submitted {dateTime(u.vaultSubscriptionProofUploadedAt)}</p><button type="button" onClick={() => window.open(getGetAdminVaultSubscriptionProofUrl(userId), '_blank', 'noopener,noreferrer')} className="mt-2 font-bold text-[#397b80] underline">Download uploaded proof</button></div>}
+           {u.vaultSubscriptionStatus === 'pending' && !u.vaultSubscriptionProofAvailable && <p className="rounded-lg border border-[#eadfbe] bg-[#fbf7eb] p-3 text-[10px] leading-5 text-[#806b3d]">This pending record has no payment proof. It cannot be approved as a paid plan. Decline or remove it; an administrator grant can be recorded separately after the request is closed.</p>}
+           <Field label="Access decision"><select className={input} value={form.decision} onChange={e => setForm({ ...form, decision: e.target.value })}><option value="active" disabled={u.vaultSubscriptionStatus === 'pending' && !u.vaultSubscriptionProofAvailable}>{u.vaultSubscriptionProofAvailable ? `Approve ${human(u.vaultSubscriptionPlan)} plan` : 'Grant access manually'}</option><option value="rejected">Decline request</option><option value="inactive">Remove access</option></select></Field>
+           {form.decision === 'active' && u.vaultSubscriptionProofAvailable && <p className="text-[9px] leading-4 text-[#718588]">Approval activates the selected plan for its fixed term: {human(u.vaultSubscriptionPlan)}.</p>}
+           {form.decision === 'active' && !u.vaultSubscriptionProofAvailable && <Field label="Optional access expiry"><input type="datetime-local" className={input} value={form.expiresAt} onChange={e => setForm({ ...form, expiresAt: e.target.value })} /></Field>}
+           <label className="flex items-start gap-2 text-[10px] leading-5 text-[#546b70]"><input type="checkbox" checked={form.confirmed} onChange={e => setForm({ ...form, confirmed: e.target.checked })} className="mt-1" required /><span>I confirm this Private Vault access decision and the displayed payment review, if applicable.</span></label>
+         </>}
         <Field label={modal === 'pin' || modal === 'password-reset' ? 'Reset reason' : 'Audit reason'}><textarea required minLength={5} maxLength={500} className={`${input} h-20 py-2`} value={form.reason} onChange={e => setForm({ ...form, reason: e.target.value })} /></Field>{error && <p role="alert" className="text-[10px] text-[#a45247]">{error}</p>}<div className="flex justify-end gap-2 pt-2"><button type="button" onClick={() => setModal(null)} className={quietButton}>Cancel</button><button disabled={statusMutation.isPending || profileMutation.isPending || identityMutation.isPending || pinMutation.isPending || passwordMutation.isPending || vaultSubscriptionMutation.isPending || form.reason.trim().length < 5 || (modal === 'profile' && form.transactionPin.length !== 6) || ((modal === 'password-reset' || modal === 'vault-subscription') && !form.confirmed)} className={button}>{statusMutation.isPending || profileMutation.isPending || identityMutation.isPending || pinMutation.isPending || passwordMutation.isPending || vaultSubscriptionMutation.isPending ? 'Saving…' : 'Confirm & save'}</button></div>
      </form></Modal>}
    </div>;
@@ -783,45 +792,120 @@ function SettingsPage() {
   const client = useQueryClient();
   const settings = useGetAdminSettings({ query: { queryKey: getGetAdminSettingsQueryKey() } });
   const update = useUpdateAdminSettings();
-  const [limit, setLimit] = useState(''); const [threshold, setThreshold] = useState(''); const [unverifiedNotice, setUnverifiedNotice] = useState<string | null>(null); const [reason, setReason] = useState(''); const [pin, setPin] = useState(''); const [message, setMessage] = useState(''); const [error, setError] = useState('');
-  const saveSettings = async (e: FormEvent) => { e.preventDefault(); setError(''); setMessage(''); try { const result = await update.mutateAsync({ data: { fundingLimit: limit || settings.data?.fundingLimit || '', secondApprovalThreshold: threshold || settings.data?.secondApprovalThreshold || '', unverifiedDashboardMessage: (unverifiedNotice ?? settings.data?.unverifiedDashboardMessage ?? '').trim(), reason: reason.trim(), transactionPin: pin } }); setUnverifiedNotice(result.unverifiedDashboardMessage); await client.invalidateQueries({ queryKey: getGetAdminSettingsQueryKey() }); setMessage('Operational settings saved.'); setReason(''); setPin(''); } catch (err) { setError(err instanceof Error ? err.message : 'Settings could not be updated.'); } };
+  const [limit, setLimit] = useState('');
+  const [threshold, setThreshold] = useState('');
+  const [unverifiedNotice, setUnverifiedNotice] = useState<string | null>(null);
+  const [vaultPaymentMethod, setVaultPaymentMethod] = useState<string | null>(null);
+  const [vaultPaymentBankName, setVaultPaymentBankName] = useState<string | null>(null);
+  const [vaultPaymentAccountName, setVaultPaymentAccountName] = useState<string | null>(null);
+  const [vaultPaymentAccountNumber, setVaultPaymentAccountNumber] = useState<string | null>(null);
+  const [vaultPaymentInstructions, setVaultPaymentInstructions] = useState<string | null>(null);
+  const [vaultPlan1mPrice, setVaultPlan1mPrice] = useState<string | null>(null);
+  const [vaultPlan3mPrice, setVaultPlan3mPrice] = useState<string | null>(null);
+  const [vaultPlan1yPrice, setVaultPlan1yPrice] = useState<string | null>(null);
+  const [reason, setReason] = useState('');
+  const [pin, setPin] = useState('');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const saveSettings = async (e: FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setMessage('');
+    try {
+      const result = await update.mutateAsync({
+        data: {
+          fundingLimit: limit || settings.data?.fundingLimit || '',
+          secondApprovalThreshold: threshold || settings.data?.secondApprovalThreshold || '',
+          unverifiedDashboardMessage: (unverifiedNotice ?? settings.data?.unverifiedDashboardMessage ?? '').trim(),
+          vaultPaymentMethod: (vaultPaymentMethod ?? settings.data?.vaultPaymentMethod ?? '').trim(),
+          vaultPaymentBankName: (vaultPaymentBankName ?? settings.data?.vaultPaymentBankName ?? '').trim(),
+          vaultPaymentAccountName: (vaultPaymentAccountName ?? settings.data?.vaultPaymentAccountName ?? '').trim(),
+          vaultPaymentAccountNumber: (vaultPaymentAccountNumber ?? settings.data?.vaultPaymentAccountNumber ?? '').trim(),
+          vaultPaymentInstructions: (vaultPaymentInstructions ?? settings.data?.vaultPaymentInstructions ?? '').trim(),
+          vaultPlan1mPrice: vaultPlan1mPrice ?? settings.data?.vaultPlan1mPrice ?? '',
+          vaultPlan3mPrice: vaultPlan3mPrice ?? settings.data?.vaultPlan3mPrice ?? '',
+          vaultPlan1yPrice: vaultPlan1yPrice ?? settings.data?.vaultPlan1yPrice ?? '',
+          reason: reason.trim(),
+          transactionPin: pin,
+        },
+      });
+      setUnverifiedNotice(result.unverifiedDashboardMessage);
+      setVaultPaymentMethod(result.vaultPaymentMethod);
+      setVaultPaymentBankName(result.vaultPaymentBankName);
+      setVaultPaymentAccountName(result.vaultPaymentAccountName);
+      setVaultPaymentAccountNumber(result.vaultPaymentAccountNumber);
+      setVaultPaymentInstructions(result.vaultPaymentInstructions);
+      setVaultPlan1mPrice(result.vaultPlan1mPrice);
+      setVaultPlan3mPrice(result.vaultPlan3mPrice);
+      setVaultPlan1yPrice(result.vaultPlan1yPrice);
+      await client.invalidateQueries({ queryKey: getGetAdminSettingsQueryKey() });
+      setMessage('Operational and Vault billing settings saved.');
+      setReason('');
+      setPin('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Settings could not be updated.');
+    }
+  };
   return (
     <>
       <Heading
         kicker="Operational policy"
         title="Operations settings"
-        subtitle="Set funding controls, the customer identity notice, and review currency quote sources."
+        subtitle="Set funding rules, customer messaging, and manual Private Vault subscription billing."
       />
       {settings.isError && <InlineError text="Operational settings could not be loaded." retry={() => settings.refetch()} />}
       {error && <p role="alert" className="mb-4 rounded-lg bg-[#fff2ed] p-3 text-[10px] text-[#a45247]">{error}</p>}
       {message && <p role="status" className="mb-4 rounded-lg bg-[#eef7f0] p-3 text-[10px] text-[#47755e]">{message}</p>}
-      <div className="grid items-start gap-5 xl:grid-cols-[.9fr_1.1fr]">
-        <Panel title="Funding controls" eyebrow="Global policy" note="Funding is capped at 100,000,000 per currency. Operations may set a lower maximum.">
-          <div className="p-5">
-            <div className="mb-4 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-xl bg-[#f2f6f1] p-4"><p className="text-[9px] font-bold uppercase tracking-[.1em] text-[#7d8d8e]">Current maximum</p><p className="mt-2 font-mono text-[17px] font-semibold">{settings.data?.fundingLimit ? `${settings.data.fundingLimit} / currency` : '—'}</p></div>
-              <div className="rounded-xl bg-[#f2f6f1] p-4"><p className="text-[9px] font-bold uppercase tracking-[.1em] text-[#7d8d8e]">Second approval</p><p className="mt-2 font-mono text-[17px] font-semibold">{settings.data?.secondApprovalThreshold || '—'}</p></div>
-            </div>
-            <p className="mb-4 text-[9px] text-[#829294]">Frozen-wallet incoming policy: {human(settings.data?.frozenIncomingPolicy)}</p>
-            <form onSubmit={saveSettings} className="space-y-3">
+      <form onSubmit={saveSettings} className="space-y-5">
+        <div className="grid items-start gap-5 xl:grid-cols-2">
+          <Panel title="Funding controls" eyebrow="Global policy" note="Funding is capped at 100,000,000 per currency. Operations may set a lower maximum.">
+            <div className="space-y-3 p-5">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-xl bg-[#f2f6f1] p-4"><p className="text-[9px] font-bold uppercase tracking-[.1em] text-[#7d8d8e]">Current maximum</p><p className="mt-2 font-mono text-[17px] font-semibold">{settings.data?.fundingLimit ? `${settings.data.fundingLimit} / currency` : '—'}</p></div>
+                <div className="rounded-xl bg-[#f2f6f1] p-4"><p className="text-[9px] font-bold uppercase tracking-[.1em] text-[#7d8d8e]">Second approval</p><p className="mt-2 font-mono text-[17px] font-semibold">{settings.data?.secondApprovalThreshold || '—'}</p></div>
+              </div>
+              <p className="text-[9px] text-[#829294]">Frozen-wallet incoming policy: {human(settings.data?.frozenIncomingPolicy)}</p>
               <Field label="Maximum funding amount per currency"><input required className={input} inputMode="decimal" pattern="[0-9]+(\\.[0-9]{1,2})?" min="0.01" max="100000000" value={limit || settings.data?.fundingLimit || ''} onChange={e => setLimit(e.target.value)} /></Field>
-              <Field label="Second administrator approval threshold"><input required className={input} inputMode="decimal" pattern="[0-9]+(\\.[0-9]{1,2})?" min="0.01" max="100000000" value={threshold || settings.data?.secondApprovalThreshold || ''} onChange={e => setThreshold(e.target.value)} /></Field>
-              <Field label="Default warning for new and unverified members"><textarea required minLength={1} maxLength={500} className={`${input} h-24 py-2`} value={unverifiedNotice ?? settings.data?.unverifiedDashboardMessage ?? ''} onChange={e => setUnverifiedNotice(e.target.value)} placeholder="Enter the message shown until identity verification is approved." /></Field>
+              <Field label="Second administrator approval threshold"><input required className={input} inputMode="decimal" pattern="[0-9]+(\\.[0-9]{1,2})?" min="0" max="100000000" value={threshold || settings.data?.secondApprovalThreshold || ''} onChange={e => setThreshold(e.target.value)} /></Field>
+              <Field label="Default warning for new and unverified members"><textarea required minLength={1} maxLength={500} className={`${input} h-20 py-2`} value={unverifiedNotice ?? settings.data?.unverifiedDashboardMessage ?? ''} onChange={e => setUnverifiedNotice(e.target.value)} placeholder="Enter the message shown until identity verification is approved." /></Field>
               <p className="-mt-1 text-[9px] leading-4 text-[#829294]">Shown on customer dashboards while identity is not approved. It clears automatically when verification is approved; separate account restrictions still apply.</p>
-              <Field label="Audit reason"><textarea required minLength={5} maxLength={500} className={`${input} h-20 py-2`} value={reason} onChange={e => setReason(e.target.value)} /></Field>
-              <Field label="Six-digit transaction PIN"><input required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} className={input} value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))} /></Field>
-              <button disabled={settings.isLoading || update.isPending || pin.length !== 6 || reason.trim().length < 5 || !(unverifiedNotice ?? settings.data?.unverifiedDashboardMessage ?? '').trim()} className={`${button} w-full`}>{update.isPending ? 'Saving…' : 'Save settings'}</button>
-            </form>
-          </div>
-        </Panel>
+            </div>
+          </Panel>
+          <Panel title="Private Vault manual billing" eyebrow="Administrator-reviewed access" note="Members pay using the instructions below and submit proof. No checkout or automatic charge is connected.">
+            <div className="space-y-3 p-5">
+              <Field label="Manual payment method"><input required maxLength={80} className={input} value={vaultPaymentMethod ?? settings.data?.vaultPaymentMethod ?? ''} onChange={e => setVaultPaymentMethod(e.target.value)} placeholder="Bank transfer" /></Field>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Bank name (optional)"><input maxLength={120} className={input} value={vaultPaymentBankName ?? settings.data?.vaultPaymentBankName ?? ''} onChange={e => setVaultPaymentBankName(e.target.value)} /></Field>
+                <Field label="Account name (optional)"><input maxLength={120} className={input} value={vaultPaymentAccountName ?? settings.data?.vaultPaymentAccountName ?? ''} onChange={e => setVaultPaymentAccountName(e.target.value)} /></Field>
+              </div>
+              <Field label="Payment account or reference (optional)"><input maxLength={40} className={input} value={vaultPaymentAccountNumber ?? settings.data?.vaultPaymentAccountNumber ?? ''} onChange={e => setVaultPaymentAccountNumber(e.target.value)} /></Field>
+              <Field label="Payment instructions"><textarea maxLength={1000} className={`${input} h-20 py-2`} value={vaultPaymentInstructions ?? settings.data?.vaultPaymentInstructions ?? ''} onChange={e => setVaultPaymentInstructions(e.target.value)} placeholder="Tell members how to make manual payment and what reference to include." /></Field>
+              <div className="rounded-xl border border-[#e4e9df] bg-[#f8faf5] p-3">
+                <p className="mb-2 text-[9px] font-bold uppercase tracking-[.12em] text-[#6f817d]">Access plans · NGN</p>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <Field label="1 month"><input required className={input} inputMode="decimal" pattern="[0-9]+(\\.[0-9]{1,2})?" value={vaultPlan1mPrice ?? settings.data?.vaultPlan1mPrice ?? '12000.00'} onChange={e => setVaultPlan1mPrice(e.target.value)} /></Field>
+                  <Field label="3 months"><input required className={input} inputMode="decimal" pattern="[0-9]+(\\.[0-9]{1,2})?" value={vaultPlan3mPrice ?? settings.data?.vaultPlan3mPrice ?? '22000.00'} onChange={e => setVaultPlan3mPrice(e.target.value)} /></Field>
+                  <Field label="1 year"><input required className={input} inputMode="decimal" pattern="[0-9]+(\\.[0-9]{1,2})?" value={vaultPlan1yPrice ?? settings.data?.vaultPlan1yPrice ?? '79000.00'} onChange={e => setVaultPlan1yPrice(e.target.value)} /></Field>
+                </div>
+              </div>
+              <p className="text-[9px] leading-4 text-[#829294]">Uploaded proof is private to the member and authorized administrators, and is deleted after approval or rejection. The review decision and audit record remain.</p>
+            </div>
+          </Panel>
+        </div>
         <Panel title="Exchange-rate quotes" eyebrow="Current rate sources" note="Frankfurter is primary; Grey is a read-only fallback. Neither is used to move money.">
-          <div className="space-y-4 p-5 text-[11px] leading-5 text-[#657c82]">
+          <div className="space-y-3 p-5 text-[10px] leading-5 text-[#657c82]">
             <p>Globus uses Frankfurter’s published reference rates when a transfer pair is selected. Quotes are cached briefly and refreshed; the rate and retrieval time used are saved with the Globus transaction record.</p>
             <p>If Frankfurter cannot quote a pair, Globus tries Grey’s dedicated rate endpoint. If neither source can provide a valid rate, the transfer is blocked rather than using an administrator-entered or guessed value.</p>
             <p>Globus requests rates only. It does not call any Grey swap, payout, or transfer endpoints. A quote does not confirm that an outside bank received or sent money.</p>
           </div>
         </Panel>
-      </div>
+        <Panel title="Confirm and save" eyebrow="Audit required">
+          <div className="grid gap-3 p-5 sm:grid-cols-2">
+            <Field label="Audit reason"><textarea required minLength={5} maxLength={500} className={`${input} h-20 py-2`} value={reason} onChange={e => setReason(e.target.value)} /></Field>
+            <div className="space-y-3"><Field label="Six-digit transaction PIN"><input required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} className={input} value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))} /></Field><button disabled={settings.isLoading || update.isPending || pin.length !== 6 || reason.trim().length < 5} className={`${button} w-full`}>{update.isPending ? 'Saving…' : 'Save settings'}</button></div>
+          </div>
+        </Panel>
+      </form>
     </>
   );
 }

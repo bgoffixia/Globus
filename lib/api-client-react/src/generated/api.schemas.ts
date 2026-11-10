@@ -297,6 +297,18 @@ export const BankVaultStatusSubscriptionStatus = {
   expired: 'expired',
 } as const;
 
+/**
+ * @nullable
+ */
+export type BankVaultStatusPlanCode = typeof BankVaultStatusPlanCode[keyof typeof BankVaultStatusPlanCode] | null;
+
+
+export const BankVaultStatusPlanCode = {
+  '1m': '1m',
+  '3m': '3m',
+  '1y': '1y',
+} as const;
+
 export interface BankVaultStatus {
   configured: boolean;
   subscriptionStatus: BankVaultStatusSubscriptionStatus;
@@ -305,9 +317,90 @@ export interface BankVaultStatus {
   requestedAt: string | null;
   /** @nullable */
   expiresAt: string | null;
+  /** @nullable */
+  planCode: BankVaultStatusPlanCode;
+  /**
+     * @nullable
+     * @pattern ^[0-9]+$
+     */
+  amountMinor: string | null;
+  /** @nullable */
+  proofUploadedAt: string | null;
 }
 
 export type BankVaultSubscriptionRequestResult = BankVaultStatus;
+
+export type BankVaultBillingPlansItemCode = typeof BankVaultBillingPlansItemCode[keyof typeof BankVaultBillingPlansItemCode];
+
+
+export const BankVaultBillingPlansItemCode = {
+  '1m': '1m',
+  '3m': '3m',
+  '1y': '1y',
+} as const;
+
+export type BankVaultBillingPlansItemCurrency = typeof BankVaultBillingPlansItemCurrency[keyof typeof BankVaultBillingPlansItemCurrency];
+
+
+export const BankVaultBillingPlansItemCurrency = {
+  NGN: 'NGN',
+} as const;
+
+export type BankVaultBillingPlansItem = {
+  code: BankVaultBillingPlansItemCode;
+  label: string;
+  durationMonths: number;
+  /** @pattern ^[0-9]+$ */
+  priceMinor: string;
+  currency: BankVaultBillingPlansItemCurrency;
+};
+
+export interface BankVaultBilling {
+  configured: boolean;
+  paymentMethod: string;
+  bankName: string;
+  accountName: string;
+  accountNumber: string;
+  instructions: string;
+  plans: BankVaultBillingPlansItem[];
+}
+
+export type BankVaultProofUploadInputPlanCode = typeof BankVaultProofUploadInputPlanCode[keyof typeof BankVaultProofUploadInputPlanCode];
+
+
+export const BankVaultProofUploadInputPlanCode = {
+  '1m': '1m',
+  '3m': '3m',
+  '1y': '1y',
+} as const;
+
+export type BankVaultProofUploadInputContentType = typeof BankVaultProofUploadInputContentType[keyof typeof BankVaultProofUploadInputContentType];
+
+
+export const BankVaultProofUploadInputContentType = {
+  'application/pdf': 'application/pdf',
+  'image/jpeg': 'image/jpeg',
+  'image/png': 'image/png',
+} as const;
+
+export interface BankVaultProofUploadInput {
+  planCode: BankVaultProofUploadInputPlanCode;
+  contentType: BankVaultProofUploadInputContentType;
+  /**
+     * @minimum 1
+     * @maximum 10485760
+     */
+  sizeBytes: number;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  fileName: string;
+}
+
+export interface BankVaultProofUploadResult {
+  uploadUrl: string;
+}
 
 export type BankVaultEmailPreferencesBannerTheme = typeof BankVaultEmailPreferencesBannerTheme[keyof typeof BankVaultEmailPreferencesBannerTheme];
 
@@ -959,6 +1052,18 @@ export const AdminUserVaultSubscriptionStatus = {
   expired: 'expired',
 } as const;
 
+/**
+ * @nullable
+ */
+export type AdminUserVaultSubscriptionPlan = typeof AdminUserVaultSubscriptionPlan[keyof typeof AdminUserVaultSubscriptionPlan] | null;
+
+
+export const AdminUserVaultSubscriptionPlan = {
+  '1m': '1m',
+  '3m': '3m',
+  '1y': '1y',
+} as const;
+
 export interface AdminUser {
   id: string;
   email: string;
@@ -990,6 +1095,22 @@ export interface AdminUser {
   vaultSubscriptionExpiresAt?: string | null;
   /** @nullable */
   vaultSubscriptionReason?: string | null;
+  /** @nullable */
+  vaultSubscriptionPlan?: AdminUserVaultSubscriptionPlan;
+  /**
+     * @nullable
+     * @pattern ^[0-9]+$
+     */
+  vaultSubscriptionAmountMinor?: string | null;
+  vaultSubscriptionProofAvailable?: boolean;
+  /** @nullable */
+  vaultSubscriptionProofContentType?: string | null;
+  /** @nullable */
+  vaultSubscriptionProofSizeBytes?: number | null;
+  /** @nullable */
+  vaultSubscriptionProofFileName?: string | null;
+  /** @nullable */
+  vaultSubscriptionProofUploadedAt?: string | null;
   walletCount: number;
   createdAt: string;
 }
@@ -1373,6 +1494,25 @@ export interface AdminSettings {
      * @maxLength 500
      */
   unverifiedDashboardMessage: string;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  vaultPaymentMethod: string;
+  /** @maxLength 120 */
+  vaultPaymentBankName: string;
+  /** @maxLength 120 */
+  vaultPaymentAccountName: string;
+  /** @maxLength 40 */
+  vaultPaymentAccountNumber: string;
+  /** @maxLength 1000 */
+  vaultPaymentInstructions: string;
+  /** @pattern ^[0-9]{1,12}(\.[0-9]{1,2})?$ */
+  vaultPlan1mPrice: string;
+  /** @pattern ^[0-9]{1,12}(\.[0-9]{1,2})?$ */
+  vaultPlan3mPrice: string;
+  /** @pattern ^[0-9]{1,12}(\.[0-9]{1,2})?$ */
+  vaultPlan1yPrice: string;
   updatedAt: string;
 }
 
@@ -1386,6 +1526,25 @@ export interface AdminSettingsInput {
      * @maxLength 500
      */
   unverifiedDashboardMessage: string;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  vaultPaymentMethod: string;
+  /** @maxLength 120 */
+  vaultPaymentBankName: string;
+  /** @maxLength 120 */
+  vaultPaymentAccountName: string;
+  /** @maxLength 40 */
+  vaultPaymentAccountNumber: string;
+  /** @maxLength 1000 */
+  vaultPaymentInstructions: string;
+  /** @pattern ^[0-9]{1,12}(\.[0-9]{1,2})?$ */
+  vaultPlan1mPrice: string;
+  /** @pattern ^[0-9]{1,12}(\.[0-9]{1,2})?$ */
+  vaultPlan3mPrice: string;
+  /** @pattern ^[0-9]{1,12}(\.[0-9]{1,2})?$ */
+  vaultPlan1yPrice: string;
   /**
      * @minLength 5
      * @maxLength 500

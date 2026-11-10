@@ -104,6 +104,24 @@ export const bankUsersTable = pgTable("bank_users", {
   vaultSubscriptionExpiresAt: timestamp("vault_subscription_expires_at", {
     withTimezone: true,
   }),
+  vaultSubscriptionPlan: text("vault_subscription_plan"),
+  vaultSubscriptionAmountMinor: text("vault_subscription_amount_minor"),
+  vaultSubscriptionProofObjectPath: text(
+    "vault_subscription_proof_object_path",
+  ),
+  vaultSubscriptionProofContentType: text(
+    "vault_subscription_proof_content_type",
+  ),
+  vaultSubscriptionProofSizeBytes: integer(
+    "vault_subscription_proof_size_bytes",
+  ),
+  vaultSubscriptionProofFileName: text(
+    "vault_subscription_proof_file_name",
+  ),
+  vaultSubscriptionProofUploadedAt: timestamp(
+    "vault_subscription_proof_uploaded_at",
+    { withTimezone: true },
+  ),
   vaultEmailBannerTheme: text("vault_email_banner_theme")
     .notNull()
     .default("navy"),
@@ -358,6 +376,30 @@ export const bankAdminSettingsTable = pgTable("bank_admin_settings", {
   frozenIncomingPolicy: text("frozen_incoming_policy")
     .notNull()
     .default("allow_frozen"),
+  vaultPaymentMethod: text("vault_payment_method")
+    .notNull()
+    .default("Manual bank transfer"),
+  vaultPaymentBankName: text("vault_payment_bank_name")
+    .notNull()
+    .default(""),
+  vaultPaymentAccountName: text("vault_payment_account_name")
+    .notNull()
+    .default(""),
+  vaultPaymentAccountNumber: text("vault_payment_account_number")
+    .notNull()
+    .default(""),
+  vaultPaymentInstructions: text("vault_payment_instructions")
+    .notNull()
+    .default(""),
+  vaultPlan1mPriceMinor: text("vault_plan_1m_price_minor")
+    .notNull()
+    .default("1200000"),
+  vaultPlan3mPriceMinor: text("vault_plan_3m_price_minor")
+    .notNull()
+    .default("2200000"),
+  vaultPlan1yPriceMinor: text("vault_plan_1y_price_minor")
+    .notNull()
+    .default("7900000"),
   updatedByUserId: text("updated_by_user_id").references(() => bankUsersTable.id),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
