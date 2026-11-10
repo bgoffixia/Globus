@@ -1,4 +1,4 @@
-const CACHE_NAME = "globus-app-shell-v1";
+const CACHE_NAME = "globus-app-shell-v2";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -11,7 +11,9 @@ self.addEventListener("install", (event) => {
       } catch {
         // A first offline visit has no shell to fall back to.
       }
-      await self.skipWaiting();
+      // Let updates wait until the current page session ends. This avoids
+      // switching the app shell while a member is completing sign-in or email
+      // verification in another app.
     })(),
   );
 });
@@ -25,7 +27,8 @@ self.addEventListener("activate", (event) => {
           .filter((key) => key.startsWith("globus-app-shell-") && key !== CACHE_NAME)
           .map((key) => caches.delete(key)),
       );
-      await self.clients.claim();
+      // Do not take control of already-open tabs during activation. They keep
+      // their current document until the member navigates or opens the app again.
     })(),
   );
 });
