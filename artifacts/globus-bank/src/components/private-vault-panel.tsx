@@ -1,15 +1,21 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { ArrowLeft, ArrowRight, CheckCircle2, LockKeyhole, ShieldCheck } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
+import { useUser } from '@clerk/react';
 import {
   getGetBankVaultBillingQueryKey,
   getGetBankVaultEmailPreferencesQueryKey,
   getGetBankVaultStatusQueryKey,
+  getGetBankPushConfigQueryKey,
+  getGetBankPushPreferencesQueryKey,
   getListBankTransactionsQueryKey,
   getListBankVaultTransactionNotesQueryKey,
   getListBankVaultWalletControlsQueryKey,
   useCreateBankVaultSubscriptionProofUploadUrl,
+  useDeleteBankPushSubscription,
   useDeleteBankVaultTransactionNote,
+  useGetBankPushConfig,
+  useGetBankPushPreferences,
   useGetBankVaultBilling,
   useGetBankVaultEmailPreferences,
   useGetBankVaultStatus,
@@ -18,13 +24,16 @@ import {
   useListBankVaultTransactionNotes,
   useListBankVaultWalletControls,
   useRequestBankVaultSubscription,
+  useSaveBankPushSubscription,
   useUnlockBankVault,
+  useUpdateBankPushPreferences,
   useUpdateBankVaultEmailPreferences,
   useUpdateBankVaultPasscode,
   useUpdateBankVaultTransactionNote,
   useUpdateBankVaultWalletControl,
 } from '@workspace/api-client-react';
 import type { BankTransaction, BankVaultEmailPreferences, BankVaultProofUploadInputContentType, BankVaultWalletControl } from '@workspace/api-client-react';
+import { fetchWebpushrSubscriberId, loadWebpushr } from '../lib/webpushr-client';
 
 const fieldClass = 'h-9 w-full rounded-lg border border-[#dfe6eb] bg-white px-3 text-[11px] text-[#344b64] outline-none focus:border-[#77aeb0] focus:ring-2 focus:ring-[#77aeb0]/15';
 type VaultPlanCode = '1m' | '3m' | '1y';
@@ -53,6 +62,7 @@ function bannerForeground(hex: string) {
 
 export function PrivateVaultPanel() {
   const queryClient = useQueryClient();
+  const { user } = useUser();
   const status = useGetBankVaultStatus({ query: { queryKey: getGetBankVaultStatusQueryKey(), retry: false, refetchInterval: 60_000 } });
   const initialize = useInitializeBankVaultPasscode();
   const unlock = useUnlockBankVault();
@@ -68,6 +78,11 @@ export function PrivateVaultPanel() {
   const [bannerBackgroundColor, setBannerBackgroundColor] = useState('#12385d');
   const [includeSupportLink, setIncludeSupportLink] = useState(false);
   const [supportUrl, setSupportUrl] = useState('');
+  const [browserPushMessage, setBrowserPushMessage] = useState('');
+  const [browserPushError, setBrowserPushError] = useState('');
+  const subscriptionStorageKey = user?.id ? `globus-push-subscription-id:${user.id}` : '';
+  const [savedPushSubscriptionId, setSavedPushSubscriptionId] = useState('');
+  const browserPushSupported = typeof window !== 'undefined' && 'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window;
   const [selectedTransactionId, setSelectedTransactionId] = useState('');
   const [privateNoteDraft, setPrivateNoteDraft] = useState('');
   const [selectedPlan, setSelectedPlan] = useState<VaultPlanCode>('1m');
@@ -90,6 +105,19 @@ export function PrivateVaultPanel() {
   const requestSubscription = useRequestBankVaultSubscription({
     request: sessionToken ? { headers: { 'X-Globus-Vault-Session': sessionToken } } : undefined,
   });
+  const browserPushConfig = useGetBankPushConfig({
+    query: { queryKey: getGetBankPushConfigQueryKey(), retry: false },
+  });
+  const browserPushPreferences = useGetBankPushPreferences({
+    query: {
+      queryKey: getGetBankPushPreferencesQueryKey(),
+      enabled: !!sessionToken,
+      retry: false,
+    },
+  });
+  const savePushSubscription = useSaveBankPushSubscription();
+  const deletePushSubscription = useDeleteBankPushSubscription();
+  const updateBrowserPushPreferences = useUpdateBankPushPreferences();
   useEffect(() => () => {
     void queryClient.cancelQueries({ queryKey: getListBankVaultWalletControlsQueryKey() });
     void queryClient.cancelQueries({ queryKey: getGetBankVaultEmailPreferencesQueryKey() });
@@ -150,6 +178,13 @@ export function PrivateVaultPanel() {
   const deleteTransactionNote = useDeleteBankVaultTransactionNote({
     request: sessionToken ? { headers: { 'X-Globus-Vault-Session': sessionToken } } : undefined,
   });
+  useEffect(() => {
+    if (!subscriptionStorageKey) {
+      setSavedPushSubscriptionId('');
+      return;
+    }
+    setSavedPushSubscriptionId(localStorage.getItem(subscriptionStorageKey) ?? '');
+  }, [subscriptionStorageKey]);
   useEffect(() => {
     if (!emailPreferences.data) return;
     setBannerTheme(emailPreferences.data.bannerTheme);
@@ -396,6 +431,74 @@ export function PrivateVaultPanel() {
       setError(err instanceof Error ? err.message : 'The private note could not be deleted.');
     }
   };
+  const enableBrowserAlerts = async () => {
+    setBrowserPushError('');
+    setBrowserPushMessage('');
+    if (!browserPushSupported) {
+      setBrowserPushError('Browser notifications are not supported on this device.');
+      return;
+    }
+    if (!browserPushConfig.data?.configured || !browserPushConfig.data.siteKey) {
+      setBrowserPushError('Browser alerts are not available right now.');
+      return;
+    }
+    try {
+      let permission = Notification.permission;
+      if (permission === 'default') permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        setBrowserPushError('Allow notifications in your browser settings, then try again.');
+        return;
+      }
+      const api = await loadWebpushr(browserPushConfig.data.siteKey);
+      const subscriberId = await fetchWebpushrSubscriberId(api);
+      if (!subscriberId) {
+        setBrowserPushMessage('Finish the browser permission prompt, then select Enable alerts again.');
+        return;
+      }
+      const result = await savePushSubscription.mutateAsync({ data: { subscriberId } });
+      setSavedPushSubscriptionId(result.id ?? '');
+      if (result.id && subscriptionStorageKey) {
+        localStorage.setItem(subscriptionStorageKey, result.id);
+      }
+      setBrowserPushMessage('Browser alerts are enabled on this device.');
+      await queryClient.invalidateQueries({ queryKey: getGetBankPushConfigQueryKey() });
+    } catch (err) {
+      setBrowserPushError(err instanceof Error ? err.message : 'Browser alerts could not be enabled.');
+    }
+  };
+  const disableBrowserAlerts = async () => {
+    setBrowserPushError('');
+    setBrowserPushMessage('');
+    if (!savedPushSubscriptionId) {
+      setBrowserPushError('This device alert link could not be found. Enable alerts on this device first.');
+      return;
+    }
+    try {
+      await deletePushSubscription.mutateAsync({ subscriptionId: savedPushSubscriptionId });
+      setSavedPushSubscriptionId('');
+      if (subscriptionStorageKey) localStorage.removeItem(subscriptionStorageKey);
+      setBrowserPushMessage('Globus alerts are disconnected for this device.');
+      await queryClient.invalidateQueries({ queryKey: getGetBankPushConfigQueryKey() });
+    } catch (err) {
+      setBrowserPushError(err instanceof Error ? err.message : 'Browser alerts could not be disabled.');
+    }
+  };
+  const updateBrowserAlertCategory = async (
+    key: 'transferEnabled' | 'walletEnabled' | 'securityEnabled',
+    enabled: boolean,
+  ) => {
+    setBrowserPushError('');
+    setBrowserPushMessage('');
+    try {
+      const preferences = await updateBrowserPushPreferences.mutateAsync({
+        data: { [key]: enabled },
+      });
+      queryClient.setQueryData(getGetBankPushPreferencesQueryKey(), preferences);
+      setBrowserPushMessage('Alert choices saved for all linked devices.');
+    } catch (err) {
+      setBrowserPushError(err instanceof Error ? err.message : 'Alert choices could not be saved.');
+    }
+  };
   const changeControl = async (control: BankVaultWalletControl, input: Partial<BankVaultWalletControl>) => {
     if (!sessionToken || !status.data?.subscriptionActive || busyWallet) return;
     setBusyWallet(control.walletId);
@@ -555,6 +658,33 @@ export function PrivateVaultPanel() {
                   ) : <p className="mt-2 rounded-lg border border-dashed border-[#dfe6eb] p-3 text-center text-[9px] text-[#8492a1]">No wallet controls are available.</p>}
                 </div>
               </div>
+              <details className="mt-3 rounded-xl border border-[#e7ecef] bg-[#fbfcfd] p-3" data-testid="vault-browser-alert-settings">
+                <summary className="cursor-pointer text-[10px] font-bold text-[#344b64]">Browser alerts</summary>
+                <p className="mt-2 text-[9px] leading-4 text-[#8190a0]">Choose which account alerts can reach linked devices. In-app notifications remain available in the notification center.</p>
+                {browserPushConfig.isError && <p role="alert" className="mt-2 text-[9px] text-[#a24940]">Browser alert setup is unavailable. Try again later.</p>}
+                {browserPushPreferences.isLoading ? <div className="mt-2 h-8 animate-pulse rounded-lg bg-[#f0f4f6]" /> :
+                  browserPushPreferences.isError ? <p role="alert" className="mt-2 text-[9px] text-[#a24940]">Alert choices could not be loaded.</p> :
+                    <fieldset disabled={updateBrowserPushPreferences.isPending} className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-3">
+                      <legend className="sr-only">Push alert categories</legend>
+                      {([
+                        ['transferEnabled', 'Transfers'],
+                        ['walletEnabled', 'Wallet activity'],
+                        ['securityEnabled', 'Security'],
+                      ] as const).map(([key, label]) => <label key={key} className="flex min-w-0 items-center gap-2 rounded-lg border border-[#e4eaee] bg-white px-3 py-2 text-[9px] font-medium text-[#62788c]">
+                        <input type="checkbox" checked={browserPushPreferences.data?.[key] ?? true} onChange={event => void updateBrowserAlertCategory(key, event.currentTarget.checked)} data-testid={`vault-toggle-push-${key}`} className="accent-[#438481]" />
+                        <span>{label}</span>
+                      </label>)}
+                    </fieldset>}
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                  <span data-testid="status-vault-browser-push" className="text-[8px] text-[#8794a2]">
+                    {browserPushConfig.isLoading ? 'Checking availability…' : !browserPushSupported ? 'Not supported on this device' : browserPushConfig.data?.configured ? savedPushSubscriptionId ? 'This device is linked' : 'Available to enable on this device' : 'Not configured'}
+                  </span>
+                  {savedPushSubscriptionId ? <button type="button" disabled={deletePushSubscription.isPending} onClick={() => void disableBrowserAlerts()} data-testid="button-vault-disable-browser-push" className="h-8 rounded-lg border border-[#dfe6eb] bg-white px-3 text-[9px] font-bold text-[#52697e] disabled:opacity-50">{deletePushSubscription.isPending ? 'Disabling…' : 'Disable alerts on this device'}</button> :
+                    <button type="button" disabled={!browserPushSupported || !browserPushConfig.data?.configured || savePushSubscription.isPending} onClick={() => void enableBrowserAlerts()} data-testid="button-vault-enable-browser-push" className="h-8 rounded-lg bg-[#173858] px-3 text-[9px] font-bold text-white disabled:cursor-not-allowed disabled:opacity-45">{savePushSubscription.isPending ? 'Linking…' : 'Enable alerts on this device'}</button>}
+                </div>
+                {browserPushError && <p role="alert" data-testid="status-vault-browser-push-error" className="mt-2 rounded-md bg-[#fff1ef] px-2 py-1.5 text-[8px] text-[#a24940]">{browserPushError}</p>}
+                {browserPushMessage && <p role="status" data-testid="status-vault-browser-push-message" className="mt-2 rounded-md bg-[#eef7f1] px-2 py-1.5 text-[8px] text-[#41755f]">{browserPushMessage}</p>}
+              </details>
               <details className="mt-3 rounded-xl border border-[#e7ecef] bg-[#fbfcfd] p-3" data-testid="vault-personal-transaction-notes">
                 <summary className="cursor-pointer text-[10px] font-bold text-[#344b64]">Personal transaction notes</summary>
                 <p className="mt-2 text-[9px] leading-4 text-[#8190a0]">These notes are private to your Vault. They never change balances, official transaction details, receipts, or notifications.</p>

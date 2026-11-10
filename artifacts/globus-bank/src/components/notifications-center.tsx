@@ -5,94 +5,14 @@ import { useLocation } from 'wouter';
 import { useUser } from '@clerk/react';
 import {
   getGetBankPushConfigQueryKey,
-  getGetBankPushPreferencesQueryKey,
   getListBankNotificationsQueryKey,
   useClearBankNotifications,
-  useDeleteBankPushSubscription,
   useGetBankPushConfig,
-  useGetBankPushPreferences,
   useListBankNotifications,
   useMarkBankNotificationRead,
   useSaveBankPushSubscription,
-  useUpdateBankPushPreferences,
 } from '@workspace/api-client-react';
-
-type WebpushrCommand = (method: string, argument?: unknown) => void;
-declare global {
-  interface Window {
-    webpushr?: WebpushrCommand;
-    __globusWebpushrLoad?: Promise<WebpushrCommand>;
-    __globusWebpushrSiteKey?: string;
-  }
-}
-
-function loadWebpushr(siteKey: string): Promise<WebpushrCommand> {
-  if (window.__globusWebpushrLoad) return window.__globusWebpushrLoad;
-  window.__globusWebpushrLoad = new Promise((resolve, reject) => {
-    const setup = () => {
-      const api = window.webpushr;
-      if (!api) {
-        reject(new Error('Webpushr did not finish loading.'));
-        return;
-      }
-      if (window.__globusWebpushrSiteKey !== siteKey) {
-        const base = new URL(import.meta.env.BASE_URL || '/', window.location.origin);
-        const worker = new URL('sw.js', base).pathname;
-        api('setup', {
-          key: siteKey,
-          sw: worker,
-          scope: base.pathname,
-          integration: 'https',
-        });
-        window.__globusWebpushrSiteKey = siteKey;
-      }
-      resolve(api);
-    };
-
-    const existing = document.getElementById('webpushr-script') as HTMLScriptElement | null;
-    if (existing) {
-      if (window.webpushr && window.__globusWebpushrSiteKey === siteKey) {
-        resolve(window.webpushr);
-      } else {
-        existing.addEventListener('load', setup, { once: true });
-        existing.addEventListener('error', () => reject(new Error('Webpushr could not be loaded.')), { once: true });
-      }
-      return;
-    }
-
-    if (!window.webpushr) {
-      const queue: unknown[][] = [];
-      const queuedApi = ((...args: unknown[]) => { queue.push(args); }) as WebpushrCommand & { q?: unknown[][] };
-      queuedApi.q = queue;
-      window.webpushr = queuedApi;
-    }
-    const script = document.createElement('script');
-    script.id = 'webpushr-script';
-    script.src = 'https://cdn.webpushr.com/app.min.js';
-    script.async = true;
-    script.referrerPolicy = 'strict-origin-when-cross-origin';
-    script.onload = setup;
-    script.onerror = () => reject(new Error('Webpushr could not be loaded.'));
-    document.head.appendChild(script);
-  });
-  window.__globusWebpushrLoad.catch(() => { window.__globusWebpushrLoad = undefined; });
-  return window.__globusWebpushrLoad;
-}
-
-function fetchWebpushrSubscriberId(api: WebpushrCommand): Promise<string | null> {
-  return new Promise(resolve => {
-    const timeout = window.setTimeout(() => resolve(null), 7000);
-    try {
-      api('fetch_id', (value: unknown) => {
-        window.clearTimeout(timeout);
-        resolve(typeof value === 'string' && /^[A-Za-z0-9._:-]{1,160}$/.test(value) ? value : null);
-      });
-    } catch {
-      window.clearTimeout(timeout);
-      resolve(null);
-    }
-  });
-}
+import { fetchWebpushrSubscriberId, loadWebpushr } from '../lib/webpushr-client';
 
 const categoryIcon = {
   transfer: ArrowLeftRight,
@@ -108,14 +28,8 @@ export function NotificationsCenter() {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const [panelTop, setPanelTop] = useState(56);
-  const [pushMessage, setPushMessage] = useState('');
-  const [pushError, setPushError] = useState('');
   const [notificationError, setNotificationError] = useState('');
   const subscriptionStorageKey = user?.id ? `globus-push-subscription-id:${user.id}` : '';
-  const permissionPromptStorageKey = user?.id ? `globus-push-permission-prompted:${user.id}` : '';
-  const [savedSubscriptionId, setSavedSubscriptionId] = useState(() =>
-    subscriptionStorageKey ? localStorage.getItem(subscriptionStorageKey) ?? '' : '',
-  );
   useEffect(() => {
     if (location === '/notifications') setOpen(true);
   }, [location]);
@@ -140,70 +54,39 @@ export function NotificationsCenter() {
       document.removeEventListener('pointerdown', dismissOutside);
     };
   }, [open]);
-  useEffect(() => {
-    if (!subscriptionStorageKey) {
-      setSavedSubscriptionId('');
-      return;
-    }
-    setSavedSubscriptionId(localStorage.getItem(subscriptionStorageKey) ?? '');
-  }, [subscriptionStorageKey]);
   const notifications = useListBankNotifications({
     query: { queryKey: getListBankNotificationsQueryKey(), refetchOnWindowFocus: true, refetchInterval: 60_000 },
   });
   const push = useGetBankPushConfig({ query: { queryKey: getGetBankPushConfigQueryKey(), retry: false } });
-  const pushPreferences = useGetBankPushPreferences({
-    query: { queryKey: getGetBankPushPreferencesQueryKey(), retry: false },
-  });
   const markRead = useMarkBankNotificationRead();
   const clearNotifications = useClearBankNotifications();
   const saveSubscription = useSaveBankPushSubscription();
   const saveSubscriber = saveSubscription.mutateAsync;
-  const deleteSubscription = useDeleteBankPushSubscription();
-  const updatePushPreferences = useUpdateBankPushPreferences();
   const unreadCount = notifications.data?.filter(item => !item.readAt).length ?? 0;
   const supported = typeof window !== 'undefined' && 'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window;
 
   useEffect((): (() => void) | undefined => {
     if (!user?.id || !push.data?.configured || !push.data.siteKey || !supported) return undefined;
-    if (Notification.permission === 'granted') {
-      if (subscriptionStorageKey && localStorage.getItem(subscriptionStorageKey)) return undefined;
-      let cancelled = false;
-      void (async () => {
-        try {
-          const siteKey = push.data?.siteKey;
-          if (!siteKey) return;
-          const api = await loadWebpushr(siteKey);
-          const subscriberId = await fetchWebpushrSubscriberId(api);
-          if (!subscriberId || cancelled) return;
-          const result = await saveSubscriber({ data: { subscriberId } });
-          if (cancelled) return;
-          setSavedSubscriptionId(result.id ?? '');
-          if (result.id && subscriptionStorageKey) {
-            localStorage.setItem(subscriptionStorageKey, result.id);
-          }
-          setPushMessage('Browser alerts are enabled on this device.');
-          await queryClient.invalidateQueries({ queryKey: getGetBankPushConfigQueryKey() });
-        } catch (err) {
-          if (!cancelled) {
-            setPushError(err instanceof Error ? err.message : 'Browser alerts could not be linked automatically.');
-          }
+    if (Notification.permission !== 'granted') return undefined;
+    if (subscriptionStorageKey && localStorage.getItem(subscriptionStorageKey)) return undefined;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const api = await loadWebpushr(push.data.siteKey!);
+        const subscriberId = await fetchWebpushrSubscriberId(api);
+        if (!subscriberId || cancelled) return;
+        const result = await saveSubscriber({ data: { subscriberId } });
+        if (cancelled) return;
+        if (result.id && subscriptionStorageKey) {
+          localStorage.setItem(subscriptionStorageKey, result.id);
         }
-      })();
-      return () => { cancelled = true; };
-    }
-
-    if (
-      Notification.permission === 'default' &&
-      permissionPromptStorageKey &&
-      !localStorage.getItem(permissionPromptStorageKey)
-    ) {
-      localStorage.setItem(permissionPromptStorageKey, 'shown');
-      setPushMessage('In-app notifications are on for your account. Tap Enable alerts to allow browser notifications on this device.');
-      setOpen(true);
-    }
-    return undefined;
+        await queryClient.invalidateQueries({ queryKey: getGetBankPushConfigQueryKey() });
+      } catch {
+        // Keep automatic device linking quiet; the customer can retry from the Vault.
+      }
+    })();
+    return () => { cancelled = true; };
   }, [
-    permissionPromptStorageKey,
     push.data?.configured,
     push.data?.siteKey,
     queryClient,
@@ -213,78 +96,6 @@ export function NotificationsCenter() {
     user?.id,
   ]);
 
-  const enablePush = async () => {
-    setPushError('');
-    setPushMessage('');
-    if (!supported) {
-      setPushError('Browser push is not supported in this browser.');
-      return;
-    }
-    if (!push.data?.configured || !push.data.siteKey) {
-      setPushError('Webpushr has not been configured for this app.');
-      return;
-    }
-    try {
-      let permission = Notification.permission;
-      if (permission === 'default') {
-        permission = await Notification.requestPermission();
-      }
-      if (permission !== 'granted') {
-        setPushError('Notifications are blocked in browser settings. Allow them there, then try again.');
-        return;
-      }
-      const api = await loadWebpushr(push.data.siteKey);
-      const subscriberId = await fetchWebpushrSubscriberId(api);
-      if (!subscriberId) {
-        setPushMessage('Complete the Webpushr permission prompt, then select Enable alerts again to link this device.');
-        return;
-      }
-      const result = await saveSubscriber({
-        data: { subscriberId },
-      });
-      setSavedSubscriptionId(result.id ?? '');
-      if (result.id && subscriptionStorageKey) {
-        localStorage.setItem(subscriptionStorageKey, result.id);
-      }
-      setPushMessage('Browser notifications are enabled for this device.');
-      await queryClient.invalidateQueries({ queryKey: getGetBankPushConfigQueryKey() });
-    } catch (err) {
-      setPushError(err instanceof Error ? err.message : 'Browser notifications could not be enabled.');
-    }
-  };
-  const disablePush = async () => {
-    setPushError('');
-    setPushMessage('');
-    if (!savedSubscriptionId) {
-      setPushError('This browser subscription cannot be removed here. Enable push on this device first, then disable it from this session.');
-      return;
-    }
-    try {
-      await deleteSubscription.mutateAsync({ subscriptionId: savedSubscriptionId });
-      setSavedSubscriptionId('');
-      if (subscriptionStorageKey) localStorage.removeItem(subscriptionStorageKey);
-      setPushMessage('Globus alerts are disconnected for this device. Browser permission can be changed in your device settings.');
-      await queryClient.invalidateQueries({ queryKey: getGetBankPushConfigQueryKey() });
-    } catch (err) {
-      setPushError(err instanceof Error ? err.message : 'Browser notifications could not be disabled.');
-    }
-  };
-  const updateAlertPreference = async (
-    key: 'transferEnabled' | 'walletEnabled' | 'securityEnabled',
-    enabled: boolean,
-  ) => {
-    setPushError('');
-    setPushMessage('');
-    try {
-      const result = await updatePushPreferences.mutateAsync({
-        data: { [key]: enabled },
-      });
-      queryClient.setQueryData(getGetBankPushPreferencesQueryKey(), result);
-      setPushMessage('Push alert preferences saved for all linked devices.');
-    } catch (err) {
-      setPushError(err instanceof Error ? err.message : 'Push alert preferences could not be saved.');
-    }
-  };
   const readOne = async (id: string) => {
     setNotificationError('');
     try {
@@ -332,30 +143,6 @@ export function NotificationsCenter() {
                   {!item.readAt && <button type="button" disabled={markRead.isPending} onClick={() => void readOne(item.id)} aria-label={`Mark ${item.title} as read`} data-testid={`button-mark-notification-read-${item.id}`} className="shrink-0 rounded-md p-1.5 text-[#548489] hover:bg-[#e5f0f0]"><CheckCheck size={14} /></button>}
                 </li>;
               })}</ul> : <div className="px-5 py-8 text-center" data-testid="notifications-empty"><span className="mx-auto grid h-9 w-9 place-items-center rounded-full bg-[#eef5f6] text-[#53858a]"><Bell size={16} /></span><p className="mt-2 text-[10px] font-bold text-[#3e566e]">No notifications yet</p><p className="mt-1 text-[9px] text-[#8794a2]">Account activity notices will appear here.</p></div>}
-        </div>
-        <div className="shrink-0 border-t border-[#edf0f3] bg-[#fbfcfd] p-3">
-          <p className="text-[9px] font-bold text-[#40576f]">Browser alerts</p>
-          <p className="mt-0.5 text-[8px] leading-4 text-[#8492a1]">In-app notifications are enabled for every account. Browser alerts are linked automatically where permission is already granted.</p>
-          {pushPreferences.isError ? <p role="alert" className="mt-1 text-[8px] text-[#a24940]">Push alert preferences could not be loaded.</p> :
-            <fieldset disabled={pushPreferences.isLoading || updatePushPreferences.isPending} className="mt-2 grid grid-cols-3 gap-1.5">
-              <legend className="sr-only">Push alert categories</legend>
-              {([
-                ['transferEnabled', 'Transfers'],
-                ['walletEnabled', 'Wallet activity'],
-                ['securityEnabled', 'Security'],
-              ] as const).map(([key, label]) => <label key={key} className="flex min-w-0 items-center gap-1 rounded-md border border-[#e4eaee] bg-white px-2 py-1.5 text-[8px] font-medium text-[#62788c]">
-                <input type="checkbox" checked={pushPreferences.data?.[key] ?? true} onChange={event => void updateAlertPreference(key, event.currentTarget.checked)} data-testid={`toggle-push-category-${key}`} className="accent-[#438481]" />
-                <span className="truncate">{label}</span>
-              </label>)}
-            </fieldset>}
-          {push.isError && <p role="alert" className="mt-1 text-[8px] text-[#a24940]">Push settings are unavailable.</p>}
-          {pushError && <p role="alert" data-testid="status-browser-push-error" className="mt-1 rounded-md bg-[#fff1ef] px-2 py-1.5 text-[8px] text-[#a24940]">{pushError}</p>}
-          {pushMessage && <p role="status" data-testid="status-browser-push-message" className="mt-1 rounded-md bg-[#eef7f1] px-2 py-1.5 text-[8px] text-[#41755f]">{pushMessage}</p>}
-          <div className="mt-2 flex items-center justify-between gap-2">
-              <span data-testid="status-browser-push-config" className="text-[8px] text-[#8794a2]">{push.isLoading ? 'Checking availability…' : !supported ? 'Not supported in this browser' : push.data?.configured ? 'Webpushr available' : 'Not configured'}</span>
-            {savedSubscriptionId ? <button type="button" disabled={deleteSubscription.isPending} onClick={() => void disablePush()} data-testid="button-disable-browser-push" className="h-8 rounded-lg border border-[#dfe6eb] bg-white px-3 text-[9px] font-bold text-[#52697e] disabled:opacity-50">{deleteSubscription.isPending ? 'Disabling…' : 'Disable alerts'}</button> :
-              <button type="button" disabled={!supported || !push.data?.configured || saveSubscription.isPending} onClick={() => void enablePush()} data-testid="button-enable-browser-push" className="h-8 rounded-lg bg-[#173858] px-3 text-[9px] font-bold text-white disabled:cursor-not-allowed disabled:opacity-45">{saveSubscription.isPending ? 'Linking…' : 'Enable alerts'}</button>}
-          </div>
         </div>
       </div>}
     </div>
