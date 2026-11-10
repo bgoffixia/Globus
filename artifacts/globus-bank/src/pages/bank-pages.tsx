@@ -1374,7 +1374,6 @@ export function PrivateVaultPage() {
       <PageHeading
         eyebrow="Private account controls"
         title="Private Vault"
-        subtitle="Review and manage your future wallet settings behind a separate passcode."
         titleClassName="text-[24px] leading-tight sm:text-[28px]"
       />
       <PrivateVaultPanel />
@@ -2144,8 +2143,8 @@ export function DisclosurePage({ path }: { path: string }) {
   );
 }
 
-function PageHeading({ eyebrow, title, subtitle, titleClassName }: { eyebrow: string; title: string; subtitle: string; titleClassName?: string }) {
-  return <div className="min-w-0 max-w-full"><p className="text-[10px] font-bold uppercase tracking-[.17em] text-[#548d92]">{eyebrow}</p><h1 className={`bank-display mt-2 max-w-full break-words font-semibold text-[#1a334f] ${titleClassName ?? 'text-[clamp(2rem,4vw,3rem)] leading-[1.08]'}`}>{title}</h1><p className="mt-2 max-w-[760px] break-words text-[12px] leading-5 text-[#76879a]">{subtitle}</p></div>;
+function PageHeading({ eyebrow, title, subtitle, titleClassName }: { eyebrow: string; title: string; subtitle?: string; titleClassName?: string }) {
+  return <div className="min-w-0 max-w-full"><p className="text-[10px] font-bold uppercase tracking-[.17em] text-[#548d92]">{eyebrow}</p><h1 className={`bank-display mt-2 max-w-full break-words font-semibold text-[#1a334f] ${titleClassName ?? 'text-[clamp(2rem,4vw,3rem)] leading-[1.08]'}`}>{title}</h1>{subtitle && <p className="mt-2 max-w-[760px] break-words text-[12px] leading-5 text-[#76879a]">{subtitle}</p>}</div>;
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
