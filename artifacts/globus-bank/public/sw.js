@@ -1,4 +1,4 @@
-const CACHE_NAME = "globus-app-shell-v2";
+const CACHE_NAME = "globus-app-shell-v3";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -55,4 +55,47 @@ self.addEventListener("fetch", (event) => {
       }),
     );
   }
+});
+
+self.addEventListener("push", (event) => {
+  let payload = {};
+  try {
+    const parsed = event.data ? event.data.json() : {};
+    payload = parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    payload = { title: "Globus account notice", body: "You have an account update." };
+  }
+
+  const title =
+    typeof payload.title === "string" && payload.title
+      ? payload.title
+      : "Globus account notice";
+  const body =
+    typeof payload.body === "string" && payload.body
+      ? payload.body
+      : "You have an account update.";
+
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      icon: new URL("globus-mark-transparent.png", self.registration.scope).toString(),
+      badge: new URL("globus-mark-transparent.png", self.registration.scope).toString(),
+      data: { url: new URL("notifications", self.registration.scope).toString() },
+      tag: typeof payload.notificationId === "string" ? payload.notificationId : "globus-account-update",
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const targetUrl = new URL("notifications", self.registration.scope).toString();
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      const matchingClient = clients.find((client) => client.url.startsWith(self.registration.scope));
+      if (matchingClient) {
+        return matchingClient.focus().then(() => matchingClient.navigate(targetUrl));
+      }
+      return self.clients.openWindow(targetUrl);
+    }),
+  );
 });

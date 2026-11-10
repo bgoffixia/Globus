@@ -58,6 +58,7 @@ export const bankInternationalTransferRequestsTable = pgTable(
     swiftBic: text("swift_bic"),
     recipientAccountName: text("recipient_account_name").notNull(),
     recipientAccountLast4: text("recipient_account_last4").notNull(),
+    recipientEmailEncrypted: text("recipient_email_encrypted"),
     remark: text("remark").notNull().default(""),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

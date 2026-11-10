@@ -59,6 +59,210 @@ export const GetBankProfileResponse = zod.object({
 
 
 /**
+ * @summary Check whether the customer's private vault is configured
+ */
+export const GetBankVaultStatusResponse = zod.object({
+  "configured": zod.boolean()
+})
+
+
+/**
+ * @summary Set the customer's four-digit vault passcode
+ */
+export const initializeBankVaultPasscodeBodyPasscodeRegExp = new RegExp('^[0-9]{4}$');
+
+
+export const InitializeBankVaultPasscodeBody = zod.object({
+  "passcode": zod.string().regex(initializeBankVaultPasscodeBodyPasscodeRegExp)
+})
+
+export const InitializeBankVaultPasscodeResponse = zod.object({
+  "configured": zod.boolean()
+})
+
+
+/**
+ * @summary Authenticate to the private customer vault
+ */
+export const unlockBankVaultBodyPasscodeRegExp = new RegExp('^[0-9]{4}$');
+
+
+export const UnlockBankVaultBody = zod.object({
+  "passcode": zod.string().regex(unlockBankVaultBodyPasscodeRegExp)
+})
+
+export const unlockBankVaultResponseSessionTokenMin = 32;
+export const unlockBankVaultResponseSessionTokenMax = 128;
+
+
+
+export const UnlockBankVaultResponse = zod.object({
+  "sessionToken": zod.string().min(unlockBankVaultResponseSessionTokenMin).max(unlockBankVaultResponseSessionTokenMax),
+  "expiresAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Change the private vault passcode
+ */
+export const updateBankVaultPasscodeHeaderXGlobusVaultSessionMin = 32;
+export const updateBankVaultPasscodeHeaderXGlobusVaultSessionMax = 128;
+
+
+
+export const UpdateBankVaultPasscodeHeader = zod.object({
+  "X-Globus-Vault-Session": zod.string().min(updateBankVaultPasscodeHeaderXGlobusVaultSessionMin).max(updateBankVaultPasscodeHeaderXGlobusVaultSessionMax)
+})
+
+export const updateBankVaultPasscodeBodyNewPasscodeRegExp = new RegExp('^[0-9]{4}$');
+
+
+export const UpdateBankVaultPasscodeBody = zod.object({
+  "newPasscode": zod.string().regex(updateBankVaultPasscodeBodyNewPasscodeRegExp)
+})
+
+export const UpdateBankVaultPasscodeResponse = zod.object({
+  "configured": zod.boolean()
+})
+
+
+/**
+ * @summary List per-wallet private vault controls
+ */
+export const listBankVaultWalletControlsHeaderXGlobusVaultSessionMin = 32;
+export const listBankVaultWalletControlsHeaderXGlobusVaultSessionMax = 128;
+
+
+
+export const ListBankVaultWalletControlsHeader = zod.object({
+  "X-Globus-Vault-Session": zod.string().min(listBankVaultWalletControlsHeaderXGlobusVaultSessionMin).max(listBankVaultWalletControlsHeaderXGlobusVaultSessionMax)
+})
+
+export const ListBankVaultWalletControlsResponseItem = zod.object({
+  "walletId": zod.string().uuid(),
+  "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
+  "transfersEnabled": zod.boolean(),
+  "depositsEnabled": zod.boolean(),
+  "withdrawalsEnabled": zod.boolean(),
+  "futureTransferMode": zod.enum(['normal', 'hold', 'reject'])
+})
+export const ListBankVaultWalletControlsResponse = zod.array(ListBankVaultWalletControlsResponseItem)
+
+
+/**
+ * @summary Update one of the customer's wallet controls
+ */
+export const UpdateBankVaultWalletControlParams = zod.object({
+  "walletId": zod.coerce.string().uuid()
+})
+
+export const updateBankVaultWalletControlHeaderXGlobusVaultSessionMin = 32;
+export const updateBankVaultWalletControlHeaderXGlobusVaultSessionMax = 128;
+
+
+
+export const UpdateBankVaultWalletControlHeader = zod.object({
+  "X-Globus-Vault-Session": zod.string().min(updateBankVaultWalletControlHeaderXGlobusVaultSessionMin).max(updateBankVaultWalletControlHeaderXGlobusVaultSessionMax)
+})
+
+export const UpdateBankVaultWalletControlBody = zod.object({
+  "transfersEnabled": zod.boolean().optional(),
+  "depositsEnabled": zod.boolean().optional(),
+  "withdrawalsEnabled": zod.boolean().optional(),
+  "futureTransferMode": zod.enum(['normal', 'hold', 'reject']).optional()
+})
+
+export const UpdateBankVaultWalletControlResponse = zod.object({
+  "walletId": zod.string().uuid(),
+  "currency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
+  "transfersEnabled": zod.boolean(),
+  "depositsEnabled": zod.boolean(),
+  "withdrawalsEnabled": zod.boolean(),
+  "futureTransferMode": zod.enum(['normal', 'hold', 'reject'])
+})
+
+
+/**
+ * @summary List notifications for the authenticated customer
+ */
+export const ListBankNotificationsResponseItem = zod.object({
+  "id": zod.string().uuid(),
+  "category": zod.enum(['transfer', 'wallet', 'security']),
+  "title": zod.string(),
+  "body": zod.string(),
+  "reference": zod.string().nullable(),
+  "readAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date()
+})
+export const ListBankNotificationsResponse = zod.array(ListBankNotificationsResponseItem)
+
+
+/**
+ * @summary Mark one of the customer's notifications as read
+ */
+export const MarkBankNotificationReadParams = zod.object({
+  "notificationId": zod.coerce.string().uuid()
+})
+
+export const MarkBankNotificationReadResponse = zod.object({
+  "id": zod.string().uuid(),
+  "category": zod.enum(['transfer', 'wallet', 'security']),
+  "title": zod.string(),
+  "body": zod.string(),
+  "reference": zod.string().nullable(),
+  "readAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Get browser push notification setup state
+ */
+export const GetBankPushConfigResponse = zod.object({
+  "configured": zod.boolean(),
+  "publicKey": zod.string().nullable()
+})
+
+
+/**
+ * @summary Save an encrypted browser push subscription
+ */
+export const saveBankPushSubscriptionBodyEndpointMax = 2048;
+
+export const saveBankPushSubscriptionBodyP256dhMin = 20;
+export const saveBankPushSubscriptionBodyP256dhMax = 256;
+
+export const saveBankPushSubscriptionBodyAuthMin = 8;
+export const saveBankPushSubscriptionBodyAuthMax = 128;
+
+
+
+export const SaveBankPushSubscriptionBody = zod.object({
+  "endpoint": zod.string().url().max(saveBankPushSubscriptionBodyEndpointMax),
+  "p256dh": zod.string().min(saveBankPushSubscriptionBodyP256dhMin).max(saveBankPushSubscriptionBodyP256dhMax),
+  "auth": zod.string().min(saveBankPushSubscriptionBodyAuthMin).max(saveBankPushSubscriptionBodyAuthMax)
+})
+
+export const SaveBankPushSubscriptionResponse = zod.object({
+  "id": zod.string().uuid().nullable(),
+  "saved": zod.boolean()
+})
+
+
+/**
+ * @summary Remove a browser push subscription
+ */
+export const DeleteBankPushSubscriptionParams = zod.object({
+  "subscriptionId": zod.coerce.string().uuid()
+})
+
+export const DeleteBankPushSubscriptionResponse = zod.object({
+  "id": zod.string().uuid().nullable(),
+  "saved": zod.boolean()
+})
+
+
+/**
  * @summary Complete an administrator-required password change
  */
 export const completeRequiredPasswordResetBodyNewPasswordMin = 8;
@@ -532,6 +736,7 @@ export const ListInternationalTransferRequestsResponseItem = zod.object({
   "routingCode": zod.string().nullable(),
   "swiftBic": zod.string().nullable(),
   "recipientAccountName": zod.string(),
+  "recipientEmail": zod.string().email().nullable(),
   "recipientAccountLast4": zod.string().regex(listInternationalTransferRequestsResponseRecipientAccountLast4RegExp),
   "sourceCurrency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
   "sourceAmount": zod.string(),
@@ -564,6 +769,8 @@ export const createInternationalTransferRequestBodySwiftBicMax = 11;
 export const createInternationalTransferRequestBodySwiftBicRegExp = new RegExp('^[A-Za-z0-9]*$');
 export const createInternationalTransferRequestBodyRecipientAccountNameMax = 120;
 
+export const createInternationalTransferRequestBodyRecipientEmailMax = 254;
+
 export const createInternationalTransferRequestBodyRecipientAccountNumberMin = 4;
 export const createInternationalTransferRequestBodyRecipientAccountNumberMax = 34;
 
@@ -587,6 +794,7 @@ export const CreateInternationalTransferRequestBody = zod.object({
   "routingCode": zod.string().max(createInternationalTransferRequestBodyRoutingCodeMax).regex(createInternationalTransferRequestBodyRoutingCodeRegExp).optional(),
   "swiftBic": zod.string().max(createInternationalTransferRequestBodySwiftBicMax).regex(createInternationalTransferRequestBodySwiftBicRegExp).optional(),
   "recipientAccountName": zod.string().min(1).max(createInternationalTransferRequestBodyRecipientAccountNameMax),
+  "recipientEmail": zod.string().email().max(createInternationalTransferRequestBodyRecipientEmailMax),
   "recipientAccountNumber": zod.string().min(createInternationalTransferRequestBodyRecipientAccountNumberMin).max(createInternationalTransferRequestBodyRecipientAccountNumberMax).regex(createInternationalTransferRequestBodyRecipientAccountNumberRegExp),
   "sourceCurrency": zod.enum(['USD', 'EUR', 'GBP', 'CAD', 'AUD']),
   "destinationCurrency": zod.string().regex(createInternationalTransferRequestBodyDestinationCurrencyRegExp).describe('ISO 4217 currency code for a rate quote, independent of supported source wallets.'),
@@ -611,6 +819,7 @@ export const CreateInternationalTransferRequestResponse = zod.object({
   "routingCode": zod.string().nullable(),
   "swiftBic": zod.string().nullable(),
   "recipientAccountName": zod.string(),
+  "recipientEmail": zod.string().email().nullable(),
   "recipientAccountLast4": zod.string().regex(createInternationalTransferRequestResponseRecipientAccountLast4RegExp),
   "sourceCurrency": zod.enum(['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD']),
   "sourceAmount": zod.string(),

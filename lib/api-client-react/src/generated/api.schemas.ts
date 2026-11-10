@@ -117,6 +117,8 @@ export interface InternationalTransferRequestInput {
      * @maxLength 120
      */
   recipientAccountName: string;
+  /** @maxLength 254 */
+  recipientEmail: string;
   /**
      * @minLength 4
      * @maxLength 34
@@ -174,6 +176,8 @@ export interface InternationalTransferRequest {
   /** @nullable */
   swiftBic: string | null;
   recipientAccountName: string;
+  /** @nullable */
+  recipientEmail: string | null;
   /** @pattern ^[A-Z0-9]{4}$ */
   recipientAccountLast4: string;
   sourceCurrency: CurrencyCode;
@@ -280,6 +284,111 @@ export interface BankProfile {
   depositAllowed: boolean;
   withdrawalAllowed: boolean;
   createdAt: string;
+}
+
+export interface BankVaultStatus {
+  configured: boolean;
+}
+
+export interface BankVaultPasscodeInput {
+  /** @pattern ^[0-9]{4}$ */
+  passcode: string;
+}
+
+export interface BankVaultPasscodeUpdateInput {
+  /** @pattern ^[0-9]{4}$ */
+  newPasscode: string;
+}
+
+export interface BankVaultSession {
+  /**
+     * @minLength 32
+     * @maxLength 128
+     */
+  sessionToken: string;
+  expiresAt: string;
+}
+
+export type BankVaultWalletControlFutureTransferMode = typeof BankVaultWalletControlFutureTransferMode[keyof typeof BankVaultWalletControlFutureTransferMode];
+
+
+export const BankVaultWalletControlFutureTransferMode = {
+  normal: 'normal',
+  hold: 'hold',
+  reject: 'reject',
+} as const;
+
+export interface BankVaultWalletControl {
+  walletId: string;
+  currency: CurrencyCode;
+  transfersEnabled: boolean;
+  depositsEnabled: boolean;
+  withdrawalsEnabled: boolean;
+  futureTransferMode: BankVaultWalletControlFutureTransferMode;
+}
+
+export type BankVaultWalletControlInputFutureTransferMode = typeof BankVaultWalletControlInputFutureTransferMode[keyof typeof BankVaultWalletControlInputFutureTransferMode];
+
+
+export const BankVaultWalletControlInputFutureTransferMode = {
+  normal: 'normal',
+  hold: 'hold',
+  reject: 'reject',
+} as const;
+
+export interface BankVaultWalletControlInput {
+  transfersEnabled?: boolean;
+  depositsEnabled?: boolean;
+  withdrawalsEnabled?: boolean;
+  futureTransferMode?: BankVaultWalletControlInputFutureTransferMode;
+}
+
+export type BankNotificationCategory = typeof BankNotificationCategory[keyof typeof BankNotificationCategory];
+
+
+export const BankNotificationCategory = {
+  transfer: 'transfer',
+  wallet: 'wallet',
+  security: 'security',
+} as const;
+
+export interface BankNotification {
+  id: string;
+  category: BankNotificationCategory;
+  title: string;
+  body: string;
+  /** @nullable */
+  reference: string | null;
+  /** @nullable */
+  readAt: string | null;
+  createdAt: string;
+}
+
+export interface BankPushConfig {
+  configured: boolean;
+  /** @nullable */
+  publicKey: string | null;
+}
+
+export interface BankPushSubscriptionInput {
+  /** @maxLength 2048 */
+  endpoint: string;
+  /**
+     * @minLength 20
+     * @maxLength 256
+     */
+  p256dh: string;
+  /**
+     * @minLength 8
+     * @maxLength 128
+     */
+  auth: string;
+}
+
+export interface BankPushSubscriptionResult {
+  /** @nullable */
+  id: string | null;
+  saved: boolean;
 }
 
 export interface CustomerIdLookupInput {
@@ -1312,6 +1421,11 @@ export type NotFoundResponse = ErrorResponse;
  * The operation conflicts with current account or balance state
  */
 export type ConflictResponse = ErrorResponse;
+
+/**
+ * Too many attempts
+ */
+export type TooManyRequestsResponse = ErrorResponse;
 
 /**
  * The external rate provider is unavailable or does not support this pair

@@ -57,9 +57,19 @@ import type {
   BankExchangeRate,
   BankExchangeRateInput,
   BankExchangeRateQuote,
+  BankNotification,
   BankProfile,
   BankProfileInput,
+  BankPushConfig,
+  BankPushSubscriptionInput,
+  BankPushSubscriptionResult,
   BankTransaction,
+  BankVaultPasscodeInput,
+  BankVaultPasscodeUpdateInput,
+  BankVaultSession,
+  BankVaultStatus,
+  BankVaultWalletControl,
+  BankVaultWalletControlInput,
   CompleteRequiredPasswordResetInput,
   CompleteRequiredPasswordResetResult,
   ConflictResponse,
@@ -93,6 +103,7 @@ import type {
   SavedPaymentMethod,
   SavedPaymentMethodInput,
   ServiceUnavailableResponse,
+  TooManyRequestsResponse,
   TransactionPinInput,
   TransactionPinUpdateResult,
   TransferInput,
@@ -369,6 +380,903 @@ export function useGetBankProfile<TData = Awaited<ReturnType<typeof getBankProfi
 
 
 
+
+export const getGetBankVaultStatusUrl = () => {
+
+
+
+
+  return `/api/bank/vault/status`
+}
+
+/**
+ * @summary Check whether the customer's private vault is configured
+ */
+export const getBankVaultStatus = async ( options?: Parameters<typeof customFetch>[1]): Promise<BankVaultStatus> => {
+
+  return customFetch<BankVaultStatus>(getGetBankVaultStatusUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetBankVaultStatusQueryKey = () => {
+    return [
+    `/api/bank/vault/status`
+    ] as const;
+    }
+
+
+export const getGetBankVaultStatusQueryOptions = <TData = Awaited<ReturnType<typeof getBankVaultStatus>>, TError = ErrorType<UnauthorizedResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBankVaultStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetBankVaultStatusQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getBankVaultStatus>>> = ({ signal }) => getBankVaultStatus({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getBankVaultStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetBankVaultStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getBankVaultStatus>>>
+export type GetBankVaultStatusQueryError = ErrorType<UnauthorizedResponse>
+
+
+/**
+ * @summary Check whether the customer's private vault is configured
+ */
+
+export function useGetBankVaultStatus<TData = Awaited<ReturnType<typeof getBankVaultStatus>>, TError = ErrorType<UnauthorizedResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBankVaultStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetBankVaultStatusQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getInitializeBankVaultPasscodeUrl = () => {
+
+
+
+
+  return `/api/bank/vault/status`
+}
+
+/**
+ * @summary Set the customer's four-digit vault passcode
+ */
+export const initializeBankVaultPasscode = async (bankVaultPasscodeInput: BankVaultPasscodeInput, options?: Parameters<typeof customFetch>[1]): Promise<BankVaultStatus> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<BankVaultStatus>(getInitializeBankVaultPasscodeUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(bankVaultPasscodeInput)
+  }
+);}
+
+
+
+
+
+export const getInitializeBankVaultPasscodeMutationKey = () => ['initializeBankVaultPasscode'] as const;
+
+export const getInitializeBankVaultPasscodeMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof initializeBankVaultPasscode>>, TError,InitializeBankVaultPasscodeMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof initializeBankVaultPasscode>>, TError,InitializeBankVaultPasscodeMutationVariables, TContext> => {
+
+const mutationKey = getInitializeBankVaultPasscodeMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof initializeBankVaultPasscode>>, InitializeBankVaultPasscodeMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  initializeBankVaultPasscode(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type InitializeBankVaultPasscodeMutationResult = NonNullable<Awaited<ReturnType<typeof initializeBankVaultPasscode>>>
+    export type InitializeBankVaultPasscodeMutationBody = BodyType<BankVaultPasscodeInput>
+    export type InitializeBankVaultPasscodeMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ConflictResponse>
+    export type InitializeBankVaultPasscodeMutationVariables = {data: BodyType<BankVaultPasscodeInput>}
+
+    /**
+ * @summary Set the customer's four-digit vault passcode
+ */
+export const useInitializeBankVaultPasscode = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof initializeBankVaultPasscode>>, TError,InitializeBankVaultPasscodeMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof initializeBankVaultPasscode>>,
+        TError,
+        InitializeBankVaultPasscodeMutationVariables,
+        TContext
+      > => {
+      return useMutation(getInitializeBankVaultPasscodeMutationOptions(options));
+    }
+
+export const getUnlockBankVaultUrl = () => {
+
+
+
+
+  return `/api/bank/vault/unlock`
+}
+
+/**
+ * @summary Authenticate to the private customer vault
+ */
+export const unlockBankVault = async (bankVaultPasscodeInput: BankVaultPasscodeInput, options?: Parameters<typeof customFetch>[1]): Promise<BankVaultSession> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<BankVaultSession>(getUnlockBankVaultUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(bankVaultPasscodeInput)
+  }
+);}
+
+
+
+
+
+export const getUnlockBankVaultMutationKey = () => ['unlockBankVault'] as const;
+
+export const getUnlockBankVaultMutationOptions = <TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | TooManyRequestsResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unlockBankVault>>, TError,UnlockBankVaultMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof unlockBankVault>>, TError,UnlockBankVaultMutationVariables, TContext> => {
+
+const mutationKey = getUnlockBankVaultMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof unlockBankVault>>, UnlockBankVaultMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  unlockBankVault(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UnlockBankVaultMutationResult = NonNullable<Awaited<ReturnType<typeof unlockBankVault>>>
+    export type UnlockBankVaultMutationBody = BodyType<BankVaultPasscodeInput>
+    export type UnlockBankVaultMutationError = ErrorType<UnauthorizedResponse | ForbiddenResponse | TooManyRequestsResponse>
+    export type UnlockBankVaultMutationVariables = {data: BodyType<BankVaultPasscodeInput>}
+
+    /**
+ * @summary Authenticate to the private customer vault
+ */
+export const useUnlockBankVault = <TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | TooManyRequestsResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unlockBankVault>>, TError,UnlockBankVaultMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof unlockBankVault>>,
+        TError,
+        UnlockBankVaultMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUnlockBankVaultMutationOptions(options));
+    }
+
+export const getUpdateBankVaultPasscodeUrl = () => {
+
+
+
+
+  return `/api/bank/vault/passcode`
+}
+
+/**
+ * @summary Change the private vault passcode
+ */
+export const updateBankVaultPasscode = async (bankVaultPasscodeUpdateInput: BankVaultPasscodeUpdateInput, options?: Parameters<typeof customFetch>[1]): Promise<BankVaultStatus> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<BankVaultStatus>(getUpdateBankVaultPasscodeUrl(),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(bankVaultPasscodeUpdateInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateBankVaultPasscodeMutationKey = () => ['updateBankVaultPasscode'] as const;
+
+export const getUpdateBankVaultPasscodeMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | TooManyRequestsResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateBankVaultPasscode>>, TError,UpdateBankVaultPasscodeMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateBankVaultPasscode>>, TError,UpdateBankVaultPasscodeMutationVariables, TContext> => {
+
+const mutationKey = getUpdateBankVaultPasscodeMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateBankVaultPasscode>>, UpdateBankVaultPasscodeMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateBankVaultPasscode(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateBankVaultPasscodeMutationResult = NonNullable<Awaited<ReturnType<typeof updateBankVaultPasscode>>>
+    export type UpdateBankVaultPasscodeMutationBody = BodyType<BankVaultPasscodeUpdateInput>
+    export type UpdateBankVaultPasscodeMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | TooManyRequestsResponse>
+    export type UpdateBankVaultPasscodeMutationVariables = {data: BodyType<BankVaultPasscodeUpdateInput>}
+
+    /**
+ * @summary Change the private vault passcode
+ */
+export const useUpdateBankVaultPasscode = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | TooManyRequestsResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateBankVaultPasscode>>, TError,UpdateBankVaultPasscodeMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateBankVaultPasscode>>,
+        TError,
+        UpdateBankVaultPasscodeMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateBankVaultPasscodeMutationOptions(options));
+    }
+
+export const getListBankVaultWalletControlsUrl = () => {
+
+
+
+
+  return `/api/bank/vault/wallet-controls`
+}
+
+/**
+ * @summary List per-wallet private vault controls
+ */
+export const listBankVaultWalletControls = async ( options?: Parameters<typeof customFetch>[1]): Promise<BankVaultWalletControl[]> => {
+
+  return customFetch<BankVaultWalletControl[]>(getListBankVaultWalletControlsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListBankVaultWalletControlsQueryKey = () => {
+    return [
+    `/api/bank/vault/wallet-controls`
+    ] as const;
+    }
+
+
+export const getListBankVaultWalletControlsQueryOptions = <TData = Awaited<ReturnType<typeof listBankVaultWalletControls>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listBankVaultWalletControls>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListBankVaultWalletControlsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listBankVaultWalletControls>>> = ({ signal }) => listBankVaultWalletControls({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listBankVaultWalletControls>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListBankVaultWalletControlsQueryResult = NonNullable<Awaited<ReturnType<typeof listBankVaultWalletControls>>>
+export type ListBankVaultWalletControlsQueryError = ErrorType<UnauthorizedResponse | ForbiddenResponse>
+
+
+/**
+ * @summary List per-wallet private vault controls
+ */
+
+export function useListBankVaultWalletControls<TData = Awaited<ReturnType<typeof listBankVaultWalletControls>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listBankVaultWalletControls>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListBankVaultWalletControlsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateBankVaultWalletControlUrl = (walletId: string,) => {
+
+
+
+
+  return `/api/bank/vault/wallet-controls/${walletId}`
+}
+
+/**
+ * @summary Update one of the customer's wallet controls
+ */
+export const updateBankVaultWalletControl = async (walletId: string,
+    bankVaultWalletControlInput: BankVaultWalletControlInput, options?: Parameters<typeof customFetch>[1]): Promise<BankVaultWalletControl> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<BankVaultWalletControl>(getUpdateBankVaultWalletControlUrl(walletId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(bankVaultWalletControlInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateBankVaultWalletControlMutationKey = () => ['updateBankVaultWalletControl'] as const;
+
+export const getUpdateBankVaultWalletControlMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateBankVaultWalletControl>>, TError,UpdateBankVaultWalletControlMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateBankVaultWalletControl>>, TError,UpdateBankVaultWalletControlMutationVariables, TContext> => {
+
+const mutationKey = getUpdateBankVaultWalletControlMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateBankVaultWalletControl>>, UpdateBankVaultWalletControlMutationVariables> = (props) => {
+          const {walletId,data} = props ?? {};
+
+          return  updateBankVaultWalletControl(walletId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateBankVaultWalletControlMutationResult = NonNullable<Awaited<ReturnType<typeof updateBankVaultWalletControl>>>
+    export type UpdateBankVaultWalletControlMutationBody = BodyType<BankVaultWalletControlInput>
+    export type UpdateBankVaultWalletControlMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
+    export type UpdateBankVaultWalletControlMutationVariables = {walletId: string;data: BodyType<BankVaultWalletControlInput>}
+
+    /**
+ * @summary Update one of the customer's wallet controls
+ */
+export const useUpdateBankVaultWalletControl = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateBankVaultWalletControl>>, TError,UpdateBankVaultWalletControlMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateBankVaultWalletControl>>,
+        TError,
+        UpdateBankVaultWalletControlMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateBankVaultWalletControlMutationOptions(options));
+    }
+
+export const getListBankNotificationsUrl = () => {
+
+
+
+
+  return `/api/bank/notifications`
+}
+
+/**
+ * @summary List notifications for the authenticated customer
+ */
+export const listBankNotifications = async ( options?: Parameters<typeof customFetch>[1]): Promise<BankNotification[]> => {
+
+  return customFetch<BankNotification[]>(getListBankNotificationsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListBankNotificationsQueryKey = () => {
+    return [
+    `/api/bank/notifications`
+    ] as const;
+    }
+
+
+export const getListBankNotificationsQueryOptions = <TData = Awaited<ReturnType<typeof listBankNotifications>>, TError = ErrorType<UnauthorizedResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listBankNotifications>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListBankNotificationsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listBankNotifications>>> = ({ signal }) => listBankNotifications({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listBankNotifications>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListBankNotificationsQueryResult = NonNullable<Awaited<ReturnType<typeof listBankNotifications>>>
+export type ListBankNotificationsQueryError = ErrorType<UnauthorizedResponse>
+
+
+/**
+ * @summary List notifications for the authenticated customer
+ */
+
+export function useListBankNotifications<TData = Awaited<ReturnType<typeof listBankNotifications>>, TError = ErrorType<UnauthorizedResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listBankNotifications>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListBankNotificationsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getMarkBankNotificationReadUrl = (notificationId: string,) => {
+
+
+
+
+  return `/api/bank/notifications/${notificationId}/read`
+}
+
+/**
+ * @summary Mark one of the customer's notifications as read
+ */
+export const markBankNotificationRead = async (notificationId: string, options?: Parameters<typeof customFetch>[1]): Promise<BankNotification> => {
+
+  return customFetch<BankNotification>(getMarkBankNotificationReadUrl(notificationId),
+  {
+    ...options,
+    method: 'PATCH'
+
+
+  }
+);}
+
+
+
+
+
+export const getMarkBankNotificationReadMutationKey = () => ['markBankNotificationRead'] as const;
+
+export const getMarkBankNotificationReadMutationOptions = <TError = ErrorType<UnauthorizedResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markBankNotificationRead>>, TError,MarkBankNotificationReadMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof markBankNotificationRead>>, TError,MarkBankNotificationReadMutationVariables, TContext> => {
+
+const mutationKey = getMarkBankNotificationReadMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof markBankNotificationRead>>, MarkBankNotificationReadMutationVariables> = (props) => {
+          const {notificationId} = props ?? {};
+
+          return  markBankNotificationRead(notificationId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MarkBankNotificationReadMutationResult = NonNullable<Awaited<ReturnType<typeof markBankNotificationRead>>>
+
+    export type MarkBankNotificationReadMutationError = ErrorType<UnauthorizedResponse | NotFoundResponse>
+    export type MarkBankNotificationReadMutationVariables = {notificationId: string}
+
+    /**
+ * @summary Mark one of the customer's notifications as read
+ */
+export const useMarkBankNotificationRead = <TError = ErrorType<UnauthorizedResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markBankNotificationRead>>, TError,MarkBankNotificationReadMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof markBankNotificationRead>>,
+        TError,
+        MarkBankNotificationReadMutationVariables,
+        TContext
+      > => {
+      return useMutation(getMarkBankNotificationReadMutationOptions(options));
+    }
+
+export const getGetBankPushConfigUrl = () => {
+
+
+
+
+  return `/api/bank/push/config`
+}
+
+/**
+ * @summary Get browser push notification setup state
+ */
+export const getBankPushConfig = async ( options?: Parameters<typeof customFetch>[1]): Promise<BankPushConfig> => {
+
+  return customFetch<BankPushConfig>(getGetBankPushConfigUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetBankPushConfigQueryKey = () => {
+    return [
+    `/api/bank/push/config`
+    ] as const;
+    }
+
+
+export const getGetBankPushConfigQueryOptions = <TData = Awaited<ReturnType<typeof getBankPushConfig>>, TError = ErrorType<UnauthorizedResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBankPushConfig>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetBankPushConfigQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getBankPushConfig>>> = ({ signal }) => getBankPushConfig({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getBankPushConfig>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetBankPushConfigQueryResult = NonNullable<Awaited<ReturnType<typeof getBankPushConfig>>>
+export type GetBankPushConfigQueryError = ErrorType<UnauthorizedResponse>
+
+
+/**
+ * @summary Get browser push notification setup state
+ */
+
+export function useGetBankPushConfig<TData = Awaited<ReturnType<typeof getBankPushConfig>>, TError = ErrorType<UnauthorizedResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBankPushConfig>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetBankPushConfigQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSaveBankPushSubscriptionUrl = () => {
+
+
+
+
+  return `/api/bank/push/subscriptions`
+}
+
+/**
+ * @summary Save an encrypted browser push subscription
+ */
+export const saveBankPushSubscription = async (bankPushSubscriptionInput: BankPushSubscriptionInput, options?: Parameters<typeof customFetch>[1]): Promise<BankPushSubscriptionResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<BankPushSubscriptionResult>(getSaveBankPushSubscriptionUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(bankPushSubscriptionInput)
+  }
+);}
+
+
+
+
+
+export const getSaveBankPushSubscriptionMutationKey = () => ['saveBankPushSubscription'] as const;
+
+export const getSaveBankPushSubscriptionMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ServiceUnavailableResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveBankPushSubscription>>, TError,SaveBankPushSubscriptionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof saveBankPushSubscription>>, TError,SaveBankPushSubscriptionMutationVariables, TContext> => {
+
+const mutationKey = getSaveBankPushSubscriptionMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof saveBankPushSubscription>>, SaveBankPushSubscriptionMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  saveBankPushSubscription(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SaveBankPushSubscriptionMutationResult = NonNullable<Awaited<ReturnType<typeof saveBankPushSubscription>>>
+    export type SaveBankPushSubscriptionMutationBody = BodyType<BankPushSubscriptionInput>
+    export type SaveBankPushSubscriptionMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ServiceUnavailableResponse>
+    export type SaveBankPushSubscriptionMutationVariables = {data: BodyType<BankPushSubscriptionInput>}
+
+    /**
+ * @summary Save an encrypted browser push subscription
+ */
+export const useSaveBankPushSubscription = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ServiceUnavailableResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveBankPushSubscription>>, TError,SaveBankPushSubscriptionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof saveBankPushSubscription>>,
+        TError,
+        SaveBankPushSubscriptionMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSaveBankPushSubscriptionMutationOptions(options));
+    }
+
+export const getDeleteBankPushSubscriptionUrl = (subscriptionId: string,) => {
+
+
+
+
+  return `/api/bank/push/subscriptions/${subscriptionId}`
+}
+
+/**
+ * @summary Remove a browser push subscription
+ */
+export const deleteBankPushSubscription = async (subscriptionId: string, options?: Parameters<typeof customFetch>[1]): Promise<BankPushSubscriptionResult> => {
+
+  return customFetch<BankPushSubscriptionResult>(getDeleteBankPushSubscriptionUrl(subscriptionId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteBankPushSubscriptionMutationKey = () => ['deleteBankPushSubscription'] as const;
+
+export const getDeleteBankPushSubscriptionMutationOptions = <TError = ErrorType<UnauthorizedResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteBankPushSubscription>>, TError,DeleteBankPushSubscriptionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteBankPushSubscription>>, TError,DeleteBankPushSubscriptionMutationVariables, TContext> => {
+
+const mutationKey = getDeleteBankPushSubscriptionMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteBankPushSubscription>>, DeleteBankPushSubscriptionMutationVariables> = (props) => {
+          const {subscriptionId} = props ?? {};
+
+          return  deleteBankPushSubscription(subscriptionId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteBankPushSubscriptionMutationResult = NonNullable<Awaited<ReturnType<typeof deleteBankPushSubscription>>>
+
+    export type DeleteBankPushSubscriptionMutationError = ErrorType<UnauthorizedResponse | NotFoundResponse>
+    export type DeleteBankPushSubscriptionMutationVariables = {subscriptionId: string}
+
+    /**
+ * @summary Remove a browser push subscription
+ */
+export const useDeleteBankPushSubscription = <TError = ErrorType<UnauthorizedResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteBankPushSubscription>>, TError,DeleteBankPushSubscriptionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteBankPushSubscription>>,
+        TError,
+        DeleteBankPushSubscriptionMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteBankPushSubscriptionMutationOptions(options));
+    }
 
 export const getCompleteRequiredPasswordResetUrl = () => {
 

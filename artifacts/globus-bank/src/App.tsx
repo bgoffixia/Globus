@@ -255,6 +255,7 @@ function ClerkRoutes() {
         <Route path="/sign-in/*?" component={SignInPage} />
         <Route path="/sign-up/*?" component={SignUpPage} />
         <Route path="/dashboard"><ProtectedPage><DashboardPage /></ProtectedPage></Route>
+        <Route path="/notifications"><ProtectedPage><DashboardPage /></ProtectedPage></Route>
         <Route path="/wallets"><ProtectedPage><WalletsPage /></ProtectedPage></Route>
         <Route path="/wallets/:walletId"><ProtectedPage><WalletDetailsPage /></ProtectedPage></Route>
         <Route path="/transactions"><ProtectedPage><TransactionsPage /></ProtectedPage></Route>

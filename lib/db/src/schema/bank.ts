@@ -1,5 +1,6 @@
 import {
   bigint,
+  boolean,
   date,
   index,
   integer,
@@ -80,6 +81,13 @@ export const bankUsersTable = pgTable("bank_users", {
   transactionPinLockedUntil: timestamp("transaction_pin_locked_until", {
     withTimezone: true,
   }),
+  vaultPasscodeHash: text("vault_passcode_hash"),
+  vaultPasscodeFailedAttempts: integer("vault_passcode_failed_attempts")
+    .notNull()
+    .default(0),
+  vaultPasscodeLockedUntil: timestamp("vault_passcode_locked_until", {
+    withTimezone: true,
+  }),
   verificationStatus: text("verification_status").notNull().default("not_started"),
   verificationNote: text("verification_note"),
   accountStatus: text("account_status").notNull().default("active"),
@@ -105,6 +113,10 @@ export const bankWalletsTable = pgTable(
       .references(() => bankUsersTable.id, { onDelete: "cascade" }),
     currency: bankCurrencyEnum("currency").notNull(),
     status: text("status").notNull().default("active"),
+    transfersEnabled: boolean("transfers_enabled").notNull().default(true),
+    depositsEnabled: boolean("deposits_enabled").notNull().default(true),
+    withdrawalsEnabled: boolean("withdrawals_enabled").notNull().default(true),
+    futureTransferMode: text("future_transfer_mode").notNull().default("reject"),
     restrictionReason: text("restriction_reason"),
     restrictionNotes: text("restriction_notes"),
     restrictedByUserId: text("restricted_by_user_id").references(
@@ -327,3 +339,63 @@ export const bankAdminSettingsTable = pgTable("bank_admin_settings", {
     .defaultNow()
     .$onUpdate(() => new Date()),
 });
+
+export const bankVaultSessionsTable = pgTable(
+  "bank_vault_sessions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => bankUsersTable.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull().unique(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("bank_vault_session_user_expiry_idx").on(table.userId, table.expiresAt),
+  ],
+);
+
+export const bankNotificationsTable = pgTable(
+  "bank_notifications",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => bankUsersTable.id, { onDelete: "cascade" }),
+    category: text("category").notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    reference: text("reference"),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("bank_notification_user_created_idx").on(table.userId, table.createdAt),
+    index("bank_notification_user_unread_idx").on(table.userId, table.readAt),
+  ],
+);
+
+export const bankPushSubscriptionsTable = pgTable(
+  "bank_push_subscriptions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => bankUsersTable.id, { onDelete: "cascade" }),
+    endpointHash: text("endpoint_hash").notNull().unique(),
+    subscriptionEncrypted: text("subscription_encrypted").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [index("bank_push_subscription_user_idx").on(table.userId)],
+);

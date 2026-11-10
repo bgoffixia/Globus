@@ -97,6 +97,7 @@ import { InstallAppButton } from '@/components/pwa-install-prompt';
 import { countries } from '@/lib/countries';
 import { destinationCurrencyForCountry } from '@/lib/destination-currency';
 import { TransferReceiptModal } from '@/components/transfer/transfer-receipt';
+import { PrivateVaultPanel } from '@/components/private-vault-panel';
 const currencies = ['USD', 'EUR', 'GBP', 'CAD', 'AUD'] as const;
 type Currency = typeof currencies[number];
 type ReceiptConversion = {
@@ -989,7 +990,7 @@ export function ProfilePage() {
   const [identityError, setIdentityError] = useState('');
   const [identityUploadPending, setIdentityUploadPending] = useState(false);
   const [identityConsent, setIdentityConsent] = useState(false);
-  const [profileTab, setProfileTab] = useState<'overview' | 'details' | 'security' | 'verification'>('overview');
+  const [profileTab, setProfileTab] = useState<'overview' | 'details' | 'security' | 'verification' | 'vault'>('overview');
   const profile = query.data;
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -1194,6 +1195,7 @@ export function ProfilePage() {
     { id: 'details', label: 'Personal details' },
     { id: 'security', label: 'Security' },
     { id: 'verification', label: 'Verification' },
+    { id: 'vault', label: 'Private vault' },
   ] as const;
   return (
     <div className="flex h-full min-h-0 flex-col gap-2.5" data-testid="customer-profile-page">
@@ -1244,6 +1246,7 @@ export function ProfilePage() {
           tabIndex={profileTab === tab.id ? 0 : -1}
           aria-selected={profileTab === tab.id}
           aria-controls="profile-tab-panel"
+          data-testid={`profile-tab-button-${tab.id}`}
           onClick={() => setProfileTab(tab.id)}
           className={`shrink-0 rounded-lg px-3 py-2 text-[9px] font-bold transition sm:px-4 ${profileTab === tab.id ? 'bg-[#173858] text-white shadow-sm' : 'text-[#64798d] hover:bg-[#f3f7f8] hover:text-[#315b65]'}`}
         >{tab.label}</button>)}
@@ -1353,6 +1356,7 @@ export function ProfilePage() {
           </>
         )}
         </section>}
+        {profileTab === 'vault' && <PrivateVaultPanel />}
       </div>
     </div>
   );

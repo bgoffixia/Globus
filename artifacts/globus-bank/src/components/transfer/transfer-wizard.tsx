@@ -6,6 +6,7 @@ import {
   getGetBankDashboardQueryKey,
   getGetBankExchangeRateQuoteQueryKey,
   getGetBankProfileQueryKey,
+  getListBankNotificationsQueryKey,
   getListBankTransactionsQueryKey,
   getListBankWalletsQueryKey,
   getListInternationalTransferRequestsQueryKey,
@@ -29,7 +30,7 @@ const sourceCurrencies = ['USD', 'EUR', 'GBP', 'CAD', 'AUD'] as const;
 const STEPS = ['Route', 'Recipient', 'Amount', 'Review', 'Authorise'] as const;
 const GUIDE = [
   'Pick the wallet to debit, where the money is going, and the currency the recipient should receive.',
-  'Enter the recipient exactly as their bank holds it. Double-check the account number.',
+  'Enter the recipient exactly as their bank holds it, including a contact email. Double-check the account number.',
   'Enter the amount from your wallet. The converted total uses a Frankfurter rate quote, with Grey as a fallback.',
   'Read every line. Confirming locks this rate; if it changes you will be asked to review again.',
   'Enter your six-digit transaction PIN on the keypad to submit.',
@@ -62,6 +63,7 @@ export function InternationalTransferPage() {
     return destinationCurrencies.includes(requested) ? requested : '';
   });
   const [recipientAccountName, setRecipientAccountName] = useState('');
+  const [recipientEmail, setRecipientEmail] = useState('');
   const [recipientAccountNumber, setRecipientAccountNumber] = useState('');
   const [routingCode, setRoutingCode] = useState('');
   const [swiftBic, setSwiftBic] = useState('');
@@ -110,7 +112,7 @@ export function InternationalTransferPage() {
   const rateChanged = rateSnapshot !== null && liveRate !== null && formatRate(liveRate) !== formatRate(rateSnapshot);
   const rateLost = rateSnapshot !== null && liveRate === null && !quote.isLoading;
 
-  const fingerprint = JSON.stringify([transferType, sourceCurrency, destinationCountry, recipientBank, destinationCurrency, recipientAccountName.trim(), recipientAccountNumber.replace(/\s/g, ''), transferType === 'local_routing' ? routingCode.trim() : swiftBic.toUpperCase(), remark.trim(), amount, rateSnapshot]);
+  const fingerprint = JSON.stringify([transferType, sourceCurrency, destinationCountry, recipientBank, destinationCurrency, recipientAccountName.trim(), recipientEmail.trim().toLowerCase(), recipientAccountNumber.replace(/\s/g, ''), transferType === 'local_routing' ? routingCode.trim() : swiftBic.toUpperCase(), remark.trim(), amount, rateSnapshot]);
   const idempotencyKey = useMemo(() => {
     if (!keyRef.current || keyRef.current.fp !== fingerprint) keyRef.current = { fp: fingerprint, key: newKey() };
     return keyRef.current.key;
@@ -122,7 +124,7 @@ export function InternationalTransferPage() {
 
   const stepValid = [
     !!wallet && !!countryCode && !!recipientBank.trim() && !!destinationCurrency,
-    recipientAccountName.trim().length > 1 && /^[A-Za-z0-9 ]{4,34}$/.test(recipientAccountNumber) && (transferType === 'local_routing' ? /^[A-Za-z0-9 -]{2,24}$/.test(routingCode.trim()) : SWIFT_RE.test(swiftBic)),
+    recipientAccountName.trim().length > 1 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail.trim()) && recipientEmail.trim().length <= 254 && /^[A-Za-z0-9 ]{4,34}$/.test(recipientAccountNumber) && (transferType === 'local_routing' ? /^[A-Za-z0-9 -]{2,24}$/.test(routingCode.trim()) : SWIFT_RE.test(swiftBic)),
     AMOUNT_RE.test(amount) && Number(amount) > 0 && Number(amount) <= available && !!liveRate && liveConverted !== null && Number(liveConverted) > 0 && wallet?.status !== 'restricted',
     confirmed && !!rateSnapshot && !rateChanged && !rateLost,
     pin.length === 6 && !rateChanged && !rateLost && pinConfigured,
@@ -144,7 +146,7 @@ export function InternationalTransferPage() {
   };
 
   const resetAll = () => {
-    setStep(0); setDestinationCountry(''); setRecipientBank(''); setDestinationCurrency(''); setRecipientAccountName(''); setRecipientAccountNumber('');
+    setStep(0); setDestinationCountry(''); setRecipientBank(''); setDestinationCurrency(''); setRecipientAccountName(''); setRecipientEmail(''); setRecipientAccountNumber('');
     setRoutingCode(''); setSwiftBic(''); setRemark(''); setAmount(''); setConfirmed(false); setRateSnapshot(null); setPin(''); keyRef.current = null;
   };
 
@@ -158,6 +160,7 @@ export function InternationalTransferPage() {
         recipientBank: recipientBank.trim(),
         ...(transferType === 'local_routing' ? { routingCode: routingCode.trim() } : { swiftBic: swiftBic.trim().toUpperCase() }),
         recipientAccountName: recipientAccountName.trim(),
+        recipientEmail: recipientEmail.trim().toLowerCase(),
         recipientAccountNumber,
         sourceCurrency,
         destinationCurrency,
@@ -174,6 +177,7 @@ export function InternationalTransferPage() {
         resetAll();
         void Promise.all([
           queryClient.invalidateQueries({ queryKey: getListInternationalTransferRequestsQueryKey() }),
+          queryClient.invalidateQueries({ queryKey: getListBankNotificationsQueryKey() }),
           queryClient.invalidateQueries({ queryKey: getListBankTransactionsQueryKey() }),
           queryClient.invalidateQueries({ queryKey: getListBankWalletsQueryKey() }),
           queryClient.invalidateQueries({ queryKey: getGetBankDashboardQueryKey() }),
@@ -243,6 +247,7 @@ export function InternationalTransferPage() {
 
               {step === 1 && <>
                 <F label="Recipient account name"><input data-testid="input-recipient-account-name" maxLength={120} value={recipientAccountName} onChange={e => setRecipientAccountName(e.target.value)} placeholder="Name on the account" className={inputCls} /></F>
+                <F label="Recipient email" hint="A transfer-status email will be sent to this address."><input type="email" required data-testid="input-recipient-email" maxLength={254} autoComplete="email" value={recipientEmail} onChange={e => setRecipientEmail(e.target.value)} placeholder="name@example.com" className={inputCls} /></F>
                 <F label="Account number / IBAN"><input data-testid="input-recipient-account-number" maxLength={34} autoComplete="off" value={recipientAccountNumber} onChange={e => setRecipientAccountNumber(e.target.value.replace(/[^A-Za-z0-9 ]/g, ''))} placeholder="Account number or IBAN" className={`${inputCls} font-mono`} /></F>
                 {transferType === 'local_routing'
                   ? <F label="Routing / clearing code"><input data-testid="input-local-routing-code" maxLength={24} value={routingCode} onChange={e => setRoutingCode(e.target.value.replace(/[^A-Za-z0-9 -]/g, ''))} placeholder="Routing or sort code" className={`${inputCls} font-mono`} /></F>
@@ -272,6 +277,7 @@ export function InternationalTransferPage() {
                   <R k="Route" v={routeLabel} />
                   <R k="From" v={`${sourceCurrency} wallet`} />
                   <R k="Recipient" v={recipientAccountName.trim()} />
+                  <R k="Recipient email" v={recipientEmail.trim()} />
                   <R k="Bank" v={`${recipientBank} · ${destinationCountry}`} />
                   <R k="Account" v={recipientAccountNumber} mono />
                   <R k={transferType === 'local_routing' ? 'Routing code' : 'SWIFT / BIC'} v={transferType === 'local_routing' ? routingCode : swiftBic} mono />
@@ -313,7 +319,7 @@ export function InternationalTransferPage() {
           : requests.isError ? <div className="flex items-center justify-between px-5 py-5 text-[11px] text-[#a05c50]"><span>Transfer history is unavailable.</span><button type="button" onClick={() => requests.refetch()} className="inline-flex items-center gap-1.5 font-bold"><RefreshCw size={12} />Retry</button></div>
           : requests.data?.length ? <ul className="divide-y divide-[#edf0f3]">{requests.data.map(r => (
             <li key={r.id} data-testid={`request-international-${r.id}`} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5">
-              <div className="min-w-0 flex-1"><p className="truncate text-[11px] font-bold text-[#304962]">{r.recipientAccountName} · {r.destinationCountry}</p><p className="mt-0.5 truncate text-[10px] text-[#7d8b99]">{humanizeStatus(r.transferType)} · {r.reference}</p><p className="mt-0.5 text-[10px] text-[#60748a]">{formatAmount(r.sourceAmount, r.sourceCurrency)} → {formatAmount(r.destinationAmount, r.destinationCurrency)}</p></div>
+               <div className="min-w-0 flex-1"><p className="truncate text-[11px] font-bold text-[#304962]">{r.recipientAccountName} · {r.destinationCountry}</p><p className="mt-0.5 truncate text-[10px] text-[#7d8b99]">{r.recipientEmail} · {humanizeStatus(r.transferType)} · {r.reference}</p><p className="mt-0.5 text-[10px] text-[#60748a]">{formatAmount(r.sourceAmount, r.sourceCurrency)} → {formatAmount(r.destinationAmount, r.destinationCurrency)}</p></div>
               <div className="flex items-center gap-2"><span className={`rounded-full px-2.5 py-1 text-[9px] font-bold ${r.status === 'completed' ? 'bg-[#edf7f1] text-[#3f7560]' : 'bg-[#fbf7eb] text-[#806b3d]'}`}>{humanizeStatus(r.status)}</span><button type="button" data-testid={`button-view-receipt-${r.id}`} onClick={() => setReceipt(receiptFromRequest(r))} className="inline-flex items-center gap-1.5 rounded-lg border border-[#dfe7eb] px-2.5 py-1.5 text-[10px] font-bold text-[#3e5a72] hover:bg-[#f5f8f9]"><FileText size={13} /> Receipt</button></div>
             </li>))}</ul>
           : <div className="px-6 py-10 text-center"><p className="text-[12px] font-bold text-[#38506a]">No transfers yet</p><p className="mt-1 text-[11px] text-[#8693a1]">Completed transfers and review requests appear here with their receipts.</p></div>}

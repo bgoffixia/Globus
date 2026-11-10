@@ -21,6 +21,7 @@ import {
   useGetAdminAccess,
 } from '@workspace/api-client-react';
 import { InstallAppButton } from '@/components/pwa-install-prompt';
+import { NotificationsCenter } from '@/components/notifications-center';
 
 const primaryLinks = [
   { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
@@ -113,6 +114,7 @@ export function BankShell({ children }: { children: ReactNode }) {
             <p className="min-w-0 truncate text-[11px] font-medium text-[#738297] sm:text-[12px]"><span className="hidden sm:inline">Globus Bank <span className="px-1.5 text-[#c5ced7]">/</span> </span><span className="text-[#253850]">{pageLabel(location)}</span></p>
           </div>
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
+            <NotificationsCenter />
             <Link href="/home" aria-label="Return to Globus home" data-testid="link-app-home" className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-[#d6e8e9] bg-white px-2 text-[9px] font-bold text-[#377d83] hover:bg-[#eff8f8] sm:px-3 sm:text-[10px]">
               <House size={14} />
               <span className="hidden sm:inline">Home</span>
@@ -159,6 +161,7 @@ function NavGroup({ title, links, location, onNavigate }: { title: string; links
 function pageLabel(path: string) {
   const labels: Record<string, string> = {
     '/dashboard': 'Overview',
+    '/notifications': 'Notifications',
     '/wallets': 'Wallets',
     '/transactions': 'Activity',
     '/calculator': 'Currency converter',

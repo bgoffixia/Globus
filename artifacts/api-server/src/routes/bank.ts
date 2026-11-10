@@ -3,6 +3,8 @@ import { clerkClient, getAuth } from "@clerk/express";
 import { rateLimit } from "express-rate-limit";
 import { and, asc, count, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
+  DeleteBankPushSubscriptionParams,
+  DeleteBankPushSubscriptionResponse,
   CreateBankSavedPaymentMethodBody,
   CreateBankSavedPaymentMethodResponse,
   CompleteRequiredPasswordResetBody,
@@ -27,6 +29,13 @@ import {
   GetBankExchangeRateQuoteQueryParams,
   GetBankExchangeRateQuoteResponse,
   GetBankProfileResponse,
+  GetBankPushConfigResponse,
+  GetBankVaultStatusResponse,
+  InitializeBankVaultPasscodeBody,
+  InitializeBankVaultPasscodeResponse,
+  ListBankNotificationsResponse,
+  ListBankVaultWalletControlsHeader,
+  ListBankVaultWalletControlsResponse,
   ListBankExchangeRatesResponse,
   ListInternationalTransferRequestsResponse,
   ListMyIdentityDocumentsResponse,
@@ -42,10 +51,25 @@ import {
   UpdateTransactionPinResponse,
   UpdateBankProfileBody,
   UpdateBankProfileResponse,
+  UpdateBankVaultPasscodeBody,
+  UpdateBankVaultPasscodeHeader,
+  UpdateBankVaultPasscodeResponse,
+  UpdateBankVaultWalletControlBody,
+  UpdateBankVaultWalletControlHeader,
+  UpdateBankVaultWalletControlParams,
+  UpdateBankVaultWalletControlResponse,
+  UnlockBankVaultBody,
+  UnlockBankVaultResponse,
+  MarkBankNotificationReadParams,
+  MarkBankNotificationReadResponse,
+  SaveBankPushSubscriptionBody,
+  SaveBankPushSubscriptionResponse,
 } from "@workspace/api-zod";
 import {
   bankAuditLogsTable,
   bankAdminSettingsTable,
+  bankNotificationsTable,
+  bankPushSubscriptionsTable,
   bankExchangeRatesTable,
   bankIdentityDocumentsTable,
   bankInternationalTransferRequestsTable,
@@ -96,6 +120,21 @@ import {
   isPasswordResetRequired,
   setPasswordResetCache,
 } from "../lib/password-reset";
+import {
+  initializeVaultPasscode,
+  isVaultSessionActive,
+  unlockVault,
+  updateVaultPasscode,
+} from "../lib/bank-vault";
+import { decryptPrivateData, encryptPrivateData } from "../lib/private-data";
+import {
+  notificationResponse,
+  getPushConfig,
+  notifyTransferRecipient,
+  savePushSubscription,
+  sendPushToUser,
+  storeNotification,
+} from "../lib/transfer-notifications";
 
 const router: IRouter = Router();
 const DEFAULT_UNVERIFIED_DASHBOARD_MESSAGE =
@@ -120,6 +159,20 @@ const passwordResetLimiter = rateLimit({
   standardHeaders: "draft-8",
   legacyHeaders: false,
   message: { error: "Too many password updates. Try again later." },
+});
+const vaultAttemptLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 12,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { error: "Too many vault attempts. Try again later." },
+});
+const transferSubmissionLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { error: "Too many transfer submissions. Try again later." },
 });
 
 type FrankfurterRateReply = {
@@ -334,6 +387,17 @@ function internationalTransferRequestResponse(
   request: typeof bankInternationalTransferRequestsTable.$inferSelect,
   transaction: typeof bankTransactionsTable.$inferSelect,
 ) {
+  let recipientEmail: string | null = null;
+  if (request.recipientEmailEncrypted) {
+    try {
+      recipientEmail = decryptPrivateData(
+        request.recipientEmailEncrypted,
+        "transfer-recipient-email",
+      );
+    } catch {
+      recipientEmail = null;
+    }
+  }
   return {
     id: transaction.id,
     reference: transaction.reference,
@@ -344,6 +408,7 @@ function internationalTransferRequestResponse(
     routingCode: request.routingCode,
     swiftBic: request.swiftBic,
     recipientAccountName: request.recipientAccountName,
+    recipientEmail,
     recipientAccountLast4: request.recipientAccountLast4,
     sourceCurrency: request.sourceCurrency,
     sourceAmount: formatMinorAmount(request.sourceAmountMinor),
@@ -1414,7 +1479,10 @@ router.get("/bank/international-transfer-requests", async (req, res): Promise<vo
   );
 });
 
-router.post("/bank/international-transfer-requests", async (req, res): Promise<void> => {
+router.post(
+  "/bank/international-transfer-requests",
+  transferSubmissionLimiter,
+  async (req, res): Promise<void> => {
   const authUserId = getAuth(req).userId;
   if (!authUserId) {
     res.status(401).json({ error: "Sign in to access your Globus account." });
@@ -1461,6 +1529,19 @@ router.post("/bank/international-transfer-requests", async (req, res): Promise<v
   const accountNumber = parsed.data.recipientAccountNumber
     .replace(/\s+/g, "")
     .toUpperCase();
+  const recipientEmail = parsed.data.recipientEmail.trim().toLowerCase();
+  let recipientEmailEncrypted: string;
+  try {
+    recipientEmailEncrypted = encryptPrivateData(
+      recipientEmail,
+      "transfer-recipient-email",
+    );
+  } catch {
+    res.status(503).json({
+      error: "Recipient notification storage is temporarily unavailable. The transfer was not submitted.",
+    });
+    return;
+  }
   const transactionPinResult = await verifyTransactionPin(
     sender.id,
     parsed.data.transactionPin,
@@ -1527,7 +1608,7 @@ router.post("/bank/international-transfer-requests", async (req, res): Promise<v
         )
         .limit(1);
       return existingRequest
-        ? { request: existingRequest, transaction: duplicate }
+        ? { request: existingRequest, transaction: duplicate, notifications: [] }
         : { error: "The existing request record could not be loaded." };
     }
 
@@ -1556,17 +1637,41 @@ router.post("/bank/international-transfer-requests", async (req, res): Promise<v
       operation: "outgoing_transfer",
     });
     if (restrictionError) return { error: restrictionError };
-    await tx
-      .select({ id: bankWalletsTable.id })
+    if (!wallet.transfersEnabled) {
+      return { error: "Outgoing transfers are disabled for this wallet in your private vault." };
+    }
+    const [lockedWallet] = await tx
+      .select()
       .from(bankWalletsTable)
-      .where(eq(bankWalletsTable.id, wallet.id))
+      .where(and(
+        eq(bankWalletsTable.id, wallet.id),
+        eq(bankWalletsTable.userId, sender.id),
+      ))
       .for("update");
-    const available = await balanceForWallet(tx, wallet.id);
-    const reserved = await reservedForWallet(tx, wallet.id);
+    if (!lockedWallet || lockedWallet.status !== "active") {
+      return { error: "The selected wallet is unavailable or frozen." };
+    }
+    if (!lockedWallet.transfersEnabled) {
+      return { error: "Outgoing transfers are disabled for this wallet in your private vault." };
+    }
+    const commitRestrictionError = await bankOperationRestrictionError(tx, {
+      userId: sender.id,
+      walletId: lockedWallet.id,
+      operation: "outgoing_transfer",
+    });
+    if (commitRestrictionError) return { error: commitRestrictionError };
+    const available = await balanceForWallet(tx, lockedWallet.id);
+    const reserved = await reservedForWallet(tx, lockedWallet.id);
     if (available - reserved < amountMinor) {
       return { error: "There is not enough available ledger balance for this request." };
     }
 
+    const status =
+      lockedWallet.futureTransferMode === "reject"
+        ? "failed"
+        : lockedWallet.futureTransferMode === "hold" || !completedByMember
+          ? "pending"
+          : "completed";
     const reference = createReference();
     const conversionSummary = `${formatMinorAmount(amountMinor)} ${parsed.data.sourceCurrency} converted to ${formatMinorAmount(destinationAmountMinor, parsed.data.destinationCurrency)} ${parsed.data.destinationCurrency} at ${rate}`;
     const [transaction] = await tx
@@ -1576,9 +1681,9 @@ router.post("/bank/international-transfer-requests", async (req, res): Promise<v
         idempotencyKey: parsed.data.idempotencyKey,
         initiatedByUserId: sender.id,
         fromUserId: sender.id,
-        fromWalletId: wallet.id,
+        fromWalletId: lockedWallet.id,
         type: "external_transfer",
-        status: completedByMember ? "completed" : "pending",
+        status,
         currency: parsed.data.sourceCurrency,
         amountMinor,
         feeMinor: 0n,
@@ -1606,6 +1711,7 @@ router.post("/bank/international-transfer-requests", async (req, res): Promise<v
         swiftBic,
         recipientAccountName: parsed.data.recipientAccountName.trim(),
         recipientAccountLast4: accountNumber.slice(-4),
+        recipientEmailEncrypted,
         remark: parsed.data.remark?.trim() ?? "",
       })
       .returning();
@@ -1613,8 +1719,8 @@ router.post("/bank/international-transfer-requests", async (req, res): Promise<v
       await tx.insert(bankLedgerEntriesTable).values([
         {
           transactionId: transaction.id,
-          walletId: wallet.id,
-          accountCode: `wallet:${wallet.id}`,
+          walletId: lockedWallet.id,
+          accountCode: `wallet:${lockedWallet.id}`,
           currency: parsed.data.sourceCurrency,
           side: "debit",
           amountMinor,
@@ -1628,19 +1734,76 @@ router.post("/bank/international-transfer-requests", async (req, res): Promise<v
         },
       ]);
     }
-    return { request, transaction };
+    const notificationTitle =
+      status === "completed"
+        ? "Transfer recorded"
+        : status === "failed"
+          ? "Transfer not processed"
+          : "Transfer sent for review";
+    const notificationBody =
+      status === "completed"
+        ? `${formatMinorAmount(amountMinor, parsed.data.sourceCurrency)} ${parsed.data.sourceCurrency} was recorded in Globus.`
+        : status === "failed"
+          ? "This wallet is set to reject new transfers. No wallet balance changed."
+          : "Your transfer is pending review. No wallet balance has changed.";
+    const senderNotification = await storeNotification(tx, {
+      userId: sender.id,
+      category: "transfer",
+      title: notificationTitle,
+      body: notificationBody,
+      reference,
+    });
+    const recipientUsers = await tx
+      .select({ id: bankUsersTable.id })
+      .from(bankUsersTable)
+      .where(sql`lower(${bankUsersTable.email}) = ${recipientEmail}`)
+      .limit(1);
+    const notifications = [senderNotification];
+    if (recipientUsers[0] && recipientUsers[0].id !== sender.id) {
+      notifications.push(
+        await storeNotification(tx, {
+          userId: recipientUsers[0].id,
+          category: "transfer",
+          title: "Transfer notice",
+          body: `${formatMinorAmount(destinationAmountMinor, parsed.data.destinationCurrency)} ${parsed.data.destinationCurrency} was referenced for you in a Globus transfer record. This is not confirmation of an outside bank payment.`,
+          reference,
+        }),
+      );
+    }
+    return { request, transaction, notifications };
   });
 
   if ("error" in result) {
     res.status(409).json({ error: result.error });
     return;
   }
+  for (const notification of result.notifications) {
+    void sendPushToUser(notification.userId, notification);
+  }
+  if (result.notifications.length) {
+    const emailSent = await notifyTransferRecipient({
+      notificationId: result.notifications[0]?.id,
+      encryptedEmail: result.request.recipientEmailEncrypted,
+      recipientName: result.request.recipientAccountName,
+      bankName: result.request.recipientBank,
+      destinationCountry: result.request.destinationCountry,
+      amount: formatMinorAmount(result.request.destinationAmountMinor, result.request.destinationCurrency),
+      currency: result.request.destinationCurrency,
+      reference: result.transaction.reference,
+      status: result.transaction.status,
+      createdAt: result.transaction.createdAt,
+    });
+    if (!emailSent) {
+      req.log.warn({ reference: result.transaction.reference }, "Transfer alert email could not be delivered");
+    }
+  }
   res.status(201).json(
     CreateInternationalTransferRequestResponse.parse(
       internationalTransferRequestResponse(result.request, result.transaction),
     ),
   );
-});
+  },
+);
 
 router.post("/bank/external-transfers", async (req, res): Promise<void> => {
   if (rejectExternalTransfer(res, "payout")) return;
@@ -2082,14 +2245,35 @@ router.post("/bank/ledger-requests", async (req, res): Promise<void> => {
       operation: parsed.data.type,
     });
     if (restrictionError) return { error: restrictionError };
-    await tx
-      .select({ id: bankWalletsTable.id })
+    const [lockedWallet] = await tx
+      .select()
       .from(bankWalletsTable)
-      .where(eq(bankWalletsTable.id, wallet.id))
+      .where(and(
+        eq(bankWalletsTable.id, wallet.id),
+        eq(bankWalletsTable.userId, userId),
+      ))
       .for("update");
+    if (!lockedWallet) return { error: "The selected wallet is unavailable." };
+    if (parsed.data.type === "withdrawal" && lockedWallet.status !== "active") {
+      return { error: "A frozen wallet cannot be used for a withdrawal." };
+    }
+    if (
+      (parsed.data.type === "deposit" && !lockedWallet.depositsEnabled) ||
+      (parsed.data.type === "withdrawal" && !lockedWallet.withdrawalsEnabled)
+    ) {
+      return {
+        error: `New ${parsed.data.type} requests are disabled for this wallet in your private vault.`,
+      };
+    }
+    const commitRestrictionError = await bankOperationRestrictionError(tx, {
+      userId,
+      walletId: lockedWallet.id,
+      operation: parsed.data.type,
+    });
+    if (commitRestrictionError) return { error: commitRestrictionError };
     if (parsed.data.type === "withdrawal") {
-      const balance = await balanceForWallet(tx, wallet.id);
-      const reserved = await reservedForWallet(tx, wallet.id);
+      const balance = await balanceForWallet(tx, lockedWallet.id);
+      const reserved = await reservedForWallet(tx, lockedWallet.id);
       if (balance - reserved < amountMinor) {
         return {
           error: "The available ledger balance is not enough for this withdrawal request.",
@@ -2106,8 +2290,8 @@ router.post("/bank/ledger-requests", async (req, res): Promise<void> => {
         initiatedByUserId: userId,
         fromUserId: userId,
         fromWalletId:
-          parsed.data.type === "withdrawal" ? wallet.id : null,
-        toWalletId: parsed.data.type === "deposit" ? wallet.id : null,
+          parsed.data.type === "withdrawal" ? lockedWallet.id : null,
+        toWalletId: parsed.data.type === "deposit" ? lockedWallet.id : null,
         type: transactionType,
         status: "pending",
         currency: parsed.data.currency,
@@ -2162,5 +2346,415 @@ router.post("/bank/ledger-requests", async (req, res): Promise<void> => {
     }),
   );
 });
+
+router.get("/bank/vault/status", async (req, res): Promise<void> => {
+  const authUserId = getAuth(req).userId;
+  if (!authUserId) {
+    res.status(401).json({ error: "Sign in to access your Globus account." });
+    return;
+  }
+  const user = await getOrCreateBankUser(authUserId);
+  res.json(
+    GetBankVaultStatusResponse.parse({
+      configured: Boolean(user.vaultPasscodeHash),
+    }),
+  );
+});
+
+router.post(
+  "/bank/vault/status",
+  vaultAttemptLimiter,
+  async (req, res): Promise<void> => {
+    const authUserId = getAuth(req).userId;
+    if (!authUserId) {
+      res.status(401).json({ error: "Sign in to access your Globus account." });
+      return;
+    }
+    const parsed = InitializeBankVaultPasscodeBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+    const user = await getOrCreateBankUser(authUserId);
+    const initialized = await initializeVaultPasscode(
+      user.id,
+      parsed.data.passcode,
+    );
+    if (!initialized) {
+      res.status(409).json({
+        error: "The private vault is already set up. Unlock it to change the passcode.",
+      });
+      return;
+    }
+    await db.insert(bankAuditLogsTable).values({
+      actorUserId: user.id,
+      targetUserId: user.id,
+      action: "initialize_private_vault",
+      reason: "Member initialized their separate four-digit private vault passcode.",
+    });
+    res.json(InitializeBankVaultPasscodeResponse.parse({ configured: true }));
+  },
+);
+
+router.post(
+  "/bank/vault/unlock",
+  vaultAttemptLimiter,
+  async (req, res): Promise<void> => {
+    const authUserId = getAuth(req).userId;
+    if (!authUserId) {
+      res.status(401).json({ error: "Sign in to access your Globus account." });
+      return;
+    }
+    const parsed = UnlockBankVaultBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+    const user = await getOrCreateBankUser(authUserId);
+    const result = await unlockVault(user.id, parsed.data.passcode);
+    if (result.result !== "valid") {
+      if (result.result === "not_configured") {
+        res.status(409).json({ error: "Set up a private vault passcode first." });
+      } else if (result.result === "locked") {
+        res.status(429).json({ error: "Too many incorrect passcodes. Try again in 15 minutes." });
+      } else if (result.result === "invalid") {
+        res.status(403).json({ error: "The private vault passcode is incorrect." });
+      } else {
+        res.status(404).json({ error: "The Globus account could not be found." });
+      }
+      return;
+    }
+    res.json(
+      UnlockBankVaultResponse.parse({
+        sessionToken: result.sessionToken,
+        expiresAt: result.expiresAt.toISOString(),
+      }),
+    );
+  },
+);
+
+router.patch(
+  "/bank/vault/passcode",
+  vaultAttemptLimiter,
+  async (req, res): Promise<void> => {
+    const authUserId = getAuth(req).userId;
+    if (!authUserId) {
+      res.status(401).json({ error: "Sign in to access your Globus account." });
+      return;
+    }
+    const sessionToken = req.get("X-Globus-Vault-Session") ?? "";
+    const parsedHeader = UpdateBankVaultPasscodeHeader.safeParse({
+      "X-Globus-Vault-Session": sessionToken,
+    });
+    const parsed = UpdateBankVaultPasscodeBody.safeParse(req.body);
+    if (!parsedHeader.success || !parsed.success) {
+      res.status(400).json({
+        error: !parsedHeader.success
+          ? parsedHeader.error.message
+          : parsed.error?.message ?? "Invalid passcode.",
+      });
+      return;
+    }
+    const user = await getOrCreateBankUser(authUserId);
+    if (!(await updateVaultPasscode(user.id, sessionToken, parsed.data.newPasscode))) {
+      res.status(403).json({ error: "Your private vault session expired. Unlock it again." });
+      return;
+    }
+    await db.insert(bankAuditLogsTable).values({
+      actorUserId: user.id,
+      targetUserId: user.id,
+      action: "update_private_vault_passcode",
+      reason: "Member changed their private vault passcode. Previous vault sessions were revoked.",
+    });
+    res.json(UpdateBankVaultPasscodeResponse.parse({ configured: true }));
+  },
+);
+
+router.get(
+  "/bank/vault/wallet-controls",
+  async (req, res): Promise<void> => {
+    const authUserId = getAuth(req).userId;
+    if (!authUserId) {
+      res.status(401).json({ error: "Sign in to access your Globus account." });
+      return;
+    }
+    const sessionToken = req.get("X-Globus-Vault-Session") ?? "";
+    const parsedHeader = ListBankVaultWalletControlsHeader.safeParse({
+      "X-Globus-Vault-Session": sessionToken,
+    });
+    if (!parsedHeader.success) {
+      res.status(403).json({ error: "Unlock your private vault to manage wallet controls." });
+      return;
+    }
+    const user = await getOrCreateBankUser(authUserId);
+    if (!(await isVaultSessionActive(user.id, sessionToken))) {
+      res.status(403).json({ error: "Your private vault session expired. Unlock it again." });
+      return;
+    }
+    const wallets = await db
+      .select({
+        walletId: bankWalletsTable.id,
+        currency: bankWalletsTable.currency,
+        transfersEnabled: bankWalletsTable.transfersEnabled,
+        depositsEnabled: bankWalletsTable.depositsEnabled,
+        withdrawalsEnabled: bankWalletsTable.withdrawalsEnabled,
+        futureTransferMode: bankWalletsTable.futureTransferMode,
+      })
+      .from(bankWalletsTable)
+      .where(eq(bankWalletsTable.userId, user.id))
+      .orderBy(asc(bankWalletsTable.currency));
+    res.json(ListBankVaultWalletControlsResponse.parse(wallets));
+  },
+);
+
+router.patch(
+  "/bank/vault/wallet-controls/:walletId",
+  async (req, res): Promise<void> => {
+    const authUserId = getAuth(req).userId;
+    if (!authUserId) {
+      res.status(401).json({ error: "Sign in to access your Globus account." });
+      return;
+    }
+    const sessionToken = req.get("X-Globus-Vault-Session") ?? "";
+    const parsedHeader = UpdateBankVaultWalletControlHeader.safeParse({
+      "X-Globus-Vault-Session": sessionToken,
+    });
+    const params = UpdateBankVaultWalletControlParams.safeParse(req.params);
+    const parsed = UpdateBankVaultWalletControlBody.safeParse(req.body);
+    if (!parsedHeader.success || !params.success || !parsed.success) {
+      res.status(400).json({
+        error: !parsedHeader.success
+          ? parsedHeader.error.message
+          : !params.success
+            ? params.error.message
+            : parsed.error?.message ?? "Invalid wallet-control request.",
+      });
+      return;
+    }
+    if (!Object.keys(parsed.data).length) {
+      res.status(400).json({ error: "Choose at least one wallet control to update." });
+      return;
+    }
+    const user = await getOrCreateBankUser(authUserId);
+    if (!(await isVaultSessionActive(user.id, sessionToken))) {
+      res.status(403).json({ error: "Your private vault session expired. Unlock it again." });
+      return;
+    }
+    const result = await db.transaction(async (tx) => {
+      const [wallet] = await tx
+        .select()
+        .from(bankWalletsTable)
+        .where(
+          and(
+            eq(bankWalletsTable.id, params.data.walletId),
+            eq(bankWalletsTable.userId, user.id),
+          ),
+        )
+        .for("update");
+      if (!wallet) return { notFound: true as const };
+      if (!(await isVaultSessionActive(user.id, sessionToken))) {
+        return { expired: true as const };
+      }
+      const changes = {
+        ...(parsed.data.transfersEnabled !== undefined
+          ? { transfersEnabled: parsed.data.transfersEnabled }
+          : {}),
+        ...(parsed.data.depositsEnabled !== undefined
+          ? { depositsEnabled: parsed.data.depositsEnabled }
+          : {}),
+        ...(parsed.data.withdrawalsEnabled !== undefined
+          ? { withdrawalsEnabled: parsed.data.withdrawalsEnabled }
+          : {}),
+        ...(parsed.data.futureTransferMode !== undefined
+          ? { futureTransferMode: parsed.data.futureTransferMode }
+          : {}),
+        updatedAt: new Date(),
+      };
+      const [updated] = await tx
+        .update(bankWalletsTable)
+        .set(changes)
+        .where(eq(bankWalletsTable.id, wallet.id))
+        .returning();
+      const changedFields = Object.keys(parsed.data).join(", ");
+      await tx.insert(bankAuditLogsTable).values({
+        actorUserId: user.id,
+        targetUserId: user.id,
+        action: "update_private_vault_wallet_controls",
+        reason: `Member updated ${wallet.currency} wallet controls: ${changedFields}.`,
+      });
+      const notification = await storeNotification(tx, {
+        userId: user.id,
+        category: "wallet",
+        title: `${wallet.currency} wallet controls updated`,
+        body: "Your new controls apply to future wallet requests only. Existing transaction records were not changed.",
+      });
+      return { wallet: updated, notification };
+    });
+    if ("notFound" in result) {
+      res.status(404).json({ error: "Wallet not found." });
+      return;
+    }
+    if ("expired" in result) {
+      res.status(403).json({ error: "Your private vault session expired. Unlock it again." });
+      return;
+    }
+    void sendPushToUser(user.id, result.notification);
+    res.json(
+      UpdateBankVaultWalletControlResponse.parse({
+        walletId: result.wallet.id,
+        currency: result.wallet.currency,
+        transfersEnabled: result.wallet.transfersEnabled,
+        depositsEnabled: result.wallet.depositsEnabled,
+        withdrawalsEnabled: result.wallet.withdrawalsEnabled,
+        futureTransferMode: result.wallet.futureTransferMode,
+      }),
+    );
+  },
+);
+
+router.get("/bank/notifications", async (req, res): Promise<void> => {
+  const authUserId = getAuth(req).userId;
+  if (!authUserId) {
+    res.status(401).json({ error: "Sign in to access your Globus account." });
+    return;
+  }
+  const user = await getOrCreateBankUser(authUserId);
+  const notifications = await db
+    .select()
+    .from(bankNotificationsTable)
+    .where(eq(bankNotificationsTable.userId, user.id))
+    .orderBy(desc(bankNotificationsTable.createdAt))
+    .limit(50);
+  res.json(
+    ListBankNotificationsResponse.parse(
+      notifications.map(notificationResponse),
+    ),
+  );
+});
+
+router.patch(
+  "/bank/notifications/:notificationId/read",
+  async (req, res): Promise<void> => {
+    const authUserId = getAuth(req).userId;
+    if (!authUserId) {
+      res.status(401).json({ error: "Sign in to access your Globus account." });
+      return;
+    }
+    const params = MarkBankNotificationReadParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const user = await getOrCreateBankUser(authUserId);
+    const [notification] = await db
+      .update(bankNotificationsTable)
+      .set({ readAt: new Date() })
+      .where(
+        and(
+          eq(bankNotificationsTable.id, params.data.notificationId),
+          eq(bankNotificationsTable.userId, user.id),
+        ),
+      )
+      .returning();
+    if (!notification) {
+      res.status(404).json({ error: "Notification not found." });
+      return;
+    }
+    res.json(
+      MarkBankNotificationReadResponse.parse(
+        notificationResponse(notification),
+      ),
+    );
+  },
+);
+
+router.get("/bank/push/config", async (req, res): Promise<void> => {
+  const authUserId = getAuth(req).userId;
+  if (!authUserId) {
+    res.status(401).json({ error: "Sign in to access your Globus account." });
+    return;
+  }
+  res.json(GetBankPushConfigResponse.parse(getPushConfig()));
+});
+
+router.put(
+  "/bank/push/subscriptions",
+  async (req, res): Promise<void> => {
+    const authUserId = getAuth(req).userId;
+    if (!authUserId) {
+      res.status(401).json({ error: "Sign in to access your Globus account." });
+      return;
+    }
+    const parsed = SaveBankPushSubscriptionBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+    if (!getPushConfig().configured) {
+      res.status(503).json({ error: "Browser push is not configured yet." });
+      return;
+    }
+    let endpoint: URL;
+    try {
+      endpoint = new URL(parsed.data.endpoint);
+    } catch {
+      res.status(400).json({ error: "Enter a valid push subscription endpoint." });
+      return;
+    }
+    const hostname = endpoint.hostname.toLowerCase();
+    const knownPushService =
+      hostname === "fcm.googleapis.com" ||
+      hostname === "updates.push.services.mozilla.com" ||
+      hostname.endsWith(".push.services.mozilla.com") ||
+      hostname === "web.push.apple.com" ||
+      hostname.endsWith(".notify.windows.com");
+    if (endpoint.protocol !== "https:" || !knownPushService || endpoint.username || endpoint.password) {
+      res.status(400).json({ error: "This browser push service is not supported." });
+      return;
+    }
+    const user = await getOrCreateBankUser(authUserId);
+    try {
+      const id = await savePushSubscription(user.id, {
+        endpoint: parsed.data.endpoint,
+        keys: { p256dh: parsed.data.p256dh, auth: parsed.data.auth },
+      });
+      res.json(SaveBankPushSubscriptionResponse.parse({ id, saved: true }));
+    } catch {
+      req.log.error("Encrypted push subscription storage is unavailable");
+      res.status(503).json({ error: "Secure notification storage is temporarily unavailable." });
+    }
+  },
+);
+
+router.delete(
+  "/bank/push/subscriptions/:subscriptionId",
+  async (req, res): Promise<void> => {
+    const authUserId = getAuth(req).userId;
+    if (!authUserId) {
+      res.status(401).json({ error: "Sign in to access your Globus account." });
+      return;
+    }
+    const params = DeleteBankPushSubscriptionParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const user = await getOrCreateBankUser(authUserId);
+    const [deleted] = await db
+      .delete(bankPushSubscriptionsTable)
+      .where(
+        and(
+          eq(bankPushSubscriptionsTable.id, params.data.subscriptionId),
+          eq(bankPushSubscriptionsTable.userId, user.id),
+        ),
+      )
+      .returning({ id: bankPushSubscriptionsTable.id });
+    if (!deleted) {
+      res.status(404).json({ error: "Push subscription not found." });
+      return;
+    }
+    res.json(DeleteBankPushSubscriptionResponse.parse({ id: deleted.id, saved: false }));
+  },
+);
 
 export default router;

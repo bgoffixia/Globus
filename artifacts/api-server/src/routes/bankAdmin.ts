@@ -126,6 +126,11 @@ import {
   getIdentityDocumentFile,
 } from "../lib/identityDocumentStorage";
 import { verifyTransactionPin } from "../lib/transaction-pin";
+import {
+  notifyTransferRecipient,
+  sendPushToUser,
+  storeNotification,
+} from "../lib/transfer-notifications";
 
 const router: IRouter = Router();
 
@@ -3771,6 +3776,15 @@ router.post(
       if (!wallet || wallet.userId !== request.userId || wallet.status !== "active") {
         return { error: "The source wallet is unavailable or frozen." };
       }
+      if (!wallet.transfersEnabled) {
+        return { error: "Outgoing transfers are disabled for this wallet in the member’s private vault." };
+      }
+      const finalRestrictionError = await bankOperationRestrictionError(tx, {
+        userId: request.userId,
+        walletId: wallet.id,
+        operation: "outgoing_transfer",
+      });
+      if (finalRestrictionError) return { error: finalRestrictionError };
       const existingEntries = await tx
         .select({ id: bankLedgerEntriesTable.id })
         .from(bankLedgerEntriesTable)
@@ -3814,7 +3828,14 @@ router.post(
           reason: `Transaction ${transaction.reference}: pending → completed. ${parsed.data.reason.trim()}`,
         })),
       );
-      return { transaction: updated };
+      const notification = await storeNotification(tx, {
+        userId: request.userId,
+        category: "transfer",
+        title: "Transfer recorded",
+        body: `${formatMinorAmount(request.sourceAmountMinor, request.sourceCurrency)} ${request.sourceCurrency} was recorded in Globus after review.`,
+        reference: transaction.reference,
+      });
+      return { transaction: updated, request, notification };
     });
     if ("notFound" in result) {
       res.status(404).json({ error: "Transaction not found." });
@@ -3823,6 +3844,27 @@ router.post(
     if ("error" in result) {
       res.status(409).json({ error: result.error });
       return;
+    }
+    if (result.notification) {
+      void sendPushToUser(result.request.userId, result.notification);
+      const emailSent = await notifyTransferRecipient({
+        notificationId: result.notification.id,
+        encryptedEmail: result.request.recipientEmailEncrypted,
+        recipientName: result.request.recipientAccountName,
+        bankName: result.request.recipientBank,
+        destinationCountry: result.request.destinationCountry,
+        amount: formatMinorAmount(
+          result.request.destinationAmountMinor,
+          result.request.destinationCurrency,
+        ),
+        currency: result.request.destinationCurrency,
+        reference: result.transaction.reference,
+        status: result.transaction.status,
+        createdAt: result.transaction.createdAt,
+      });
+      if (!emailSent) {
+        req.log.warn({ reference: result.transaction.reference }, "Transfer alert email could not be delivered");
+      }
     }
     res.json(
       ProcessAdminInternalTransferResponse.parse(
@@ -3891,7 +3933,7 @@ router.patch(
         .for("update");
       const ledgerPosted = ledgerPostingsBalanced(ledgerEntries);
       if (transaction.status === parsed.data.status) {
-        return { transaction };
+        return { transaction, notification: null, transferRequest: null };
       }
       if (transaction.status === "completed" || transaction.status === "reversed") {
         return {
@@ -3967,7 +4009,32 @@ router.patch(
           reason: `Transaction ${transaction.reference}: ${transaction.status} → ${parsed.data.status}. ${reason}`,
         })),
       );
-      return { transaction: updated };
+      let notification: Awaited<ReturnType<typeof storeNotification>> | null = null;
+      let transferRequest: typeof bankInternationalTransferRequestsTable.$inferSelect | null = null;
+      if (transaction.type === "external_transfer" && transaction.fromUserId) {
+        const [request] = await tx
+          .select()
+          .from(bankInternationalTransferRequestsTable)
+          .where(eq(bankInternationalTransferRequestsTable.transactionId, transaction.id))
+          .for("update");
+        if (request) {
+          transferRequest = request;
+          const statusMessage =
+            parsed.data.status === "pending"
+              ? "The transfer was reopened for review. No wallet balance changed."
+              : parsed.data.status === "failed" || parsed.data.status === "rejected"
+                ? "The transfer was not posted to the Globus wallet."
+                : "The transfer status was updated in Globus.";
+          notification = await storeNotification(tx, {
+            userId: transaction.fromUserId,
+            category: "transfer",
+            title: `Transfer status: ${parsed.data.status}`,
+            body: statusMessage,
+            reference: transaction.reference,
+          });
+        }
+      }
+      return { transaction: updated, notification, transferRequest };
     });
 
     if ("notFound" in result) {
@@ -3977,6 +4044,27 @@ router.patch(
     if ("error" in result) {
       res.status(409).json({ error: result.error });
       return;
+    }
+    if ("notification" in result && result.notification && result.transferRequest) {
+      void sendPushToUser(result.transferRequest.userId, result.notification);
+      const emailSent = await notifyTransferRecipient({
+        notificationId: result.notification.id,
+        encryptedEmail: result.transferRequest.recipientEmailEncrypted,
+        recipientName: result.transferRequest.recipientAccountName,
+        bankName: result.transferRequest.recipientBank,
+        destinationCountry: result.transferRequest.destinationCountry,
+        amount: formatMinorAmount(
+          result.transferRequest.destinationAmountMinor,
+          result.transferRequest.destinationCurrency,
+        ),
+        currency: result.transferRequest.destinationCurrency,
+        reference: result.transaction.reference,
+        status: result.transaction.status,
+        createdAt: result.transaction.createdAt,
+      });
+      if (!emailSent) {
+        req.log.warn({ reference: result.transaction.reference }, "Transfer alert email could not be delivered");
+      }
     }
     res.json(
       UpdateAdminTransactionStatusResponse.parse(

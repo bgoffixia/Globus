@@ -22,6 +22,8 @@ export interface InternationalTransferRequest {
   /** @nullable */
   swiftBic: string | null;
   recipientAccountName: string;
+  /** @nullable */
+  recipientEmail: string | null;
   /** @pattern ^[A-Z0-9]{4}$ */
   recipientAccountLast4: string;
   sourceCurrency: CurrencyCode;

@@ -17,11 +17,15 @@ Globus member-to-member transfers are retired; keep historical entries readable.
 
 Admin funding and correction adjustments share a maximum of 100,000,000 per currency. The second-approval threshold defaults to that maximum to minimize extra approvals; admins can change it. Credits to frozen wallets are allowed, and the wallet remains frozen.
 
+Customer private-vault controls are per wallet and prospective: they may enable/disable future transfers, deposits, and withdrawals, and choose future transfer handling. New wallets default to rejecting new transfer requests; vault controls never rewrite existing transaction status or ledger history.
+
 **Why:** The user explicitly set these product and disclosure boundaries.
 
 **Why:** The user requested an international transfer page with automatic currency conversion while prohibiting external banking and payment services; admin-maintained rates are the internal-only approach.
 
 **Why:** The user chose one limit across currencies, a 100,000,000 maximum, minimal second approvals, and incoming credits to frozen wallets.
+
+**Why:** The user chose “Reject new transactions” as the private vault’s future-request behavior.
 
 **Why:** The user requested saved cards without enabling real-money services, then chose encrypted full bank-account storage while requiring card details to remain masked in administrator views.
 
@@ -32,3 +36,5 @@ Admin funding and correction adjustments share a maximum of 100,000,000 per curr
 **How to apply:** Preserve these rules in future payment, wallet, transaction, receipt, admin, and customer-facing changes. Never hide a nonzero NGN balance; require a configured rate and an auditable ledger conversion first.
 
 **How to apply:** Never collect full card numbers or CVV. Bank account numbers require the dedicated encryption secret, stable key retention, and masked-only responses; never send plaintext into logs or audit records. Keep deposit credits and withdrawal debits administrator-reviewed, with verification and restrictions checked on the server at submission and commit.
+
+**How to apply:** Enforce each wallet toggle on the backend at submission and before commit. Keep customer controls separate from administrator restrictions, and treat all customer policy changes as forward-only.
