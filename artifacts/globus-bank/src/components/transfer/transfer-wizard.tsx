@@ -77,6 +77,7 @@ export function InternationalTransferPage() {
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [receipt, setReceipt] = useState<ReceiptTransaction | null>(null);
+  const [receiptNotice, setReceiptNotice] = useState('');
   const keyRef = useRef<{ fp: string; key: string } | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
 
@@ -184,6 +185,9 @@ export function InternationalTransferPage() {
       onSuccess: request => {
         setPin('');
         setReceipt(receiptFromRequest(request));
+        setReceiptNotice(request.recipientEmailNotificationSkipped
+          ? 'The transfer was recorded, but no recipient email notification was sent.'
+          : '');
         resetAll();
         void Promise.all([
           queryClient.invalidateQueries({ queryKey: getListInternationalTransferRequestsQueryKey() }),
@@ -330,11 +334,11 @@ export function InternationalTransferPage() {
           : requests.data?.length ? <ul className="divide-y divide-[#edf0f3]">{requests.data.map(r => (
             <li key={r.id} data-testid={`request-international-${r.id}`} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5">
                <div className="min-w-0 flex-1"><p className="truncate text-[11px] font-bold text-[#304962]">{r.recipientAccountName} · {r.destinationCountry}</p><p className="mt-0.5 truncate text-[10px] text-[#7d8b99]">{r.recipientEmail ? `${r.recipientEmail} · ` : ''}{humanizeStatus(r.transferType)} · {r.reference}</p><p className="mt-0.5 text-[10px] text-[#60748a]">{formatAmount(r.sourceAmount, r.sourceCurrency)} → {formatAmount(r.destinationAmount, r.destinationCurrency)}</p></div>
-              <div className="flex items-center gap-2"><span className={`rounded-full px-2.5 py-1 text-[9px] font-bold ${r.status === 'completed' ? 'bg-[#edf7f1] text-[#3f7560]' : 'bg-[#fbf7eb] text-[#806b3d]'}`}>{humanizeStatus(r.status)}</span><button type="button" data-testid={`button-view-receipt-${r.id}`} onClick={() => setReceipt(receiptFromRequest(r))} className="inline-flex items-center gap-1.5 rounded-lg border border-[#dfe7eb] px-2.5 py-1.5 text-[10px] font-bold text-[#3e5a72] hover:bg-[#f5f8f9]"><FileText size={13} /> Receipt</button></div>
+              <div className="flex items-center gap-2"><span className={`rounded-full px-2.5 py-1 text-[9px] font-bold ${r.status === 'completed' ? 'bg-[#edf7f1] text-[#3f7560]' : 'bg-[#fbf7eb] text-[#806b3d]'}`}>{humanizeStatus(r.status)}</span><button type="button" data-testid={`button-view-receipt-${r.id}`} onClick={() => { setReceiptNotice(''); setReceipt(receiptFromRequest(r)); }} className="inline-flex items-center gap-1.5 rounded-lg border border-[#dfe7eb] px-2.5 py-1.5 text-[10px] font-bold text-[#3e5a72] hover:bg-[#f5f8f9]"><FileText size={13} /> Receipt</button></div>
             </li>))}</ul>
           : <div className="px-6 py-10 text-center"><p className="text-[12px] font-bold text-[#38506a]">No transfers yet</p><p className="mt-1 text-[11px] text-[#8693a1]">Completed transfers and review requests appear here with their receipts.</p></div>}
       </section>
-      {receipt && <TransferReceiptModal transaction={receipt} onClose={() => setReceipt(null)} title={receipt.status === 'completed' ? 'Transfer completed' : 'Transfer request submitted'} />}
+      {receipt && <TransferReceiptModal transaction={receipt} onClose={() => { setReceipt(null); setReceiptNotice(''); }} notice={receiptNotice || undefined} title={receipt.status === 'completed' ? 'Transfer completed' : 'Transfer request submitted'} />}
     </div>
   );
 }

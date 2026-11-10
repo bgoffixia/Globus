@@ -28,6 +28,7 @@ export interface InternationalTransferRequest {
   recipientAccountName: string;
   /** @nullable */
   recipientEmail: string | null;
+  recipientEmailNotificationSkipped: boolean;
   /** @pattern ^[A-Z0-9]{4}$ */
   recipientAccountLast4: string;
   sourceCurrency: CurrencyCode;

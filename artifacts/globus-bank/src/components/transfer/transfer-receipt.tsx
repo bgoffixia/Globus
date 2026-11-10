@@ -102,7 +102,7 @@ export function receiptFromRequest(r: InternationalTransferRequest): ReceiptTran
   } as ReceiptTransaction;
 }
 
-export function TransferReceiptModal({ transaction, onClose, title }: { transaction: ReceiptTransaction; onClose: () => void; title?: string }) {
+export function TransferReceiptModal({ transaction, onClose, title, notice }: { transaction: ReceiptTransaction; onClose: () => void; title?: string; notice?: string }) {
   const [exporting, setExporting] = useState<'pdf' | 'png' | null>(null);
   const [downloadError, setDownloadError] = useState('');
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -272,6 +272,7 @@ export function TransferReceiptModal({ transaction, onClose, title }: { transact
           </article>
         </div>
         <div ref={actionsRef} className="receipt-actions shrink-0 border-t border-[#e7ecee] bg-[#fafbf9] px-3 py-2.5 sm:px-5">
+          {notice && <p role="status" data-testid="status-recipient-email-notice" className="mb-2 rounded-lg border border-[#eadfbf] bg-[#fbf7eb] px-3 py-2 text-left text-[10px] leading-4 text-[#806b3d]">{notice}</p>}
           <div className="flex flex-wrap items-center justify-end gap-2">
             <button type="button" data-testid="button-save-receipt-png" aria-label="Save receipt PNG to device or gallery" disabled={exporting !== null || !completed} onClick={downloadPng} className="inline-flex items-center gap-1.5 rounded-lg border border-[#dbe4e8] bg-white px-2.5 py-2 text-[9px] font-bold text-[#456179] hover:bg-[#f4f8f9] disabled:cursor-not-allowed disabled:opacity-50"><ImageDown size={13} />{exporting === 'png' ? 'Preparing image…' : 'Save PNG'}</button>
             <button type="button" data-testid="button-download-receipt-pdf" disabled={exporting !== null || !completed} onClick={downloadPdf} className="inline-flex items-center gap-1.5 rounded-lg border border-[#dbe4e8] bg-white px-2.5 py-2 text-[9px] font-bold text-[#456179] hover:bg-[#f4f8f9] disabled:cursor-not-allowed disabled:opacity-50"><Download size={13} />{exporting === 'pdf' ? 'Preparing PDF…' : 'Download PDF'}</button>

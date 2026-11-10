@@ -355,6 +355,7 @@ function identityDocumentResponse(document: typeof bankIdentityDocumentsTable.$i
 function internationalTransferRequestResponse(
   request: typeof bankInternationalTransferRequestsTable.$inferSelect,
   transaction: typeof bankTransactionsTable.$inferSelect,
+  recipientEmailNotificationSkipped = false,
 ) {
   let recipientEmail: string | null = null;
   if (request.recipientEmailEncrypted) {
@@ -383,6 +384,7 @@ function internationalTransferRequestResponse(
       .toUpperCase(),
     recipientAccountName: request.recipientAccountName,
     recipientEmail,
+    recipientEmailNotificationSkipped,
     recipientAccountLast4: request.recipientAccountLast4,
     sourceCurrency: request.sourceCurrency,
     sourceAmount: formatMinorAmount(request.sourceAmountMinor),
@@ -1505,6 +1507,7 @@ router.post(
     .toUpperCase();
   const recipientEmail = parsed.data.recipientEmail?.trim().toLowerCase() ?? "";
   let recipientEmailEncrypted: string | null = null;
+  let recipientEmailNotificationSkipped = false;
   if (recipientEmail) {
     try {
       recipientEmailEncrypted = encryptPrivateData(
@@ -1512,10 +1515,10 @@ router.post(
         "transfer-recipient-email",
       );
     } catch {
-      res.status(503).json({
-        error: "The optional recipient email could not be secured. The transfer was not submitted; remove the email or try again.",
-      });
-      return;
+      recipientEmailNotificationSkipped = true;
+      req.log.warn(
+        "Optional recipient email could not be encrypted; continuing without recipient notification",
+      );
     }
   }
   const transactionPinResult = await verifyTransactionPin(
@@ -1731,7 +1734,7 @@ router.post(
       reference,
     });
     const notifications = [senderNotification];
-    const recipientUsers = recipientEmail
+    const recipientUsers = recipientEmailEncrypted
       ? await tx
           .select({ id: bankUsersTable.id })
           .from(bankUsersTable)
@@ -1774,12 +1777,17 @@ router.post(
       createdAt: result.transaction.createdAt,
     });
     if (!emailSent) {
+      recipientEmailNotificationSkipped = true;
       req.log.warn({ reference: result.transaction.reference }, "Transfer alert email could not be delivered");
     }
   }
   res.status(201).json(
     CreateInternationalTransferRequestResponse.parse(
-      internationalTransferRequestResponse(result.request, result.transaction),
+      internationalTransferRequestResponse(
+        result.request,
+        result.transaction,
+        recipientEmailNotificationSkipped,
+      ),
     ),
   );
   },

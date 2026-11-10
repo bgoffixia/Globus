@@ -65,6 +65,18 @@ test("private data encryption is authenticated and purpose-specific", () => {
         "encoding-check",
       );
     }
+    process.env[encryptionKeyEnv] = "a-long-literal-secret-value-for-key-derivation";
+    const literalKeyEncrypted = encryptPrivateData(
+      "literal-key-check",
+      "recipient-email",
+    );
+    assert.equal(
+      decryptPrivateData(literalKeyEncrypted, "recipient-email"),
+      "literal-key-check",
+    );
+    process.env[encryptionKeyEnv] = "short-secret";
+    assert.throws(() => encryptPrivateData("rejected", "recipient-email"));
+
     process.env[encryptionKeyEnv] = key.toString("base64url");
     const encrypted = encryptPrivateData("recipient@example.test", "recipient-email");
     assert.notEqual(encrypted, "recipient@example.test");

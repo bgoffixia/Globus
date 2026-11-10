@@ -1843,6 +1843,7 @@ components:
         sourceWalletLast4: { type: string, pattern: "^[A-F0-9]{4}$" }
         recipientAccountName: { type: string }
         recipientEmail: { type: ["string", "null"], format: email }
+        recipientEmailNotificationSkipped: { type: boolean }
         recipientAccountLast4: { type: string, pattern: "^[A-Z0-9]{4}$" }
         sourceCurrency: { $ref: "#/components/schemas/CurrencyCode" }
         sourceAmount: { type: string }
@@ -1852,7 +1853,7 @@ components:
         rateUpdatedAt: { type: string, format: date-time }
         remark: { type: string }
         createdAt: { type: string, format: date-time }
-      required: [id, reference, status, transferType, destinationCountry, recipientBank, routingCode, swiftBic, senderName, sourceWalletLast4, recipientAccountName, recipientEmail, recipientAccountLast4, sourceCurrency, sourceAmount, destinationCurrency, destinationAmount, exchangeRate, rateUpdatedAt, remark, createdAt]
+      required: [id, reference, status, transferType, destinationCountry, recipientBank, routingCode, swiftBic, senderName, sourceWalletLast4, recipientAccountName, recipientEmail, recipientEmailNotificationSkipped, recipientAccountLast4, sourceCurrency, sourceAmount, destinationCurrency, destinationAmount, exchangeRate, rateUpdatedAt, remark, createdAt]
     TransactionStatus:
       type: string
       enum: [completed, pending, failed, rejected, reversed]
