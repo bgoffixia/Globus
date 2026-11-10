@@ -67,20 +67,42 @@ self.addEventListener("push", (event) => {
   }
 
   const title =
-    typeof payload.title === "string" && payload.title
-      ? payload.title
+    typeof payload.t === "string" && payload.t
+      ? payload.t
+      : typeof payload.title === "string" && payload.title
+        ? payload.title
       : "Globus account notice";
   const body =
-    typeof payload.body === "string" && payload.body
-      ? payload.body
+    typeof payload.m === "string" && payload.m
+      ? payload.m
+      : typeof payload.message === "string" && payload.message
+        ? payload.message
+        : typeof payload.body === "string" && payload.body
+          ? payload.body
       : "You have an account update.";
+  const requestedTarget = payload.u ?? payload.target_url ?? payload.data?.url;
+  let targetUrl = new URL("notifications", self.registration.scope).toString();
+  if (typeof requestedTarget === "string") {
+    try {
+      const candidate = new URL(requestedTarget, self.registration.scope);
+      const scope = new URL(self.registration.scope);
+      if (
+        candidate.origin === scope.origin &&
+        candidate.pathname.startsWith(scope.pathname)
+      ) {
+        targetUrl = candidate.toString();
+      }
+    } catch {
+      // Use the app notifications page for malformed targets.
+    }
+  }
 
   event.waitUntil(
     self.registration.showNotification(title, {
       body,
       icon: new URL("globus-mark-transparent.png", self.registration.scope).toString(),
       badge: new URL("globus-mark-transparent.png", self.registration.scope).toString(),
-      data: { url: new URL("notifications", self.registration.scope).toString() },
+      data: { url: targetUrl },
       tag: typeof payload.notificationId === "string" ? payload.notificationId : "globus-account-update",
     }),
   );
@@ -88,7 +110,10 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const targetUrl = new URL("notifications", self.registration.scope).toString();
+  const targetUrl =
+    typeof event.notification.data?.url === "string"
+      ? event.notification.data.url
+      : new URL("notifications", self.registration.scope).toString();
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
       const matchingClient = clients.find((client) => client.url.startsWith(self.registration.scope));

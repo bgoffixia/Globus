@@ -1,11 +1,6 @@
 import { eq } from "drizzle-orm";
 import { ReplitConnectors } from "@replit/connectors-sdk";
 import {
-  sendNotification as sendWebPushNotification,
-  setVapidDetails,
-  type PushSubscription,
-} from "web-push";
-import {
   bankNotificationsTable,
   bankPushSubscriptionsTable,
   db,
@@ -17,19 +12,41 @@ type NotificationCategory = "transfer" | "wallet" | "security";
 
 export type StoredNotification = typeof bankNotificationsTable.$inferSelect;
 
-export function getPushConfig(): { configured: boolean; publicKey: string | null } {
-  const publicKey = process.env.GLOBUS_PUSH_VAPID_PUBLIC_KEY?.trim();
-  const privateKey = process.env.GLOBUS_PUSH_VAPID_PRIVATE_KEY?.trim();
-  const sender = process.env.GLOBUS_SECURITY_EMAIL_FROM?.trim();
-  if (!publicKey || !privateKey || !sender) {
-    return { configured: false, publicKey: null };
+export class WebpushrSubscriberAlreadyLinkedError extends Error {
+  constructor() {
+    super("This Webpushr subscriber is already linked to another Globus account.");
+    this.name = "WebpushrSubscriberAlreadyLinkedError";
   }
+}
+
+function webpushrCredentials() {
+  const siteKey = process.env.WEBPUSHR_SITE_KEY?.trim();
+  const apiKey = process.env.WEBPUSHR_REST_API_KEY?.trim();
+  const authToken = process.env.WEBPUSHR_AUTH_TOKEN?.trim();
+  return siteKey && apiKey && authToken
+    ? { siteKey, apiKey, authToken }
+    : null;
+}
+
+function appOrigin(): string | null {
+  const host =
+    process.env.REPLIT_DOMAINS?.split(",")[0]?.trim() ||
+    process.env.REPLIT_DEV_DOMAIN?.trim();
+  if (!host) return null;
   try {
-    setVapidDetails(`mailto:${sender}`, publicKey, privateKey);
-    return { configured: true, publicKey };
+    const url = new URL(host.includes("://") ? host : `https://${host}`);
+    return url.protocol === "https:" ? url.origin : null;
   } catch {
-    return { configured: false, publicKey: null };
+    return null;
   }
+}
+
+export function getPushConfig(): { configured: boolean; siteKey: string | null } {
+  const credentials = webpushrCredentials();
+  return {
+    configured: Boolean(credentials),
+    siteKey: credentials?.siteKey ?? null,
+  };
 }
 
 export async function storeNotification(
@@ -155,7 +172,9 @@ export async function sendPushToUser(
   userId: string,
   notification: Pick<StoredNotification, "title" | "body" | "reference" | "id">,
 ): Promise<void> {
-  if (!getPushConfig().configured) return;
+  const credentials = webpushrCredentials();
+  const origin = appOrigin();
+  if (!credentials || !origin) return;
 
   let subscriptions: typeof bankPushSubscriptionsTable.$inferSelect[];
   try {
@@ -166,38 +185,39 @@ export async function sendPushToUser(
   } catch {
     return;
   }
-  const payload = JSON.stringify({
-    title: notification.title,
-    body: "You have a new account activity update. Open Globus to review it.",
-    notificationId: notification.id,
-    url: "/notifications",
-  });
   await Promise.all(
     subscriptions.map(async (row) => {
-      let subscription: PushSubscription;
+      let subscriberId: string;
       try {
-        subscription = JSON.parse(
-          decryptPrivateData(row.subscriptionEncrypted, "push-subscription"),
-        ) as PushSubscription;
+        subscriberId = decryptPrivateData(
+          row.subscriptionEncrypted,
+          "webpushr-subscriber-id",
+        );
+        if (!/^[A-Za-z0-9._:-]{1,160}$/.test(subscriberId)) return;
       } catch {
         return;
       }
       try {
-          await sendWebPushNotification(subscription, payload, { TTL: 3600 });
-      } catch (error) {
-        const statusCode =
-          typeof error === "object" && error !== null && "statusCode" in error
-            ? Number(error.statusCode)
-            : 0;
-        if (statusCode === 404 || statusCode === 410) {
-          try {
-            await db
-              .delete(bankPushSubscriptionsTable)
-              .where(eq(bankPushSubscriptionsTable.id, row.id));
-          } catch {
-            return;
-          }
-        }
+        await fetch("https://api.webpushr.com/v1/notification/send/sid", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            webpushrKey: credentials.apiKey,
+            webpushrAuthToken: credentials.authToken,
+          },
+          body: JSON.stringify({
+            title: notification.title.slice(0, 100),
+            message: "You have a new account activity update. Open Globus to review it.",
+            target_url: new URL("/notifications", origin).toString(),
+            sid: subscriberId,
+            icon: new URL("/globus-mark-transparent.png", origin).toString(),
+            auto_hide: 1,
+            expire_push: "1d",
+          }),
+          signal: AbortSignal.timeout(8000),
+        });
+      } catch {
+        // Push delivery is best-effort; in-app notifications remain available.
       }
     }),
   );
@@ -205,21 +225,30 @@ export async function sendPushToUser(
 
 export async function savePushSubscription(
   userId: string,
-  subscription: PushSubscription,
+  subscriberId: string,
 ): Promise<string> {
-  const endpointHash = hashPrivateToken(subscription.endpoint);
+  if (!/^[A-Za-z0-9._:-]{1,160}$/.test(subscriberId)) {
+    throw new Error("Invalid Webpushr subscriber ID.");
+  }
+  const endpointHash = hashPrivateToken(subscriberId);
   const encrypted = encryptPrivateData(
-    JSON.stringify(subscription),
-    "push-subscription",
+    subscriberId,
+    "webpushr-subscriber-id",
   );
   return db.transaction(async (tx) => {
     const [existing] = await tx
-      .select({ id: bankPushSubscriptionsTable.id })
+      .select({
+        id: bankPushSubscriptionsTable.id,
+        userId: bankPushSubscriptionsTable.userId,
+      })
       .from(bankPushSubscriptionsTable)
       .where(eq(bankPushSubscriptionsTable.endpointHash, endpointHash))
       .limit(1)
       .for("update");
     if (existing) {
+      if (existing.userId !== userId) {
+        throw new WebpushrSubscriberAlreadyLinkedError();
+      }
       await tx
         .update(bankPushSubscriptionsTable)
         .set({ userId, subscriptionEncrypted: encrypted, updatedAt: new Date() })

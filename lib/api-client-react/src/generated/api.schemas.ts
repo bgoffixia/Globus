@@ -367,22 +367,16 @@ export interface BankNotification {
 export interface BankPushConfig {
   configured: boolean;
   /** @nullable */
-  publicKey: string | null;
+  siteKey: string | null;
 }
 
 export interface BankPushSubscriptionInput {
-  /** @maxLength 2048 */
-  endpoint: string;
   /**
-     * @minLength 20
-     * @maxLength 256
+     * @minLength 1
+     * @maxLength 160
+     * @pattern ^[A-Za-z0-9._:-]+$
      */
-  p256dh: string;
-  /**
-     * @minLength 8
-     * @maxLength 128
-     */
-  auth: string;
+  subscriberId: string;
 }
 
 export interface BankPushSubscriptionResult {

@@ -93,6 +93,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/BankVaultStatus" }
         "400": { $ref: "#/components/responses/BadRequest" }
+        "409": { $ref: "#/components/responses/Conflict" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "409": { $ref: "#/components/responses/Conflict" }
   /bank/vault/unlock:
@@ -227,7 +228,7 @@ paths:
       summary: Get browser push notification setup state
       responses:
         "200":
-          description: Browser push public key, if configured
+          description: Webpushr browser site key, if configured
           content:
             application/json:
               schema: { $ref: "#/components/schemas/BankPushConfig" }
@@ -236,7 +237,7 @@ paths:
     put:
       operationId: saveBankPushSubscription
       tags: [bank]
-      summary: Save an encrypted browser push subscription
+      summary: Link the signed-in member to a Webpushr subscriber
       requestBody:
         required: true
         content:
@@ -1743,15 +1744,13 @@ components:
       type: object
       properties:
         configured: { type: boolean }
-        publicKey: { type: ["string", "null"] }
-      required: [configured, publicKey]
+        siteKey: { type: ["string", "null"] }
+      required: [configured, siteKey]
     BankPushSubscriptionInput:
       type: object
       properties:
-        endpoint: { type: string, format: uri, maxLength: 2048 }
-        p256dh: { type: string, minLength: 20, maxLength: 256 }
-        auth: { type: string, minLength: 8, maxLength: 128 }
-      required: [endpoint, p256dh, auth]
+        subscriberId: { type: string, minLength: 1, maxLength: 160, pattern: "^[A-Za-z0-9._:-]+$" }
+      required: [subscriberId]
     BankPushSubscriptionResult:
       type: object
       properties:

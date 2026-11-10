@@ -13,10 +13,81 @@ import {
   useSaveBankPushSubscription,
 } from '@workspace/api-client-react';
 
-function decodeKey(value: string) {
-  const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
-  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
-  return Uint8Array.from(atob(padded), char => char.charCodeAt(0));
+type WebpushrCommand = (method: string, argument?: unknown) => void;
+declare global {
+  interface Window {
+    webpushr?: WebpushrCommand;
+    __globusWebpushrLoad?: Promise<WebpushrCommand>;
+    __globusWebpushrSiteKey?: string;
+  }
+}
+
+function loadWebpushr(siteKey: string): Promise<WebpushrCommand> {
+  if (window.__globusWebpushrLoad) return window.__globusWebpushrLoad;
+  window.__globusWebpushrLoad = new Promise((resolve, reject) => {
+    const setup = () => {
+      const api = window.webpushr;
+      if (!api) {
+        reject(new Error('Webpushr did not finish loading.'));
+        return;
+      }
+      if (window.__globusWebpushrSiteKey !== siteKey) {
+        const base = new URL(import.meta.env.BASE_URL || '/', window.location.origin);
+        const worker = new URL('sw.js', base).pathname;
+        api('setup', {
+          key: siteKey,
+          sw: worker,
+          scope: base.pathname,
+          integration: 'https',
+        });
+        window.__globusWebpushrSiteKey = siteKey;
+      }
+      resolve(api);
+    };
+
+    const existing = document.getElementById('webpushr-script') as HTMLScriptElement | null;
+    if (existing) {
+      if (window.webpushr && window.__globusWebpushrSiteKey === siteKey) {
+        resolve(window.webpushr);
+      } else {
+        existing.addEventListener('load', setup, { once: true });
+        existing.addEventListener('error', () => reject(new Error('Webpushr could not be loaded.')), { once: true });
+      }
+      return;
+    }
+
+    if (!window.webpushr) {
+      const queue: unknown[][] = [];
+      const queuedApi = ((...args: unknown[]) => { queue.push(args); }) as WebpushrCommand & { q?: unknown[][] };
+      queuedApi.q = queue;
+      window.webpushr = queuedApi;
+    }
+    const script = document.createElement('script');
+    script.id = 'webpushr-script';
+    script.src = 'https://cdn.webpushr.com/app.min.js';
+    script.async = true;
+    script.referrerPolicy = 'strict-origin-when-cross-origin';
+    script.onload = setup;
+    script.onerror = () => reject(new Error('Webpushr could not be loaded.'));
+    document.head.appendChild(script);
+  });
+  window.__globusWebpushrLoad.catch(() => { window.__globusWebpushrLoad = undefined; });
+  return window.__globusWebpushrLoad;
+}
+
+function fetchWebpushrSubscriberId(api: WebpushrCommand): Promise<string | null> {
+  return new Promise(resolve => {
+    const timeout = window.setTimeout(() => resolve(null), 7000);
+    try {
+      api('fetch_id', (value: unknown) => {
+        window.clearTimeout(timeout);
+        resolve(typeof value === 'string' && /^[A-Za-z0-9._:-]{1,160}$/.test(value) ? value : null);
+      });
+    } catch {
+      window.clearTimeout(timeout);
+      resolve(null);
+    }
+  });
 }
 
 const categoryIcon = {
@@ -64,25 +135,23 @@ export function NotificationsCenter() {
       setPushError('Browser push is not supported in this browser.');
       return;
     }
-    if (!push.data?.configured || !push.data.publicKey) {
-      setPushError('Browser push is not configured for this account.');
+    if (!push.data?.configured || !push.data.siteKey) {
+      setPushError('Webpushr has not been configured for this app.');
       return;
     }
     try {
-      const permission = Notification.permission === 'default' ? await Notification.requestPermission() : Notification.permission;
-      if (permission !== 'granted') {
-        setPushError(permission === 'denied' ? 'Notifications are blocked in browser settings. Allow them there, then try again.' : 'Notification permission was not granted.');
+      if (Notification.permission === 'denied') {
+        setPushError('Notifications are blocked in browser settings. Allow them there, then try again.');
         return;
       }
-      const registration = await navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`);
-      const subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: decodeKey(push.data.publicKey),
-      });
-      const keys = subscription.toJSON().keys;
-      if (!subscription.endpoint || !keys?.p256dh || !keys.auth) throw new Error('The browser did not return a complete push subscription.');
+      const api = await loadWebpushr(push.data.siteKey);
+      const subscriberId = await fetchWebpushrSubscriberId(api);
+      if (!subscriberId) {
+        setPushMessage('Complete the Webpushr permission prompt, then select Enable alerts again to link this device.');
+        return;
+      }
       const result = await saveSubscription.mutateAsync({
-        data: { endpoint: subscription.endpoint, p256dh: keys.p256dh, auth: keys.auth },
+        data: { subscriberId },
       });
       setSavedSubscriptionId(result.id ?? '');
       if (result.id && subscriptionStorageKey) {
@@ -103,12 +172,9 @@ export function NotificationsCenter() {
     }
     try {
       await deleteSubscription.mutateAsync({ subscriptionId: savedSubscriptionId });
-      const registration = await navigator.serviceWorker.getRegistration();
-      const subscription = await registration?.pushManager.getSubscription();
-      await subscription?.unsubscribe();
       setSavedSubscriptionId('');
       if (subscriptionStorageKey) localStorage.removeItem(subscriptionStorageKey);
-      setPushMessage('Browser notifications are disabled for this device.');
+      setPushMessage('Globus alerts are disconnected for this device. Browser permission can be changed in your device settings.');
       await queryClient.invalidateQueries({ queryKey: getGetBankPushConfigQueryKey() });
     } catch (err) {
       setPushError(err instanceof Error ? err.message : 'Browser notifications could not be disabled.');
@@ -155,9 +221,9 @@ export function NotificationsCenter() {
           {pushError && <p role="alert" data-testid="status-browser-push-error" className="mt-1 rounded-md bg-[#fff1ef] px-2 py-1.5 text-[8px] text-[#a24940]">{pushError}</p>}
           {pushMessage && <p role="status" data-testid="status-browser-push-message" className="mt-1 rounded-md bg-[#eef7f1] px-2 py-1.5 text-[8px] text-[#41755f]">{pushMessage}</p>}
           <div className="mt-2 flex items-center justify-between gap-2">
-            <span data-testid="status-browser-push-config" className="text-[8px] text-[#8794a2]">{push.isLoading ? 'Checking availability…' : !supported ? 'Not supported in this browser' : push.data?.configured ? 'Available' : 'Not configured'}</span>
+              <span data-testid="status-browser-push-config" className="text-[8px] text-[#8794a2]">{push.isLoading ? 'Checking availability…' : !supported ? 'Not supported in this browser' : push.data?.configured ? 'Webpushr available' : 'Not configured'}</span>
             {savedSubscriptionId ? <button type="button" disabled={deleteSubscription.isPending} onClick={() => void disablePush()} data-testid="button-disable-browser-push" className="h-8 rounded-lg border border-[#dfe6eb] bg-white px-3 text-[9px] font-bold text-[#52697e] disabled:opacity-50">{deleteSubscription.isPending ? 'Disabling…' : 'Disable alerts'}</button> :
-              <button type="button" disabled={!supported || !push.data?.configured || saveSubscription.isPending} onClick={() => void enablePush()} data-testid="button-enable-browser-push" className="h-8 rounded-lg bg-[#173858] px-3 text-[9px] font-bold text-white disabled:cursor-not-allowed disabled:opacity-45">{saveSubscription.isPending ? 'Enabling…' : 'Enable alerts'}</button>}
+              <button type="button" disabled={!supported || !push.data?.configured || saveSubscription.isPending} onClick={() => void enablePush()} data-testid="button-enable-browser-push" className="h-8 rounded-lg bg-[#173858] px-3 text-[9px] font-bold text-white disabled:cursor-not-allowed disabled:opacity-45">{saveSubscription.isPending ? 'Linking…' : 'Enable alerts'}</button>}
           </div>
         </div>
       </div>}

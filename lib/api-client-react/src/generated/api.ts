@@ -1125,7 +1125,7 @@ export const getSaveBankPushSubscriptionUrl = () => {
 }
 
 /**
- * @summary Save an encrypted browser push subscription
+ * @summary Link the signed-in member to a Webpushr subscriber
  */
 export const saveBankPushSubscription = async (bankPushSubscriptionInput: BankPushSubscriptionInput, options?: Parameters<typeof customFetch>[1]): Promise<BankPushSubscriptionResult> => {
 
@@ -1191,7 +1191,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type SaveBankPushSubscriptionMutationVariables = {data: BodyType<BankPushSubscriptionInput>}
 
     /**
- * @summary Save an encrypted browser push subscription
+ * @summary Link the signed-in member to a Webpushr subscriber
  */
 export const useSaveBankPushSubscription = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ServiceUnavailableResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveBankPushSubscription>>, TError,SaveBankPushSubscriptionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}

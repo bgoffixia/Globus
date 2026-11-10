@@ -129,6 +129,7 @@ import {
 import { decryptPrivateData, encryptPrivateData } from "../lib/private-data";
 import {
   notificationResponse,
+  WebpushrSubscriberAlreadyLinkedError,
   getPushConfig,
   notifyTransferRecipient,
   savePushSubscription,
@@ -173,6 +174,13 @@ const transferSubmissionLimiter = rateLimit({
   standardHeaders: "draft-8",
   legacyHeaders: false,
   message: { error: "Too many transfer submissions. Try again later." },
+});
+const pushSubscriptionLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 8,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { error: "Too many notification setup attempts. Try again later." },
 });
 
 type FrankfurterRateReply = {
@@ -2679,6 +2687,7 @@ router.get("/bank/push/config", async (req, res): Promise<void> => {
 
 router.put(
   "/bank/push/subscriptions",
+  pushSubscriptionLimiter,
   async (req, res): Promise<void> => {
     const authUserId = getAuth(req).userId;
     if (!authUserId) {
@@ -2694,32 +2703,21 @@ router.put(
       res.status(503).json({ error: "Browser push is not configured yet." });
       return;
     }
-    let endpoint: URL;
-    try {
-      endpoint = new URL(parsed.data.endpoint);
-    } catch {
-      res.status(400).json({ error: "Enter a valid push subscription endpoint." });
-      return;
-    }
-    const hostname = endpoint.hostname.toLowerCase();
-    const knownPushService =
-      hostname === "fcm.googleapis.com" ||
-      hostname === "updates.push.services.mozilla.com" ||
-      hostname.endsWith(".push.services.mozilla.com") ||
-      hostname === "web.push.apple.com" ||
-      hostname.endsWith(".notify.windows.com");
-    if (endpoint.protocol !== "https:" || !knownPushService || endpoint.username || endpoint.password) {
-      res.status(400).json({ error: "This browser push service is not supported." });
-      return;
-    }
     const user = await getOrCreateBankUser(authUserId);
     try {
-      const id = await savePushSubscription(user.id, {
-        endpoint: parsed.data.endpoint,
-        keys: { p256dh: parsed.data.p256dh, auth: parsed.data.auth },
+      const id = await savePushSubscription(user.id, parsed.data.subscriberId);
+      await db.insert(bankAuditLogsTable).values({
+        actorUserId: user.id,
+        targetUserId: user.id,
+        action: "link_webpushr_notifications",
+        reason: "Member linked a Webpushr subscriber to their account.",
       });
       res.json(SaveBankPushSubscriptionResponse.parse({ id, saved: true }));
-    } catch {
+    } catch (error) {
+      if (error instanceof WebpushrSubscriberAlreadyLinkedError) {
+        res.status(409).json({ error: error.message });
+        return;
+      }
       req.log.error("Encrypted push subscription storage is unavailable");
       res.status(503).json({ error: "Secure notification storage is temporarily unavailable." });
     }
@@ -2753,6 +2751,12 @@ router.delete(
       res.status(404).json({ error: "Push subscription not found." });
       return;
     }
+    await db.insert(bankAuditLogsTable).values({
+      actorUserId: user.id,
+      targetUserId: user.id,
+      action: "unlink_webpushr_notifications",
+      reason: "Member disconnected a Webpushr subscriber from their account.",
+    });
     res.json(DeleteBankPushSubscriptionResponse.parse({ id: deleted.id, saved: false }));
   },
 );

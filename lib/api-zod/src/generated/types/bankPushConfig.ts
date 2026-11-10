@@ -9,5 +9,5 @@
 export interface BankPushConfig {
   configured: boolean;
   /** @nullable */
-  publicKey: string | null;
+  siteKey: string | null;
 }

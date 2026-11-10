@@ -220,27 +220,21 @@ export const MarkBankNotificationReadResponse = zod.object({
  */
 export const GetBankPushConfigResponse = zod.object({
   "configured": zod.boolean(),
-  "publicKey": zod.string().nullable()
+  "siteKey": zod.string().nullable()
 })
 
 
 /**
- * @summary Save an encrypted browser push subscription
+ * @summary Link the signed-in member to a Webpushr subscriber
  */
-export const saveBankPushSubscriptionBodyEndpointMax = 2048;
+export const saveBankPushSubscriptionBodySubscriberIdMax = 160;
 
-export const saveBankPushSubscriptionBodyP256dhMin = 20;
-export const saveBankPushSubscriptionBodyP256dhMax = 256;
 
-export const saveBankPushSubscriptionBodyAuthMin = 8;
-export const saveBankPushSubscriptionBodyAuthMax = 128;
-
+export const saveBankPushSubscriptionBodySubscriberIdRegExp = new RegExp('^[A-Za-z0-9._:-]+$');
 
 
 export const SaveBankPushSubscriptionBody = zod.object({
-  "endpoint": zod.string().url().max(saveBankPushSubscriptionBodyEndpointMax),
-  "p256dh": zod.string().min(saveBankPushSubscriptionBodyP256dhMin).max(saveBankPushSubscriptionBodyP256dhMax),
-  "auth": zod.string().min(saveBankPushSubscriptionBodyAuthMin).max(saveBankPushSubscriptionBodyAuthMax)
+  "subscriberId": zod.string().min(1).max(saveBankPushSubscriptionBodySubscriberIdMax).regex(saveBankPushSubscriptionBodySubscriberIdRegExp)
 })
 
 export const SaveBankPushSubscriptionResponse = zod.object({
