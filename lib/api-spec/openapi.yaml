@@ -160,6 +160,79 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
+  /bank/vault/transaction-notes:
+    get:
+      operationId: listBankVaultTransactionNotes
+      tags: [bank]
+      summary: List the authenticated member's private transaction notes
+      parameters:
+        - name: X-Globus-Vault-Session
+          in: header
+          required: true
+          schema: { type: string, minLength: 32, maxLength: 128 }
+      responses:
+        "200":
+          description: Private transaction notes
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/BankVaultTransactionNote" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /bank/vault/transaction-notes/{transactionId}:
+    put:
+      operationId: updateBankVaultTransactionNote
+      tags: [bank]
+      summary: Save a private note for an owned transaction
+      parameters:
+        - name: transactionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: X-Globus-Vault-Session
+          in: header
+          required: true
+          schema: { type: string, minLength: 32, maxLength: 128 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BankVaultTransactionNoteInput" }
+      responses:
+        "200":
+          description: Saved private transaction note
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankVaultTransactionNote" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    delete:
+      operationId: deleteBankVaultTransactionNote
+      tags: [bank]
+      summary: Delete a private note for an owned transaction
+      parameters:
+        - name: transactionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: X-Globus-Vault-Session
+          in: header
+          required: true
+          schema: { type: string, minLength: 32, maxLength: 128 }
+      responses:
+        "200":
+          description: Deleted private transaction note
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankVaultTransactionNoteDeleteResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /bank/vault/email-preferences:
     get:
       operationId: getBankVaultEmailPreferences
@@ -335,6 +408,36 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/BankNotification" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /bank/push/preferences:
+    get:
+      operationId: getBankPushPreferences
+      tags: [bank]
+      summary: Get the authenticated customer's push alert categories
+      responses:
+        "200":
+          description: Customer push alert preferences
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankPushPreferences" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    patch:
+      operationId: updateBankPushPreferences
+      tags: [bank]
+      summary: Update the authenticated customer's push alert categories
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BankPushPreferencesInput" }
+      responses:
+        "200":
+          description: Updated customer push alert preferences
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankPushPreferences" }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
   /bank/push/config:
@@ -1945,15 +2048,39 @@ components:
       properties:
         bannerTheme: { type: string, enum: [navy, teal, gold] }
         bannerHeadline: { type: string, minLength: 1, maxLength: 60 }
+        bannerBackgroundColor: { type: string, pattern: "^#[0-9A-Fa-f]{6}$" }
         includeSupportLink: { type: boolean }
-      required: [bannerTheme, bannerHeadline, includeSupportLink]
+        supportUrl: { type: ["string", "null"], format: uri, maxLength: 500 }
+      required: [bannerTheme, bannerHeadline, bannerBackgroundColor, includeSupportLink, supportUrl]
     BankVaultEmailPreferencesInput:
       type: object
       properties:
         bannerTheme: { type: string, enum: [navy, teal, gold] }
         bannerHeadline: { type: string, minLength: 1, maxLength: 60 }
+        bannerBackgroundColor: { type: string, pattern: "^#[0-9A-Fa-f]{6}$" }
         includeSupportLink: { type: boolean }
+        supportUrl: { type: ["string", "null"], format: uri, maxLength: 500 }
       minProperties: 1
+    BankVaultTransactionNote:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        transactionId: { type: string, format: uuid }
+        note: { type: string, minLength: 1, maxLength: 500 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required: [id, transactionId, note, createdAt, updatedAt]
+    BankVaultTransactionNoteInput:
+      type: object
+      properties:
+        note: { type: string, minLength: 1, maxLength: 500 }
+      required: [note]
+    BankVaultTransactionNoteDeleteResult:
+      type: object
+      properties:
+        transactionId: { type: string, format: uuid }
+        deleted: { type: boolean, const: true }
+      required: [transactionId, deleted]
     BankVaultPasscodeInput:
       type: object
       properties:
@@ -2010,6 +2137,20 @@ components:
         configured: { type: boolean }
         siteKey: { type: ["string", "null"] }
       required: [configured, siteKey]
+    BankPushPreferences:
+      type: object
+      properties:
+        transferEnabled: { type: boolean }
+        walletEnabled: { type: boolean }
+        securityEnabled: { type: boolean }
+      required: [transferEnabled, walletEnabled, securityEnabled]
+    BankPushPreferencesInput:
+      type: object
+      properties:
+        transferEnabled: { type: boolean }
+        walletEnabled: { type: boolean }
+        securityEnabled: { type: boolean }
+      minProperties: 1
     BankPushSubscriptionInput:
       type: object
       properties:

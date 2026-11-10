@@ -191,6 +191,91 @@ export const CreateBankVaultSubscriptionProofUploadUrlResponse = zod.object({
 
 
 /**
+ * @summary List the authenticated member's private transaction notes
+ */
+export const listBankVaultTransactionNotesHeaderXGlobusVaultSessionMin = 32;
+export const listBankVaultTransactionNotesHeaderXGlobusVaultSessionMax = 128;
+
+
+
+export const ListBankVaultTransactionNotesHeader = zod.object({
+  "X-Globus-Vault-Session": zod.string().min(listBankVaultTransactionNotesHeaderXGlobusVaultSessionMin).max(listBankVaultTransactionNotesHeaderXGlobusVaultSessionMax)
+})
+
+export const listBankVaultTransactionNotesResponseNoteMax = 500;
+
+
+
+export const ListBankVaultTransactionNotesResponseItem = zod.object({
+  "id": zod.string().uuid(),
+  "transactionId": zod.string().uuid(),
+  "note": zod.string().min(1).max(listBankVaultTransactionNotesResponseNoteMax),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListBankVaultTransactionNotesResponse = zod.array(ListBankVaultTransactionNotesResponseItem)
+
+
+/**
+ * @summary Save a private note for an owned transaction
+ */
+export const UpdateBankVaultTransactionNoteParams = zod.object({
+  "transactionId": zod.coerce.string().uuid()
+})
+
+export const updateBankVaultTransactionNoteHeaderXGlobusVaultSessionMin = 32;
+export const updateBankVaultTransactionNoteHeaderXGlobusVaultSessionMax = 128;
+
+
+
+export const UpdateBankVaultTransactionNoteHeader = zod.object({
+  "X-Globus-Vault-Session": zod.string().min(updateBankVaultTransactionNoteHeaderXGlobusVaultSessionMin).max(updateBankVaultTransactionNoteHeaderXGlobusVaultSessionMax)
+})
+
+export const updateBankVaultTransactionNoteBodyNoteMax = 500;
+
+
+
+export const UpdateBankVaultTransactionNoteBody = zod.object({
+  "note": zod.string().min(1).max(updateBankVaultTransactionNoteBodyNoteMax)
+})
+
+export const updateBankVaultTransactionNoteResponseNoteMax = 500;
+
+
+
+export const UpdateBankVaultTransactionNoteResponse = zod.object({
+  "id": zod.string().uuid(),
+  "transactionId": zod.string().uuid(),
+  "note": zod.string().min(1).max(updateBankVaultTransactionNoteResponseNoteMax),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete a private note for an owned transaction
+ */
+export const DeleteBankVaultTransactionNoteParams = zod.object({
+  "transactionId": zod.coerce.string().uuid()
+})
+
+export const deleteBankVaultTransactionNoteHeaderXGlobusVaultSessionMin = 32;
+export const deleteBankVaultTransactionNoteHeaderXGlobusVaultSessionMax = 128;
+
+
+
+export const DeleteBankVaultTransactionNoteHeader = zod.object({
+  "X-Globus-Vault-Session": zod.string().min(deleteBankVaultTransactionNoteHeaderXGlobusVaultSessionMin).max(deleteBankVaultTransactionNoteHeaderXGlobusVaultSessionMax)
+})
+
+export const DeleteBankVaultTransactionNoteResponse = zod.object({
+  "transactionId": zod.string().uuid(),
+  "deleted": zod.literal(true)
+})
+
+
+/**
  * @summary Get private vault transfer alert branding preferences
  */
 export const getBankVaultEmailPreferencesHeaderXGlobusVaultSessionMin = 32;
@@ -204,12 +289,17 @@ export const GetBankVaultEmailPreferencesHeader = zod.object({
 
 export const getBankVaultEmailPreferencesResponseBannerHeadlineMax = 60;
 
+export const getBankVaultEmailPreferencesResponseBannerBackgroundColorRegExp = new RegExp('^#[0-9A-Fa-f]{6}$');
+export const getBankVaultEmailPreferencesResponseSupportUrlMax = 500;
+
 
 
 export const GetBankVaultEmailPreferencesResponse = zod.object({
   "bannerTheme": zod.enum(['navy', 'teal', 'gold']),
   "bannerHeadline": zod.string().min(1).max(getBankVaultEmailPreferencesResponseBannerHeadlineMax),
-  "includeSupportLink": zod.boolean()
+  "bannerBackgroundColor": zod.string().regex(getBankVaultEmailPreferencesResponseBannerBackgroundColorRegExp),
+  "includeSupportLink": zod.boolean(),
+  "supportUrl": zod.string().url().max(getBankVaultEmailPreferencesResponseSupportUrlMax).nullable()
 })
 
 
@@ -227,22 +317,32 @@ export const UpdateBankVaultEmailPreferencesHeader = zod.object({
 
 export const updateBankVaultEmailPreferencesBodyBannerHeadlineMax = 60;
 
+export const updateBankVaultEmailPreferencesBodyBannerBackgroundColorRegExp = new RegExp('^#[0-9A-Fa-f]{6}$');
+export const updateBankVaultEmailPreferencesBodySupportUrlMax = 500;
+
 
 
 export const UpdateBankVaultEmailPreferencesBody = zod.object({
   "bannerTheme": zod.enum(['navy', 'teal', 'gold']).optional(),
   "bannerHeadline": zod.string().min(1).max(updateBankVaultEmailPreferencesBodyBannerHeadlineMax).optional(),
-  "includeSupportLink": zod.boolean().optional()
+  "bannerBackgroundColor": zod.string().regex(updateBankVaultEmailPreferencesBodyBannerBackgroundColorRegExp).optional(),
+  "includeSupportLink": zod.boolean().optional(),
+  "supportUrl": zod.string().url().max(updateBankVaultEmailPreferencesBodySupportUrlMax).nullish()
 })
 
 export const updateBankVaultEmailPreferencesResponseBannerHeadlineMax = 60;
+
+export const updateBankVaultEmailPreferencesResponseBannerBackgroundColorRegExp = new RegExp('^#[0-9A-Fa-f]{6}$');
+export const updateBankVaultEmailPreferencesResponseSupportUrlMax = 500;
 
 
 
 export const UpdateBankVaultEmailPreferencesResponse = zod.object({
   "bannerTheme": zod.enum(['navy', 'teal', 'gold']),
   "bannerHeadline": zod.string().min(1).max(updateBankVaultEmailPreferencesResponseBannerHeadlineMax),
-  "includeSupportLink": zod.boolean()
+  "bannerBackgroundColor": zod.string().regex(updateBankVaultEmailPreferencesResponseBannerBackgroundColorRegExp),
+  "includeSupportLink": zod.boolean(),
+  "supportUrl": zod.string().url().max(updateBankVaultEmailPreferencesResponseSupportUrlMax).nullable()
 })
 
 
@@ -399,6 +499,32 @@ export const MarkBankNotificationReadResponse = zod.object({
   "reference": zod.string().nullable(),
   "readAt": zod.coerce.date().nullable(),
   "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Get the authenticated customer's push alert categories
+ */
+export const GetBankPushPreferencesResponse = zod.object({
+  "transferEnabled": zod.boolean(),
+  "walletEnabled": zod.boolean(),
+  "securityEnabled": zod.boolean()
+})
+
+
+/**
+ * @summary Update the authenticated customer's push alert categories
+ */
+export const UpdateBankPushPreferencesBody = zod.object({
+  "transferEnabled": zod.boolean().optional(),
+  "walletEnabled": zod.boolean().optional(),
+  "securityEnabled": zod.boolean().optional()
+})
+
+export const UpdateBankPushPreferencesResponse = zod.object({
+  "transferEnabled": zod.boolean(),
+  "walletEnabled": zod.boolean(),
+  "securityEnabled": zod.boolean()
 })
 
 

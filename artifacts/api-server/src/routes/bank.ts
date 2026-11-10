@@ -1,8 +1,11 @@
 import { Router, type IRouter, type RequestHandler, type Response } from "express";
 import { clerkClient, getAuth } from "@clerk/express";
 import { rateLimit } from "express-rate-limit";
-import { and, asc, count, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import {
+  DeleteBankVaultTransactionNoteHeader,
+  DeleteBankVaultTransactionNoteParams,
+  DeleteBankVaultTransactionNoteResponse,
   DeleteBankPushSubscriptionParams,
   DeleteBankPushSubscriptionResponse,
   CreateBankSavedPaymentMethodBody,
@@ -32,6 +35,7 @@ import {
   GetBankExchangeRateQuoteResponse,
   GetBankProfileResponse,
   GetBankPushConfigResponse,
+  GetBankPushPreferencesResponse,
   GetBankVaultStatusResponse,
   GetBankVaultBillingHeader,
   GetBankVaultBillingResponse,
@@ -50,6 +54,8 @@ import {
   ListMyIdentityDocumentsResponse,
   ListBankTransactionsQueryParams,
   ListBankTransactionsResponse,
+  ListBankVaultTransactionNotesHeader,
+  ListBankVaultTransactionNotesResponse,
   ListBankWalletsResponse,
   ListBankSavedPaymentMethodsResponse,
   LookupCustomerIdBody,
@@ -66,10 +72,16 @@ import {
   UpdateBankVaultEmailPreferencesBody,
   UpdateBankVaultEmailPreferencesHeader,
   UpdateBankVaultEmailPreferencesResponse,
+  UpdateBankVaultTransactionNoteBody,
+  UpdateBankVaultTransactionNoteHeader,
+  UpdateBankVaultTransactionNoteParams,
+  UpdateBankVaultTransactionNoteResponse,
   UpdateBankVaultWalletControlBody,
   UpdateBankVaultWalletControlHeader,
   UpdateBankVaultWalletControlParams,
   UpdateBankVaultWalletControlResponse,
+  UpdateBankPushPreferencesBody,
+  UpdateBankPushPreferencesResponse,
   UnlockBankVaultBody,
   UnlockBankVaultResponse,
   MarkBankNotificationReadParams,
@@ -82,6 +94,7 @@ import {
   bankAdminSettingsTable,
   bankNotificationsTable,
   bankPushSubscriptionsTable,
+  bankVaultTransactionNotesTable,
   bankExchangeRatesTable,
   bankIdentityDocumentsTable,
   bankInternationalTransferRequestsTable,
@@ -158,6 +171,7 @@ import {
 } from "../lib/bank-vault";
 import { decryptPrivateData, encryptPrivateData } from "../lib/private-data";
 import {
+  normalizeSupportUrl,
   notificationResponse,
   WebpushrSubscriberAlreadyLinkedError,
   getPushConfig,
@@ -264,7 +278,29 @@ function bankVaultEmailPreferencesPayload(user: typeof bankUsersTable.$inferSele
   return {
     bannerTheme: user.vaultEmailBannerTheme,
     bannerHeadline: user.vaultEmailBannerHeadline,
+    bannerBackgroundColor: user.vaultEmailBannerBackgroundColor,
     includeSupportLink: user.vaultEmailIncludeSupportLink,
+    supportUrl: user.vaultEmailSupportUrl,
+  };
+}
+
+function bankVaultTransactionNoteResponse(
+  note: typeof bankVaultTransactionNotesTable.$inferSelect,
+) {
+  return {
+    id: note.id,
+    transactionId: note.transactionId,
+    note: decryptPrivateData(note.note, "vault-transaction-note"),
+    createdAt: note.createdAt.toISOString(),
+    updatedAt: note.updatedAt.toISOString(),
+  };
+}
+
+function bankPushPreferencesPayload(user: typeof bankUsersTable.$inferSelect) {
+  return {
+    transferEnabled: user.pushTransferAlertsEnabled,
+    walletEnabled: user.pushWalletAlertsEnabled,
+    securityEnabled: user.pushSecurityAlertsEnabled,
   };
 }
 
@@ -2839,6 +2875,24 @@ router.patch(
       if (!(await isVaultSessionActive(user.id, sessionToken))) {
         return { expired: true as const };
       }
+      const nextSupportUrl =
+        parsed.data.supportUrl === undefined
+          ? lockedUser.vaultEmailSupportUrl
+          : parsed.data.supportUrl === null
+            ? null
+            : normalizeSupportUrl(parsed.data.supportUrl);
+      const nextIncludeSupportLink =
+        parsed.data.includeSupportLink ??
+        lockedUser.vaultEmailIncludeSupportLink;
+      if (
+        parsed.data.supportUrl &&
+        !normalizeSupportUrl(parsed.data.supportUrl)
+      ) {
+        return { invalidSupportUrl: true as const };
+      }
+      if (nextIncludeSupportLink && !nextSupportUrl) {
+        return { missingSupportUrl: true as const };
+      }
       const changes = {
         ...(parsed.data.bannerTheme !== undefined
           ? { vaultEmailBannerTheme: parsed.data.bannerTheme }
@@ -2846,8 +2900,17 @@ router.patch(
         ...(parsed.data.bannerHeadline !== undefined
           ? { vaultEmailBannerHeadline: parsed.data.bannerHeadline.trim() }
           : {}),
+        ...(parsed.data.bannerBackgroundColor !== undefined
+          ? {
+              vaultEmailBannerBackgroundColor:
+                parsed.data.bannerBackgroundColor.toLowerCase(),
+            }
+          : {}),
         ...(parsed.data.includeSupportLink !== undefined
           ? { vaultEmailIncludeSupportLink: parsed.data.includeSupportLink }
+          : {}),
+        ...(parsed.data.supportUrl !== undefined
+          ? { vaultEmailSupportUrl: nextSupportUrl }
           : {}),
         updatedAt: new Date(),
       };
@@ -2879,10 +2942,213 @@ router.patch(
       res.status(400).json({ error: "Enter a non-empty email banner headline." });
       return;
     }
+    if ("invalidSupportUrl" in result) {
+      res.status(400).json({ error: "Enter a valid HTTPS support link." });
+      return;
+    }
+    if ("missingSupportUrl" in result) {
+      res.status(400).json({
+        error: "Add a support link or disable the footer link before saving.",
+      });
+      return;
+    }
     res.json(
       UpdateBankVaultEmailPreferencesResponse.parse(
         bankVaultEmailPreferencesPayload(result.user),
       ),
+    );
+  },
+);
+
+router.get(
+  "/bank/vault/transaction-notes",
+  async (req, res): Promise<void> => {
+    const authUserId = getAuth(req).userId;
+    if (!authUserId) {
+      res.status(401).json({ error: "Sign in to access your Globus account." });
+      return;
+    }
+    const sessionToken = req.get("X-Globus-Vault-Session") ?? "";
+    const parsedHeader = ListBankVaultTransactionNotesHeader.safeParse({
+      "X-Globus-Vault-Session": sessionToken,
+    });
+    if (!parsedHeader.success) {
+      res.status(403).json({ error: "Unlock your private vault to view personal notes." });
+      return;
+    }
+    const user = await getOrCreateBankUser(authUserId);
+    if (!(await isVaultPasscodeSessionValid(user.id, sessionToken))) {
+      res.status(403).json({ error: "Your private vault session expired. Unlock it again." });
+      return;
+    }
+    const notes = await db
+      .select()
+      .from(bankVaultTransactionNotesTable)
+      .where(eq(bankVaultTransactionNotesTable.userId, user.id))
+      .orderBy(desc(bankVaultTransactionNotesTable.updatedAt))
+      .limit(100);
+    try {
+      res.json(
+        ListBankVaultTransactionNotesResponse.parse(
+          notes.map(bankVaultTransactionNoteResponse),
+        ),
+      );
+    } catch {
+      req.log.error("Private transaction notes could not be decrypted");
+      res.status(503).json({ error: "Private notes are temporarily unavailable." });
+    }
+  },
+);
+
+router.put(
+  "/bank/vault/transaction-notes/:transactionId",
+  async (req, res): Promise<void> => {
+    const authUserId = getAuth(req).userId;
+    if (!authUserId) {
+      res.status(401).json({ error: "Sign in to access your Globus account." });
+      return;
+    }
+    const sessionToken = req.get("X-Globus-Vault-Session") ?? "";
+    const parsedHeader = UpdateBankVaultTransactionNoteHeader.safeParse({
+      "X-Globus-Vault-Session": sessionToken,
+    });
+    const params = UpdateBankVaultTransactionNoteParams.safeParse(req.params);
+    const parsed = UpdateBankVaultTransactionNoteBody.safeParse(req.body);
+    if (!parsedHeader.success || !params.success || !parsed.success) {
+      res.status(400).json({
+        error: !parsedHeader.success
+          ? parsedHeader.error.message
+          : !params.success
+            ? params.error.message
+            : parsed.error?.message ?? "Invalid personal transaction note.",
+      });
+      return;
+    }
+    const noteText = parsed.data.note.trim();
+    if (!noteText) {
+      res.status(400).json({ error: "Enter a personal note before saving." });
+      return;
+    }
+    const user = await getOrCreateBankUser(authUserId);
+    if (!(await isVaultSessionActive(user.id, sessionToken))) {
+      res.status(403).json({ error: "Your private vault session expired. Unlock it again." });
+      return;
+    }
+    if (
+      vaultSubscriptionStatus(
+        user.vaultSubscriptionStatus,
+        user.vaultSubscriptionExpiresAt,
+      ) !== "active"
+    ) {
+      res.status(403).json({ error: "An active Vault subscription is required to change personal notes." });
+      return;
+    }
+    const [transaction] = await db
+      .select({ id: bankTransactionsTable.id })
+      .from(bankTransactionsTable)
+      .where(
+        and(
+          eq(bankTransactionsTable.id, params.data.transactionId),
+          or(
+            eq(bankTransactionsTable.fromUserId, user.id),
+            eq(bankTransactionsTable.toUserId, user.id),
+            eq(bankTransactionsTable.initiatedByUserId, user.id),
+          ),
+        ),
+      )
+      .limit(1);
+    if (!transaction) {
+      res.status(404).json({ error: "Transaction not found for this account." });
+      return;
+    }
+    let encryptedNote: string;
+    try {
+      encryptedNote = encryptPrivateData(noteText, "vault-transaction-note");
+    } catch {
+      res.status(503).json({ error: "Private note storage is temporarily unavailable." });
+      return;
+    }
+    const [saved] = await db
+      .insert(bankVaultTransactionNotesTable)
+      .values({
+        userId: user.id,
+        transactionId: transaction.id,
+        note: encryptedNote,
+      })
+      .onConflictDoUpdate({
+        target: [
+          bankVaultTransactionNotesTable.userId,
+          bankVaultTransactionNotesTable.transactionId,
+        ],
+        set: { note: encryptedNote, updatedAt: new Date() },
+      })
+      .returning();
+    try {
+      res.json(
+        UpdateBankVaultTransactionNoteResponse.parse(
+          bankVaultTransactionNoteResponse(saved),
+        ),
+      );
+    } catch {
+      req.log.error("Private transaction note could not be decrypted after saving");
+      res.status(503).json({ error: "Private note is saved but temporarily unavailable." });
+    }
+  },
+);
+
+router.delete(
+  "/bank/vault/transaction-notes/:transactionId",
+  async (req, res): Promise<void> => {
+    const authUserId = getAuth(req).userId;
+    if (!authUserId) {
+      res.status(401).json({ error: "Sign in to access your Globus account." });
+      return;
+    }
+    const sessionToken = req.get("X-Globus-Vault-Session") ?? "";
+    const parsedHeader = DeleteBankVaultTransactionNoteHeader.safeParse({
+      "X-Globus-Vault-Session": sessionToken,
+    });
+    const params = DeleteBankVaultTransactionNoteParams.safeParse(req.params);
+    if (!parsedHeader.success || !params.success) {
+      res.status(400).json({
+        error: !parsedHeader.success
+          ? parsedHeader.error.message
+          : params.error?.message ?? "Invalid transaction note identifier.",
+      });
+      return;
+    }
+    const user = await getOrCreateBankUser(authUserId);
+    if (!(await isVaultSessionActive(user.id, sessionToken))) {
+      res.status(403).json({ error: "Your private vault session expired. Unlock it again." });
+      return;
+    }
+    if (
+      vaultSubscriptionStatus(
+        user.vaultSubscriptionStatus,
+        user.vaultSubscriptionExpiresAt,
+      ) !== "active"
+    ) {
+      res.status(403).json({ error: "An active Vault subscription is required to change personal notes." });
+      return;
+    }
+    const [deleted] = await db
+      .delete(bankVaultTransactionNotesTable)
+      .where(
+        and(
+          eq(bankVaultTransactionNotesTable.userId, user.id),
+          eq(bankVaultTransactionNotesTable.transactionId, params.data.transactionId),
+        ),
+      )
+      .returning({ transactionId: bankVaultTransactionNotesTable.transactionId });
+    if (!deleted) {
+      res.status(404).json({ error: "Personal transaction note not found." });
+      return;
+    }
+    res.json(
+      DeleteBankVaultTransactionNoteResponse.parse({
+        transactionId: deleted.transactionId,
+        deleted: true,
+      }),
     );
   },
 );
@@ -3107,6 +3373,82 @@ router.get("/bank/push/config", async (req, res): Promise<void> => {
   }
   res.json(GetBankPushConfigResponse.parse(getPushConfig()));
 });
+
+router.get(
+  "/bank/push/preferences",
+  async (req, res): Promise<void> => {
+    const authUserId = getAuth(req).userId;
+    if (!authUserId) {
+      res.status(401).json({ error: "Sign in to access your Globus account." });
+      return;
+    }
+    const user = await getOrCreateBankUser(authUserId);
+    res.json(
+      GetBankPushPreferencesResponse.parse(bankPushPreferencesPayload(user)),
+    );
+  },
+);
+
+router.patch(
+  "/bank/push/preferences",
+  async (req, res): Promise<void> => {
+    const authUserId = getAuth(req).userId;
+    if (!authUserId) {
+      res.status(401).json({ error: "Sign in to access your Globus account." });
+      return;
+    }
+    const parsed = UpdateBankPushPreferencesBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+    if (!Object.keys(parsed.data).length) {
+      res.status(400).json({ error: "Choose at least one push alert preference." });
+      return;
+    }
+    const user = await getOrCreateBankUser(authUserId);
+    const result = await db.transaction(async (tx) => {
+      const [lockedUser] = await tx
+        .select()
+        .from(bankUsersTable)
+        .where(eq(bankUsersTable.id, user.id))
+        .for("update");
+      if (!lockedUser) return null;
+      const [updated] = await tx
+        .update(bankUsersTable)
+        .set({
+          ...(parsed.data.transferEnabled !== undefined
+            ? { pushTransferAlertsEnabled: parsed.data.transferEnabled }
+            : {}),
+          ...(parsed.data.walletEnabled !== undefined
+            ? { pushWalletAlertsEnabled: parsed.data.walletEnabled }
+            : {}),
+          ...(parsed.data.securityEnabled !== undefined
+            ? { pushSecurityAlertsEnabled: parsed.data.securityEnabled }
+            : {}),
+          updatedAt: new Date(),
+        })
+        .where(eq(bankUsersTable.id, user.id))
+        .returning();
+      await tx.insert(bankAuditLogsTable).values({
+        actorUserId: user.id,
+        targetUserId: user.id,
+        action: "update_push_notification_preferences",
+        reason: "Member updated push notification category preferences.",
+      });
+      return updated;
+    });
+    if (!result) {
+      res.status(404).json({ error: "The Globus account could not be found." });
+      return;
+    }
+    res.json(
+      UpdateBankPushPreferencesResponse.parse(
+        bankPushPreferencesPayload(result),
+      ),
+    );
+  },
+);
 
 router.put(
   "/bank/push/subscriptions",

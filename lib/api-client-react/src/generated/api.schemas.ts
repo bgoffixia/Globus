@@ -422,7 +422,14 @@ export interface BankVaultEmailPreferences {
      * @maxLength 60
      */
   bannerHeadline: string;
+  /** @pattern ^#[0-9A-Fa-f]{6}$ */
+  bannerBackgroundColor: string;
   includeSupportLink: boolean;
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  supportUrl: string | null;
 }
 
 export type BankVaultEmailPreferencesInputBannerTheme = typeof BankVaultEmailPreferencesInputBannerTheme[keyof typeof BankVaultEmailPreferencesInputBannerTheme];
@@ -441,7 +448,39 @@ export interface BankVaultEmailPreferencesInput {
      * @maxLength 60
      */
   bannerHeadline?: string;
+  /** @pattern ^#[0-9A-Fa-f]{6}$ */
+  bannerBackgroundColor?: string;
   includeSupportLink?: boolean;
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  supportUrl?: string | null;
+}
+
+export interface BankVaultTransactionNote {
+  id: string;
+  transactionId: string;
+  /**
+     * @minLength 1
+     * @maxLength 500
+     */
+  note: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BankVaultTransactionNoteInput {
+  /**
+     * @minLength 1
+     * @maxLength 500
+     */
+  note: string;
+}
+
+export interface BankVaultTransactionNoteDeleteResult {
+  transactionId: string;
+  deleted: true;
 }
 
 export interface BankVaultPasscodeInput {
@@ -527,6 +566,18 @@ export interface BankPushConfig {
   configured: boolean;
   /** @nullable */
   siteKey: string | null;
+}
+
+export interface BankPushPreferences {
+  transferEnabled: boolean;
+  walletEnabled: boolean;
+  securityEnabled: boolean;
+}
+
+export interface BankPushPreferencesInput {
+  transferEnabled?: boolean;
+  walletEnabled?: boolean;
+  securityEnabled?: boolean;
 }
 
 export interface BankPushSubscriptionInput {

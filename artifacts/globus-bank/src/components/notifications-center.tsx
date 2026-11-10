@@ -5,13 +5,16 @@ import { useLocation } from 'wouter';
 import { useUser } from '@clerk/react';
 import {
   getGetBankPushConfigQueryKey,
+  getGetBankPushPreferencesQueryKey,
   getListBankNotificationsQueryKey,
   useClearBankNotifications,
   useDeleteBankPushSubscription,
   useGetBankPushConfig,
+  useGetBankPushPreferences,
   useListBankNotifications,
   useMarkBankNotificationRead,
   useSaveBankPushSubscription,
+  useUpdateBankPushPreferences,
 } from '@workspace/api-client-react';
 
 type WebpushrCommand = (method: string, argument?: unknown) => void;
@@ -148,11 +151,15 @@ export function NotificationsCenter() {
     query: { queryKey: getListBankNotificationsQueryKey(), refetchOnWindowFocus: true, refetchInterval: 60_000 },
   });
   const push = useGetBankPushConfig({ query: { queryKey: getGetBankPushConfigQueryKey(), retry: false } });
+  const pushPreferences = useGetBankPushPreferences({
+    query: { queryKey: getGetBankPushPreferencesQueryKey(), retry: false },
+  });
   const markRead = useMarkBankNotificationRead();
   const clearNotifications = useClearBankNotifications();
   const saveSubscription = useSaveBankPushSubscription();
   const saveSubscriber = saveSubscription.mutateAsync;
   const deleteSubscription = useDeleteBankPushSubscription();
+  const updatePushPreferences = useUpdateBankPushPreferences();
   const unreadCount = notifications.data?.filter(item => !item.readAt).length ?? 0;
   const supported = typeof window !== 'undefined' && 'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window;
 
@@ -262,6 +269,22 @@ export function NotificationsCenter() {
       setPushError(err instanceof Error ? err.message : 'Browser notifications could not be disabled.');
     }
   };
+  const updateAlertPreference = async (
+    key: 'transferEnabled' | 'walletEnabled' | 'securityEnabled',
+    enabled: boolean,
+  ) => {
+    setPushError('');
+    setPushMessage('');
+    try {
+      const result = await updatePushPreferences.mutateAsync({
+        data: { [key]: enabled },
+      });
+      queryClient.setQueryData(getGetBankPushPreferencesQueryKey(), result);
+      setPushMessage('Push alert preferences saved for all linked devices.');
+    } catch (err) {
+      setPushError(err instanceof Error ? err.message : 'Push alert preferences could not be saved.');
+    }
+  };
   const readOne = async (id: string) => {
     setNotificationError('');
     try {
@@ -313,6 +336,18 @@ export function NotificationsCenter() {
         <div className="shrink-0 border-t border-[#edf0f3] bg-[#fbfcfd] p-3">
           <p className="text-[9px] font-bold text-[#40576f]">Browser alerts</p>
           <p className="mt-0.5 text-[8px] leading-4 text-[#8492a1]">In-app notifications are enabled for every account. Browser alerts are linked automatically where permission is already granted.</p>
+          {pushPreferences.isError ? <p role="alert" className="mt-1 text-[8px] text-[#a24940]">Push alert preferences could not be loaded.</p> :
+            <fieldset disabled={pushPreferences.isLoading || updatePushPreferences.isPending} className="mt-2 grid grid-cols-3 gap-1.5">
+              <legend className="sr-only">Push alert categories</legend>
+              {([
+                ['transferEnabled', 'Transfers'],
+                ['walletEnabled', 'Wallet activity'],
+                ['securityEnabled', 'Security'],
+              ] as const).map(([key, label]) => <label key={key} className="flex min-w-0 items-center gap-1 rounded-md border border-[#e4eaee] bg-white px-2 py-1.5 text-[8px] font-medium text-[#62788c]">
+                <input type="checkbox" checked={pushPreferences.data?.[key] ?? true} onChange={event => void updateAlertPreference(key, event.currentTarget.checked)} data-testid={`toggle-push-category-${key}`} className="accent-[#438481]" />
+                <span className="truncate">{label}</span>
+              </label>)}
+            </fieldset>}
           {push.isError && <p role="alert" className="mt-1 text-[8px] text-[#a24940]">Push settings are unavailable.</p>}
           {pushError && <p role="alert" data-testid="status-browser-push-error" className="mt-1 rounded-md bg-[#fff1ef] px-2 py-1.5 text-[8px] text-[#a24940]">{pushError}</p>}
           {pushMessage && <p role="status" data-testid="status-browser-push-message" className="mt-1 rounded-md bg-[#eef7f1] px-2 py-1.5 text-[8px] text-[#41755f]">{pushMessage}</p>}

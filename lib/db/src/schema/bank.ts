@@ -128,9 +128,22 @@ export const bankUsersTable = pgTable("bank_users", {
   vaultEmailBannerHeadline: text("vault_email_banner_headline")
     .notNull()
     .default("A Globus transfer notice"),
+  vaultEmailBannerBackgroundColor: text("vault_email_banner_background_color")
+    .notNull()
+    .default("#12385d"),
   vaultEmailIncludeSupportLink: boolean("vault_email_include_support_link")
     .notNull()
     .default(false),
+  vaultEmailSupportUrl: text("vault_email_support_url"),
+  pushTransferAlertsEnabled: boolean("push_transfer_alerts_enabled")
+    .notNull()
+    .default(true),
+  pushWalletAlertsEnabled: boolean("push_wallet_alerts_enabled")
+    .notNull()
+    .default(true),
+  pushSecurityAlertsEnabled: boolean("push_security_alerts_enabled")
+    .notNull()
+    .default(true),
   verificationStatus: text("verification_status").notNull().default("not_started"),
   verificationNote: text("verification_note"),
   accountStatus: text("account_status").notNull().default("active"),
@@ -246,6 +259,36 @@ export const bankTransactionsTable = pgTable(
     index("bank_transaction_status_idx").on(table.status, table.createdAt),
     index("bank_transaction_correction_idx").on(table.correctionOfTransactionId),
     uniqueIndex("bank_transaction_single_reversal_idx").on(table.reversalOfTransactionId),
+  ],
+);
+
+export const bankVaultTransactionNotesTable = pgTable(
+  "bank_vault_transaction_notes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => bankUsersTable.id, { onDelete: "cascade" }),
+    transactionId: uuid("transaction_id")
+      .notNull()
+      .references(() => bankTransactionsTable.id, { onDelete: "cascade" }),
+    note: text("note").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("bank_vault_transaction_note_user_tx_unique").on(
+      table.userId,
+      table.transactionId,
+    ),
+    index("bank_vault_transaction_note_user_updated_idx").on(
+      table.userId,
+      table.updatedAt,
+    ),
   ],
 );
 

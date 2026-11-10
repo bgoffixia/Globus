@@ -14,5 +14,12 @@ export interface BankVaultEmailPreferences {
      * @maxLength 60
      */
   bannerHeadline: string;
+  /** @pattern ^#[0-9A-Fa-f]{6}$ */
+  bannerBackgroundColor: string;
   includeSupportLink: boolean;
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  supportUrl: string | null;
 }

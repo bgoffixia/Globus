@@ -5,20 +5,26 @@ import {
   getGetBankVaultBillingQueryKey,
   getGetBankVaultEmailPreferencesQueryKey,
   getGetBankVaultStatusQueryKey,
+  getListBankTransactionsQueryKey,
+  getListBankVaultTransactionNotesQueryKey,
   getListBankVaultWalletControlsQueryKey,
   useCreateBankVaultSubscriptionProofUploadUrl,
+  useDeleteBankVaultTransactionNote,
   useGetBankVaultBilling,
   useGetBankVaultEmailPreferences,
   useGetBankVaultStatus,
   useInitializeBankVaultPasscode,
+  useListBankTransactions,
+  useListBankVaultTransactionNotes,
   useListBankVaultWalletControls,
   useRequestBankVaultSubscription,
   useUnlockBankVault,
   useUpdateBankVaultEmailPreferences,
   useUpdateBankVaultPasscode,
+  useUpdateBankVaultTransactionNote,
   useUpdateBankVaultWalletControl,
 } from '@workspace/api-client-react';
-import type { BankVaultEmailPreferences, BankVaultProofUploadInputContentType, BankVaultWalletControl } from '@workspace/api-client-react';
+import type { BankTransaction, BankVaultEmailPreferences, BankVaultProofUploadInputContentType, BankVaultWalletControl } from '@workspace/api-client-react';
 
 const fieldClass = 'h-9 w-full rounded-lg border border-[#dfe6eb] bg-white px-3 text-[11px] text-[#344b64] outline-none focus:border-[#77aeb0] focus:ring-2 focus:ring-[#77aeb0]/15';
 type VaultPlanCode = '1m' | '3m' | '1y';
@@ -38,6 +44,13 @@ function ngnMinor(value: string) {
   return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(Number(value) / 100);
 }
 
+function bannerForeground(hex: string) {
+  const parts = hex.replace('#', '').match(/.{2}/g)?.map(value => Number.parseInt(value, 16));
+  if (!parts || parts.length !== 3 || parts.some(Number.isNaN)) return '#ffffff';
+  const luminance = (0.2126 * parts[0] + 0.7152 * parts[1] + 0.0722 * parts[2]) / 255;
+  return luminance > 0.62 ? '#17314f' : '#ffffff';
+}
+
 export function PrivateVaultPanel() {
   const queryClient = useQueryClient();
   const status = useGetBankVaultStatus({ query: { queryKey: getGetBankVaultStatusQueryKey(), retry: false, refetchInterval: 60_000 } });
@@ -52,7 +65,11 @@ export function PrivateVaultPanel() {
   const [busyWallet, setBusyWallet] = useState('');
   const [bannerTheme, setBannerTheme] = useState<BankVaultEmailPreferences['bannerTheme']>('navy');
   const [bannerHeadline, setBannerHeadline] = useState('A Globus transfer notice');
+  const [bannerBackgroundColor, setBannerBackgroundColor] = useState('#12385d');
   const [includeSupportLink, setIncludeSupportLink] = useState(false);
+  const [supportUrl, setSupportUrl] = useState('');
+  const [selectedTransactionId, setSelectedTransactionId] = useState('');
+  const [privateNoteDraft, setPrivateNoteDraft] = useState('');
   const [selectedPlan, setSelectedPlan] = useState<VaultPlanCode>('1m');
   const [subscriptionStep, setSubscriptionStep] = useState<SubscriptionStep>('closed');
   const [proofFile, setProofFile] = useState<File | null>(null);
@@ -77,9 +94,11 @@ export function PrivateVaultPanel() {
     void queryClient.cancelQueries({ queryKey: getListBankVaultWalletControlsQueryKey() });
     void queryClient.cancelQueries({ queryKey: getGetBankVaultEmailPreferencesQueryKey() });
     void queryClient.cancelQueries({ queryKey: getGetBankVaultBillingQueryKey() });
+    void queryClient.cancelQueries({ queryKey: getListBankVaultTransactionNotesQueryKey() });
     queryClient.removeQueries({ queryKey: getListBankVaultWalletControlsQueryKey() });
     queryClient.removeQueries({ queryKey: getGetBankVaultEmailPreferencesQueryKey() });
     queryClient.removeQueries({ queryKey: getGetBankVaultBillingQueryKey() });
+    queryClient.removeQueries({ queryKey: getListBankVaultTransactionNotesQueryKey() });
   }, [queryClient]);
 
   const controls = useListBankVaultWalletControls({
@@ -107,12 +126,56 @@ export function PrivateVaultPanel() {
   const updateControl = useUpdateBankVaultWalletControl({
     request: sessionToken ? { headers: { 'X-Globus-Vault-Session': sessionToken } } : undefined,
   });
+  const transactions = useListBankTransactions(
+    { limit: 100 },
+    {
+      query: {
+        queryKey: getListBankTransactionsQueryKey({ limit: 100 }),
+        enabled: !!sessionToken,
+        staleTime: 30_000,
+      },
+    },
+  );
+  const transactionNotes = useListBankVaultTransactionNotes({
+    query: {
+      queryKey: getListBankVaultTransactionNotesQueryKey(),
+      enabled: !!sessionToken,
+      retry: false,
+    },
+    request: sessionToken ? { headers: { 'X-Globus-Vault-Session': sessionToken } } : undefined,
+  });
+  const saveTransactionNote = useUpdateBankVaultTransactionNote({
+    request: sessionToken ? { headers: { 'X-Globus-Vault-Session': sessionToken } } : undefined,
+  });
+  const deleteTransactionNote = useDeleteBankVaultTransactionNote({
+    request: sessionToken ? { headers: { 'X-Globus-Vault-Session': sessionToken } } : undefined,
+  });
   useEffect(() => {
     if (!emailPreferences.data) return;
     setBannerTheme(emailPreferences.data.bannerTheme);
     setBannerHeadline(emailPreferences.data.bannerHeadline);
+    setBannerBackgroundColor(emailPreferences.data.bannerBackgroundColor);
     setIncludeSupportLink(emailPreferences.data.includeSupportLink);
+    setSupportUrl(emailPreferences.data.supportUrl ?? '');
   }, [emailPreferences.data]);
+  useEffect(() => {
+    if (!selectedTransactionId && transactions.data?.length) {
+      setSelectedTransactionId(transactions.data[0].id);
+    }
+  }, [selectedTransactionId, transactions.data]);
+  const selectedTransactionNote = transactionNotes.data?.find(
+    item => item.transactionId === selectedTransactionId,
+  );
+  useEffect(() => {
+    setPrivateNoteDraft(selectedTransactionNote?.note ?? '');
+  }, [selectedTransactionId, selectedTransactionNote?.note]);
+  useEffect(() => {
+    if (sessionToken) return;
+    void queryClient.cancelQueries({ queryKey: getListBankVaultTransactionNotesQueryKey() });
+    queryClient.removeQueries({ queryKey: getListBankVaultTransactionNotesQueryKey() });
+    setSelectedTransactionId('');
+    setPrivateNoteDraft('');
+  }, [queryClient, sessionToken]);
   useEffect(() => {
     if (!sessionToken || !expiresAt) return;
     const remaining = Date.parse(expiresAt) - Date.now();
@@ -289,13 +352,48 @@ export function PrivateVaultPanel() {
         data: {
           bannerTheme,
           bannerHeadline: bannerHeadline.trim(),
+          bannerBackgroundColor,
           includeSupportLink,
+          supportUrl: supportUrl.trim() || null,
         },
       });
       await queryClient.invalidateQueries({ queryKey: getGetBankVaultEmailPreferencesQueryKey() });
       setMessage('Transfer email banner preferences saved for future alerts.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'The email preferences could not be saved.');
+    }
+  };
+  const savePrivateTransactionNote = async () => {
+    if (
+      !sessionToken ||
+      !subscriptionActive ||
+      !selectedTransactionId ||
+      !privateNoteDraft.trim()
+    ) return;
+    setError('');
+    setMessage('');
+    try {
+      await saveTransactionNote.mutateAsync({
+        transactionId: selectedTransactionId,
+        data: { note: privateNoteDraft.trim() },
+      });
+      await queryClient.invalidateQueries({ queryKey: getListBankVaultTransactionNotesQueryKey() });
+      setMessage('Private note saved. It does not change the transaction or receipt.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'The private note could not be saved.');
+    }
+  };
+  const removePrivateTransactionNote = async () => {
+    if (!sessionToken || !subscriptionActive || !selectedTransactionId || !selectedTransactionNote) return;
+    setError('');
+    setMessage('');
+    try {
+      await deleteTransactionNote.mutateAsync({ transactionId: selectedTransactionId });
+      await queryClient.invalidateQueries({ queryKey: getListBankVaultTransactionNotesQueryKey() });
+      setPrivateNoteDraft('');
+      setMessage('Private note deleted. The transaction record is unchanged.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'The private note could not be deleted.');
     }
   };
   const changeControl = async (control: BankVaultWalletControl, input: Partial<BankVaultWalletControl>) => {
@@ -457,9 +555,36 @@ export function PrivateVaultPanel() {
                   ) : <p className="mt-2 rounded-lg border border-dashed border-[#dfe6eb] p-3 text-center text-[9px] text-[#8492a1]">No wallet controls are available.</p>}
                 </div>
               </div>
+              <details className="mt-3 rounded-xl border border-[#e7ecef] bg-[#fbfcfd] p-3" data-testid="vault-personal-transaction-notes">
+                <summary className="cursor-pointer text-[10px] font-bold text-[#344b64]">Personal transaction notes</summary>
+                <p className="mt-2 text-[9px] leading-4 text-[#8190a0]">These notes are private to your Vault. They never change balances, official transaction details, receipts, or notifications.</p>
+                {!subscriptionActive && <p className="mt-2 text-[9px] font-semibold text-[#8a784c]">Notes are read-only until your subscription is active.</p>}
+                {transactions.isLoading || transactionNotes.isLoading ? <div className="mt-2 h-10 animate-pulse rounded-lg bg-[#f0f4f6]" /> :
+                  transactions.isError || transactionNotes.isError ? <div className="mt-2 rounded-lg border border-[#eadfda] bg-[#fff8f6] p-3 text-[9px] text-[#a24940]"><p>Transaction notes could not be loaded.</p><button type="button" onClick={() => { void transactions.refetch(); void transactionNotes.refetch(); }} className="mt-1 font-bold underline">Try again</button></div> :
+                    !transactions.data?.length ? <p className="mt-2 rounded-lg border border-dashed border-[#dfe6eb] p-3 text-center text-[9px] text-[#8492a1]">Your transactions will appear here when available.</p> :
+                      <div className="mt-3 grid gap-2">
+                        <label className="text-[9px] font-semibold text-[#5c7085]">Choose a transaction
+                          <select value={selectedTransactionId} onChange={event => setSelectedTransactionId(event.target.value)} className={`${fieldClass} mt-1`} data-testid="select-private-note-transaction">
+                            {transactions.data.map((transaction: BankTransaction) => <option key={transaction.id} value={transaction.id}>
+                              {`${new Date(transaction.createdAt).toLocaleDateString()} · ${transaction.currency} ${transaction.amount} · ${transaction.reference}`}
+                            </option>)}
+                          </select>
+                        </label>
+                        {selectedTransactionId && <>
+                          <label className="text-[9px] font-semibold text-[#5c7085]">Your private note
+                            <textarea disabled={!subscriptionActive} maxLength={500} rows={3} value={privateNoteDraft} onChange={event => setPrivateNoteDraft(event.target.value)} placeholder="Add a reminder for yourself" className="mt-1 w-full resize-y rounded-lg border border-[#dfe6eb] bg-white px-3 py-2 text-[10px] leading-4 text-[#344b64] outline-none focus:border-[#77aeb0] disabled:bg-[#f3f5f5]" data-testid="input-private-transaction-note" />
+                            <span className="mt-1 block text-right text-[8px] font-normal text-[#8794a2]">{privateNoteDraft.length}/500</span>
+                          </label>
+                          <div className="flex flex-wrap gap-2">
+                            {subscriptionActive && <button type="button" disabled={saveTransactionNote.isPending || deleteTransactionNote.isPending || !privateNoteDraft.trim()} onClick={() => void savePrivateTransactionNote()} data-testid="button-save-private-transaction-note" className="h-8 rounded-lg bg-[#173858] px-3 text-[9px] font-bold text-white disabled:opacity-50">{saveTransactionNote.isPending ? 'Saving…' : 'Save private note'}</button>}
+                            {subscriptionActive && selectedTransactionNote && <button type="button" disabled={saveTransactionNote.isPending || deleteTransactionNote.isPending} onClick={() => void removePrivateTransactionNote()} data-testid="button-delete-private-transaction-note" className="h-8 rounded-lg border border-[#dfe6eb] bg-white px-3 text-[9px] font-bold text-[#6b7888] disabled:opacity-50">{deleteTransactionNote.isPending ? 'Deleting…' : 'Delete note'}</button>}
+                          </div>
+                        </>}
+                      </div>}
+              </details>
               <details className="mt-3 rounded-xl border border-[#e7ecef] bg-[#fbfcfd] p-3" data-testid="vault-email-banner-settings">
                 <summary className="cursor-pointer text-[10px] font-bold text-[#344b64]">Transaction email banner</summary>
-                <p className="mt-2 text-[9px] leading-4 text-[#8190a0]">Customize the banner for future transfer alerts. Globus branding stays in place; only approved colors and a short headline can be changed.</p>
+                <p className="mt-2 text-[9px] leading-4 text-[#8190a0]">Customize the branded banner and optional support footer link for future transfer alerts.</p>
                 {!subscriptionActive && <p className="mt-2 text-[9px] font-semibold text-[#8a784c]">Read-only until your subscription is active.</p>}
                 {emailPreferences.isLoading ? <div className="mt-2 h-8 animate-pulse rounded-lg bg-[#f0f4f6]" /> : emailPreferences.isError ? <p role="alert" className="mt-2 text-[9px] text-[#a24940]">Email banner settings could not be loaded.</p> : <form onSubmit={submitEmailPreferences} className="mt-3 grid gap-3 sm:grid-cols-2">
                   <label className="text-[9px] font-semibold text-[#5c7085]">Banner color
@@ -470,11 +595,29 @@ export function PrivateVaultPanel() {
                   <label className="text-[9px] font-semibold text-[#5c7085]">Banner headline
                     <input disabled={!subscriptionActive} required maxLength={60} value={bannerHeadline} onChange={event => setBannerHeadline(event.target.value)} className={`${fieldClass} mt-1 disabled:bg-[#f3f5f5]`} data-testid="input-vault-email-banner-headline" />
                   </label>
+                  <label className="text-[9px] font-semibold text-[#5c7085]">Custom banner background
+                    <span className="mt-1 flex h-9 items-center gap-2 rounded-lg border border-[#dfe6eb] bg-white px-2">
+                      <input disabled={!subscriptionActive} type="color" value={bannerBackgroundColor} onChange={event => setBannerBackgroundColor(event.target.value)} className="h-6 w-8 cursor-pointer border-0 bg-transparent p-0 disabled:cursor-not-allowed" aria-label="Choose email banner background color" data-testid="input-vault-email-banner-background-color" />
+                      <span className="font-mono text-[9px] font-normal uppercase text-[#687d90]">{bannerBackgroundColor}</span>
+                    </span>
+                  </label>
+                  <div aria-label="Email banner preview" data-testid="preview-vault-email-banner" className="overflow-hidden rounded-lg border border-[#e2e8eb] sm:col-span-2">
+                    <div className="px-4 py-3" style={{ backgroundColor: bannerBackgroundColor, color: bannerForeground(bannerBackgroundColor) }}>
+                      <p className="text-[10px] font-extrabold tracking-[.12em]">GLOBUS <span className="text-[#d6b45e]">BANK</span></p>
+                      <p className="mt-1 text-[10px] font-semibold">{bannerHeadline || 'A Globus transfer notice'}</p>
+                    </div>
+                    <div className="bg-white px-4 py-2 text-[9px] text-[#526b7e]">Transfer update · transaction details</div>
+                    {includeSupportLink && supportUrl.trim() && <div className="border-t border-[#e7ecee] bg-white px-4 py-2 text-center text-[9px] font-bold text-[#356e75]">Sender-provided support link</div>}
+                  </div>
+                  <label className="text-[9px] font-semibold text-[#5c7085] sm:col-span-2">Support contact URL
+                    <input disabled={!subscriptionActive} type="url" maxLength={500} value={supportUrl} onChange={event => setSupportUrl(event.target.value)} placeholder="https://support.example.com" className={`${fieldClass} mt-1 disabled:bg-[#f3f5f5]`} data-testid="input-vault-email-support-url" />
+                    <span className="mt-1 block text-[8px] font-normal text-[#8794a2]">Use an HTTPS link. Recipients will see it identified as a sender-provided link, and it appears only when enabled below.</span>
+                  </label>
                   <label className="flex items-start gap-2 text-[9px] leading-4 text-[#64798d] sm:col-span-2">
                     <input disabled={!subscriptionActive} type="checkbox" checked={includeSupportLink} onChange={event => setIncludeSupportLink(event.target.checked)} className="mt-0.5 accent-[#438481]" data-testid="toggle-vault-email-support-link" />
-                    <span>I confirm that future recipient alert emails may include the Globus Contact page link.</span>
+                    <span>Include my support contact link in future recipient alert email footers.</span>
                   </label>
-                  {subscriptionActive && <button type="submit" disabled={saveEmailPreferences.isPending || !bannerHeadline.trim()} data-testid="button-save-vault-email-banner" className="h-8 justify-self-start rounded-lg bg-[#173858] px-3 text-[9px] font-bold text-white disabled:opacity-50 sm:col-span-2">{saveEmailPreferences.isPending ? 'Saving…' : 'Save email design'}</button>}
+                  {subscriptionActive && <button type="submit" disabled={saveEmailPreferences.isPending || !bannerHeadline.trim() || (includeSupportLink && !supportUrl.trim())} data-testid="button-save-vault-email-banner" className="h-8 justify-self-start rounded-lg bg-[#173858] px-3 text-[9px] font-bold text-white disabled:opacity-50 sm:col-span-2">{saveEmailPreferences.isPending ? 'Saving…' : 'Save email design'}</button>}
                 </form>}
               </details>
             </div>

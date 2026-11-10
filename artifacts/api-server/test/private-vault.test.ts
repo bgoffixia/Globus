@@ -84,6 +84,15 @@ test("private data encryption is authenticated and purpose-specific", () => {
       decryptPrivateData(encrypted, "recipient-email"),
       "recipient@example.test",
     );
+    const privateNote = encryptPrivateData(
+      "Call the bank about this record",
+      "vault-transaction-note",
+    );
+    assert.ok(!privateNote.includes("Call the bank"));
+    assert.equal(
+      decryptPrivateData(privateNote, "vault-transaction-note"),
+      "Call the bank about this record",
+    );
     assert.throws(
       () => decryptPrivateData(encrypted, "push-subscription"),
       /could not be decrypted/i,
@@ -104,7 +113,19 @@ test("private data encryption is authenticated and purpose-specific", () => {
 });
 
 test("private vault passcodes unlock a short session and revoke it when changed", async () => {
-  await db.insert(bankUsersTable).values({ id: userId, email });
+  const [createdUser] = await db
+    .insert(bankUsersTable)
+    .values({ id: userId, email })
+    .returning({
+      transferPushEnabled: bankUsersTable.pushTransferAlertsEnabled,
+      walletPushEnabled: bankUsersTable.pushWalletAlertsEnabled,
+      securityPushEnabled: bankUsersTable.pushSecurityAlertsEnabled,
+    });
+  assert.deepEqual(createdUser, {
+    transferPushEnabled: true,
+    walletPushEnabled: true,
+    securityPushEnabled: true,
+  });
   assert.equal(await initializeVaultPasscode(userId, "1357"), true);
   assert.equal(await initializeVaultPasscode(userId, "2468"), false);
 

@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { sendResendEmail } from "../src/lib/resend-email";
+import {
+  isPushCategoryEnabled,
+  normalizeSupportUrl,
+} from "../src/lib/transfer-notifications";
 
 const apiKeyEnv = "RESEND_API_KEY";
 
@@ -11,6 +15,31 @@ const message = {
   text: "Test message",
   html: "<p>Test message</p>",
 };
+
+test("normalizes only safe HTTPS support URLs", () => {
+  assert.equal(
+    normalizeSupportUrl(" https://support.example.test/help "),
+    "https://support.example.test/help",
+  );
+  assert.equal(normalizeSupportUrl("http://support.example.test"), null);
+  assert.equal(normalizeSupportUrl("javascript:alert(1)"), null);
+  assert.equal(
+    normalizeSupportUrl("https://user:password@support.example.test"),
+    null,
+  );
+  assert.equal(normalizeSupportUrl("x".repeat(501)), null);
+});
+
+test("push delivery rules honor each customer's alert category choices", () => {
+  const preferences = {
+    transferEnabled: true,
+    walletEnabled: false,
+    securityEnabled: true,
+  };
+  assert.equal(isPushCategoryEnabled("transfer", preferences), true);
+  assert.equal(isPushCategoryEnabled("wallet", preferences), false);
+  assert.equal(isPushCategoryEnabled("security", preferences), true);
+});
 
 test("sends mail through the Resend API using the server-side secret", async () => {
   const previousKey = process.env[apiKeyEnv];
