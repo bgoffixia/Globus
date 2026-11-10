@@ -62,7 +62,11 @@ export const GetBankProfileResponse = zod.object({
  * @summary Check whether the customer's private vault is configured
  */
 export const GetBankVaultStatusResponse = zod.object({
-  "configured": zod.boolean()
+  "configured": zod.boolean(),
+  "subscriptionStatus": zod.enum(['inactive', 'pending', 'active', 'rejected', 'expired']),
+  "subscriptionActive": zod.boolean(),
+  "requestedAt": zod.coerce.date().nullable(),
+  "expiresAt": zod.coerce.date().nullable()
 })
 
 
@@ -77,7 +81,79 @@ export const InitializeBankVaultPasscodeBody = zod.object({
 })
 
 export const InitializeBankVaultPasscodeResponse = zod.object({
-  "configured": zod.boolean()
+  "configured": zod.boolean(),
+  "subscriptionStatus": zod.enum(['inactive', 'pending', 'active', 'rejected', 'expired']),
+  "subscriptionActive": zod.boolean(),
+  "requestedAt": zod.coerce.date().nullable(),
+  "expiresAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Request manual administrator approval for private vault access
+ */
+export const RequestBankVaultSubscriptionResponse = zod.object({
+  "configured": zod.boolean(),
+  "subscriptionStatus": zod.enum(['inactive', 'pending', 'active', 'rejected', 'expired']),
+  "subscriptionActive": zod.boolean(),
+  "requestedAt": zod.coerce.date().nullable(),
+  "expiresAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Get private vault transfer alert branding preferences
+ */
+export const getBankVaultEmailPreferencesHeaderXGlobusVaultSessionMin = 32;
+export const getBankVaultEmailPreferencesHeaderXGlobusVaultSessionMax = 128;
+
+
+
+export const GetBankVaultEmailPreferencesHeader = zod.object({
+  "X-Globus-Vault-Session": zod.string().min(getBankVaultEmailPreferencesHeaderXGlobusVaultSessionMin).max(getBankVaultEmailPreferencesHeaderXGlobusVaultSessionMax)
+})
+
+export const getBankVaultEmailPreferencesResponseBannerHeadlineMax = 60;
+
+
+
+export const GetBankVaultEmailPreferencesResponse = zod.object({
+  "bannerTheme": zod.enum(['navy', 'teal', 'gold']),
+  "bannerHeadline": zod.string().min(1).max(getBankVaultEmailPreferencesResponseBannerHeadlineMax),
+  "includeSupportLink": zod.boolean()
+})
+
+
+/**
+ * @summary Update private vault transfer alert branding preferences
+ */
+export const updateBankVaultEmailPreferencesHeaderXGlobusVaultSessionMin = 32;
+export const updateBankVaultEmailPreferencesHeaderXGlobusVaultSessionMax = 128;
+
+
+
+export const UpdateBankVaultEmailPreferencesHeader = zod.object({
+  "X-Globus-Vault-Session": zod.string().min(updateBankVaultEmailPreferencesHeaderXGlobusVaultSessionMin).max(updateBankVaultEmailPreferencesHeaderXGlobusVaultSessionMax)
+})
+
+export const updateBankVaultEmailPreferencesBodyBannerHeadlineMax = 60;
+
+
+
+export const UpdateBankVaultEmailPreferencesBody = zod.object({
+  "bannerTheme": zod.enum(['navy', 'teal', 'gold']).optional(),
+  "bannerHeadline": zod.string().min(1).max(updateBankVaultEmailPreferencesBodyBannerHeadlineMax).optional(),
+  "includeSupportLink": zod.boolean().optional()
+})
+
+export const updateBankVaultEmailPreferencesResponseBannerHeadlineMax = 60;
+
+
+
+export const UpdateBankVaultEmailPreferencesResponse = zod.object({
+  "bannerTheme": zod.enum(['navy', 'teal', 'gold']),
+  "bannerHeadline": zod.string().min(1).max(updateBankVaultEmailPreferencesResponseBannerHeadlineMax),
+  "includeSupportLink": zod.boolean()
 })
 
 
@@ -122,7 +198,11 @@ export const UpdateBankVaultPasscodeBody = zod.object({
 })
 
 export const UpdateBankVaultPasscodeResponse = zod.object({
-  "configured": zod.boolean()
+  "configured": zod.boolean(),
+  "subscriptionStatus": zod.enum(['inactive', 'pending', 'active', 'rejected', 'expired']),
+  "subscriptionActive": zod.boolean(),
+  "requestedAt": zod.coerce.date().nullable(),
+  "expiresAt": zod.coerce.date().nullable()
 })
 
 
@@ -144,7 +224,7 @@ export const ListBankVaultWalletControlsResponseItem = zod.object({
   "transfersEnabled": zod.boolean(),
   "depositsEnabled": zod.boolean(),
   "withdrawalsEnabled": zod.boolean(),
-  "futureTransferMode": zod.enum(['normal', 'hold', 'reject'])
+  "futureTransferMode": zod.enum(['successful', 'pending', 'failed'])
 })
 export const ListBankVaultWalletControlsResponse = zod.array(ListBankVaultWalletControlsResponseItem)
 
@@ -169,7 +249,7 @@ export const UpdateBankVaultWalletControlBody = zod.object({
   "transfersEnabled": zod.boolean().optional(),
   "depositsEnabled": zod.boolean().optional(),
   "withdrawalsEnabled": zod.boolean().optional(),
-  "futureTransferMode": zod.enum(['normal', 'hold', 'reject']).optional()
+  "futureTransferMode": zod.enum(['successful', 'pending', 'failed']).optional()
 })
 
 export const UpdateBankVaultWalletControlResponse = zod.object({
@@ -178,7 +258,7 @@ export const UpdateBankVaultWalletControlResponse = zod.object({
   "transfersEnabled": zod.boolean(),
   "depositsEnabled": zod.boolean(),
   "withdrawalsEnabled": zod.boolean(),
-  "futureTransferMode": zod.enum(['normal', 'hold', 'reject'])
+  "futureTransferMode": zod.enum(['successful', 'pending', 'failed'])
 })
 
 
@@ -1354,7 +1434,8 @@ export const ListAdminUsersQueryParams = zod.object({
   "limit": zod.coerce.number().int().min(1).max(listAdminUsersQueryLimitMax).default(listAdminUsersQueryLimitDefault),
   "page": zod.coerce.number().int().min(1).default(listAdminUsersQueryPageDefault),
   "accountStatus": zod.enum(['active', 'restricted', 'suspended']).optional(),
-  "verificationStatus": zod.enum(['not_started', 'pending', 'approved', 'rejected', 'additional_information_required']).optional()
+  "verificationStatus": zod.enum(['not_started', 'pending', 'approved', 'rejected', 'additional_information_required']).optional(),
+  "vaultSubscriptionStatus": zod.enum(['inactive', 'pending', 'active', 'rejected', 'expired']).optional()
 })
 
 export const listAdminUsersResponseItemsItemCustomerIdRegExp = new RegExp('^[A-Z0-9]{7}$');
@@ -1374,6 +1455,10 @@ export const ListAdminUsersResponse = zod.object({
   "accountRestrictionReason": zod.string().nullable(),
   "accountRestrictionNotes": zod.string().nullable(),
   "accountRestrictedAt": zod.coerce.date().nullable(),
+  "vaultSubscriptionStatus": zod.enum(['inactive', 'pending', 'active', 'rejected', 'expired']).optional(),
+  "vaultSubscriptionRequestedAt": zod.coerce.date().nullish(),
+  "vaultSubscriptionExpiresAt": zod.coerce.date().nullish(),
+  "vaultSubscriptionReason": zod.string().nullish(),
   "walletCount": zod.number().int(),
   "createdAt": zod.coerce.date()
 })),
@@ -1411,6 +1496,10 @@ export const GetAdminUserDetailResponse = zod.object({
   "accountRestrictionReason": zod.string().nullable(),
   "accountRestrictionNotes": zod.string().nullable(),
   "accountRestrictedAt": zod.coerce.date().nullable(),
+  "vaultSubscriptionStatus": zod.enum(['inactive', 'pending', 'active', 'rejected', 'expired']).optional(),
+  "vaultSubscriptionRequestedAt": zod.coerce.date().nullish(),
+  "vaultSubscriptionExpiresAt": zod.coerce.date().nullish(),
+  "vaultSubscriptionReason": zod.string().nullish(),
   "walletCount": zod.number().int(),
   "createdAt": zod.coerce.date()
 }),
@@ -1547,6 +1636,10 @@ export const UpdateAdminUserStatusResponse = zod.object({
   "accountRestrictionReason": zod.string().nullable(),
   "accountRestrictionNotes": zod.string().nullable(),
   "accountRestrictedAt": zod.coerce.date().nullable(),
+  "vaultSubscriptionStatus": zod.enum(['inactive', 'pending', 'active', 'rejected', 'expired']).optional(),
+  "vaultSubscriptionRequestedAt": zod.coerce.date().nullish(),
+  "vaultSubscriptionExpiresAt": zod.coerce.date().nullish(),
+  "vaultSubscriptionReason": zod.string().nullish(),
   "walletCount": zod.number().int(),
   "createdAt": zod.coerce.date()
 })
@@ -1601,6 +1694,10 @@ export const UpdateAdminUserProfileResponse = zod.object({
   "accountRestrictionReason": zod.string().nullable(),
   "accountRestrictionNotes": zod.string().nullable(),
   "accountRestrictedAt": zod.coerce.date().nullable(),
+  "vaultSubscriptionStatus": zod.enum(['inactive', 'pending', 'active', 'rejected', 'expired']).optional(),
+  "vaultSubscriptionRequestedAt": zod.coerce.date().nullish(),
+  "vaultSubscriptionExpiresAt": zod.coerce.date().nullish(),
+  "vaultSubscriptionReason": zod.string().nullish(),
   "walletCount": zod.number().int(),
   "createdAt": zod.coerce.date()
 })
@@ -1629,6 +1726,34 @@ export const ListAdminIdentityDocumentsResponseItem = zod.object({
   "uploadedAt": zod.coerce.date().nullable()
 })
 export const ListAdminIdentityDocumentsResponse = zod.array(ListAdminIdentityDocumentsResponseItem)
+
+
+/**
+ * @summary Approve or decline a member's private vault subscription request
+ */
+
+
+
+export const UpdateAdminUserVaultSubscriptionParams = zod.object({
+  "userId": zod.coerce.string().min(1)
+})
+
+export const updateAdminUserVaultSubscriptionBodyReasonMin = 5;
+export const updateAdminUserVaultSubscriptionBodyReasonMax = 500;
+
+
+
+export const UpdateAdminUserVaultSubscriptionBody = zod.object({
+  "status": zod.enum(['active', 'rejected', 'inactive']),
+  "expiresAt": zod.coerce.date().nullish(),
+  "reason": zod.string().min(updateAdminUserVaultSubscriptionBodyReasonMin).max(updateAdminUserVaultSubscriptionBodyReasonMax)
+})
+
+export const UpdateAdminUserVaultSubscriptionResponse = zod.object({
+  "userId": zod.string(),
+  "status": zod.enum(['inactive', 'pending', 'active', 'rejected', 'expired']),
+  "expiresAt": zod.coerce.date().nullable()
+})
 
 
 /**
@@ -1680,6 +1805,10 @@ export const UpdateAdminUserVerificationResponse = zod.object({
   "accountRestrictionReason": zod.string().nullable(),
   "accountRestrictionNotes": zod.string().nullable(),
   "accountRestrictedAt": zod.coerce.date().nullable(),
+  "vaultSubscriptionStatus": zod.enum(['inactive', 'pending', 'active', 'rejected', 'expired']).optional(),
+  "vaultSubscriptionRequestedAt": zod.coerce.date().nullish(),
+  "vaultSubscriptionExpiresAt": zod.coerce.date().nullish(),
+  "vaultSubscriptionReason": zod.string().nullish(),
   "walletCount": zod.number().int(),
   "createdAt": zod.coerce.date()
 })

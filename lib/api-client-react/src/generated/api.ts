@@ -51,6 +51,8 @@ import type {
   AdminUserPasswordResetResult,
   AdminUserProfileInput,
   AdminUserStatusInput,
+  AdminVaultSubscriptionInput,
+  AdminVaultSubscriptionResult,
   AdminWalletStatusInput,
   BadRequestResponse,
   BankDashboard,
@@ -64,6 +66,8 @@ import type {
   BankPushSubscriptionInput,
   BankPushSubscriptionResult,
   BankTransaction,
+  BankVaultEmailPreferences,
+  BankVaultEmailPreferencesInput,
   BankVaultPasscodeInput,
   BankVaultPasscodeUpdateInput,
   BankVaultSession,
@@ -544,6 +548,245 @@ export const useInitializeBankVaultPasscode = <TError = ErrorType<BadRequestResp
         TContext
       > => {
       return useMutation(getInitializeBankVaultPasscodeMutationOptions(options));
+    }
+
+export const getRequestBankVaultSubscriptionUrl = () => {
+
+
+
+
+  return `/api/bank/vault/subscription`
+}
+
+/**
+ * @summary Request manual administrator approval for private vault access
+ */
+export const requestBankVaultSubscription = async ( options?: Parameters<typeof customFetch>[1]): Promise<BankVaultStatus> => {
+
+  return customFetch<BankVaultStatus>(getRequestBankVaultSubscriptionUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRequestBankVaultSubscriptionMutationKey = () => ['requestBankVaultSubscription'] as const;
+
+export const getRequestBankVaultSubscriptionMutationOptions = <TError = ErrorType<UnauthorizedResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestBankVaultSubscription>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof requestBankVaultSubscription>>, TError,void, TContext> => {
+
+const mutationKey = getRequestBankVaultSubscriptionMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof requestBankVaultSubscription>>, void> = () => {
+
+
+          return  requestBankVaultSubscription(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RequestBankVaultSubscriptionMutationResult = NonNullable<Awaited<ReturnType<typeof requestBankVaultSubscription>>>
+
+    export type RequestBankVaultSubscriptionMutationError = ErrorType<UnauthorizedResponse | ConflictResponse>
+
+
+    /**
+ * @summary Request manual administrator approval for private vault access
+ */
+export const useRequestBankVaultSubscription = <TError = ErrorType<UnauthorizedResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestBankVaultSubscription>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof requestBankVaultSubscription>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getRequestBankVaultSubscriptionMutationOptions(options));
+    }
+
+export const getGetBankVaultEmailPreferencesUrl = () => {
+
+
+
+
+  return `/api/bank/vault/email-preferences`
+}
+
+/**
+ * @summary Get private vault transfer alert branding preferences
+ */
+export const getBankVaultEmailPreferences = async ( options?: Parameters<typeof customFetch>[1]): Promise<BankVaultEmailPreferences> => {
+
+  return customFetch<BankVaultEmailPreferences>(getGetBankVaultEmailPreferencesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetBankVaultEmailPreferencesQueryKey = () => {
+    return [
+    `/api/bank/vault/email-preferences`
+    ] as const;
+    }
+
+
+export const getGetBankVaultEmailPreferencesQueryOptions = <TData = Awaited<ReturnType<typeof getBankVaultEmailPreferences>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBankVaultEmailPreferences>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetBankVaultEmailPreferencesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getBankVaultEmailPreferences>>> = ({ signal }) => getBankVaultEmailPreferences({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getBankVaultEmailPreferences>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetBankVaultEmailPreferencesQueryResult = NonNullable<Awaited<ReturnType<typeof getBankVaultEmailPreferences>>>
+export type GetBankVaultEmailPreferencesQueryError = ErrorType<UnauthorizedResponse | ForbiddenResponse>
+
+
+/**
+ * @summary Get private vault transfer alert branding preferences
+ */
+
+export function useGetBankVaultEmailPreferences<TData = Awaited<ReturnType<typeof getBankVaultEmailPreferences>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBankVaultEmailPreferences>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetBankVaultEmailPreferencesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateBankVaultEmailPreferencesUrl = () => {
+
+
+
+
+  return `/api/bank/vault/email-preferences`
+}
+
+/**
+ * @summary Update private vault transfer alert branding preferences
+ */
+export const updateBankVaultEmailPreferences = async (bankVaultEmailPreferencesInput: BankVaultEmailPreferencesInput, options?: Parameters<typeof customFetch>[1]): Promise<BankVaultEmailPreferences> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<BankVaultEmailPreferences>(getUpdateBankVaultEmailPreferencesUrl(),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(bankVaultEmailPreferencesInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateBankVaultEmailPreferencesMutationKey = () => ['updateBankVaultEmailPreferences'] as const;
+
+export const getUpdateBankVaultEmailPreferencesMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateBankVaultEmailPreferences>>, TError,UpdateBankVaultEmailPreferencesMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateBankVaultEmailPreferences>>, TError,UpdateBankVaultEmailPreferencesMutationVariables, TContext> => {
+
+const mutationKey = getUpdateBankVaultEmailPreferencesMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateBankVaultEmailPreferences>>, UpdateBankVaultEmailPreferencesMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateBankVaultEmailPreferences(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateBankVaultEmailPreferencesMutationResult = NonNullable<Awaited<ReturnType<typeof updateBankVaultEmailPreferences>>>
+    export type UpdateBankVaultEmailPreferencesMutationBody = BodyType<BankVaultEmailPreferencesInput>
+    export type UpdateBankVaultEmailPreferencesMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>
+    export type UpdateBankVaultEmailPreferencesMutationVariables = {data: BodyType<BankVaultEmailPreferencesInput>}
+
+    /**
+ * @summary Update private vault transfer alert branding preferences
+ */
+export const useUpdateBankVaultEmailPreferences = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateBankVaultEmailPreferences>>, TError,UpdateBankVaultEmailPreferencesMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateBankVaultEmailPreferences>>,
+        TError,
+        UpdateBankVaultEmailPreferencesMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateBankVaultEmailPreferencesMutationOptions(options));
     }
 
 export const getUnlockBankVaultUrl = () => {
@@ -1158,7 +1401,7 @@ return customFetch<BankPushSubscriptionResult>(getSaveBankPushSubscriptionUrl(),
 
 export const getSaveBankPushSubscriptionMutationKey = () => ['saveBankPushSubscription'] as const;
 
-export const getSaveBankPushSubscriptionMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ServiceUnavailableResponse>,
+export const getSaveBankPushSubscriptionMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ConflictResponse | ServiceUnavailableResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveBankPushSubscription>>, TError,SaveBankPushSubscriptionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof saveBankPushSubscription>>, TError,SaveBankPushSubscriptionMutationVariables, TContext> => {
 
@@ -1187,13 +1430,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type SaveBankPushSubscriptionMutationResult = NonNullable<Awaited<ReturnType<typeof saveBankPushSubscription>>>
     export type SaveBankPushSubscriptionMutationBody = BodyType<BankPushSubscriptionInput>
-    export type SaveBankPushSubscriptionMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ServiceUnavailableResponse>
+    export type SaveBankPushSubscriptionMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ConflictResponse | ServiceUnavailableResponse>
     export type SaveBankPushSubscriptionMutationVariables = {data: BodyType<BankPushSubscriptionInput>}
 
     /**
  * @summary Link the signed-in member to a Webpushr subscriber
  */
-export const useSaveBankPushSubscription = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ServiceUnavailableResponse>,
+export const useSaveBankPushSubscription = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ConflictResponse | ServiceUnavailableResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveBankPushSubscription>>, TError,SaveBankPushSubscriptionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof saveBankPushSubscription>>,
@@ -4796,6 +5039,95 @@ export function useListAdminIdentityDocuments<TData = Awaited<ReturnType<typeof 
 
 
 
+
+export const getUpdateAdminUserVaultSubscriptionUrl = (userId: string,) => {
+
+
+
+
+  return `/api/bank/admin/users/${userId}/vault-subscription`
+}
+
+/**
+ * @summary Approve or decline a member's private vault subscription request
+ */
+export const updateAdminUserVaultSubscription = async (userId: string,
+    adminVaultSubscriptionInput: AdminVaultSubscriptionInput, options?: Parameters<typeof customFetch>[1]): Promise<AdminVaultSubscriptionResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<AdminVaultSubscriptionResult>(getUpdateAdminUserVaultSubscriptionUrl(userId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(adminVaultSubscriptionInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateAdminUserVaultSubscriptionMutationKey = () => ['updateAdminUserVaultSubscription'] as const;
+
+export const getUpdateAdminUserVaultSubscriptionMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminUserVaultSubscription>>, TError,UpdateAdminUserVaultSubscriptionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAdminUserVaultSubscription>>, TError,UpdateAdminUserVaultSubscriptionMutationVariables, TContext> => {
+
+const mutationKey = getUpdateAdminUserVaultSubscriptionMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAdminUserVaultSubscription>>, UpdateAdminUserVaultSubscriptionMutationVariables> = (props) => {
+          const {userId,data} = props ?? {};
+
+          return  updateAdminUserVaultSubscription(userId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAdminUserVaultSubscriptionMutationResult = NonNullable<Awaited<ReturnType<typeof updateAdminUserVaultSubscription>>>
+    export type UpdateAdminUserVaultSubscriptionMutationBody = BodyType<AdminVaultSubscriptionInput>
+    export type UpdateAdminUserVaultSubscriptionMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>
+    export type UpdateAdminUserVaultSubscriptionMutationVariables = {userId: string;data: BodyType<AdminVaultSubscriptionInput>}
+
+    /**
+ * @summary Approve or decline a member's private vault subscription request
+ */
+export const useUpdateAdminUserVaultSubscription = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminUserVaultSubscription>>, TError,UpdateAdminUserVaultSubscriptionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAdminUserVaultSubscription>>,
+        TError,
+        UpdateAdminUserVaultSubscriptionMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateAdminUserVaultSubscriptionMutationOptions(options));
+    }
 
 export const getGetAdminIdentityDocumentContentUrl = (documentId: string,) => {
 

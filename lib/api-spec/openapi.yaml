@@ -93,9 +93,62 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/BankVaultStatus" }
         "400": { $ref: "#/components/responses/BadRequest" }
-        "409": { $ref: "#/components/responses/Conflict" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /bank/vault/subscription:
+    post:
+      operationId: requestBankVaultSubscription
+      tags: [bank]
+      summary: Request manual administrator approval for private vault access
+      responses:
+        "200":
+          description: Current private vault subscription request state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankVaultStatus" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /bank/vault/email-preferences:
+    get:
+      operationId: getBankVaultEmailPreferences
+      tags: [bank]
+      summary: Get private vault transfer alert branding preferences
+      parameters:
+        - name: X-Globus-Vault-Session
+          in: header
+          required: true
+          schema: { type: string, minLength: 32, maxLength: 128 }
+      responses:
+        "200":
+          description: Transfer alert branding preferences
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankVaultEmailPreferences" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    patch:
+      operationId: updateBankVaultEmailPreferences
+      tags: [bank]
+      summary: Update private vault transfer alert branding preferences
+      parameters:
+        - name: X-Globus-Vault-Session
+          in: header
+          required: true
+          schema: { type: string, minLength: 32, maxLength: 128 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BankVaultEmailPreferencesInput" }
+      responses:
+        "200":
+          description: Updated transfer alert branding preferences
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankVaultEmailPreferences" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /bank/vault/unlock:
     post:
       operationId: unlockBankVault
@@ -250,6 +303,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/BankPushSubscriptionResult" }
         "400": { $ref: "#/components/responses/BadRequest" }
+        "409": { $ref: "#/components/responses/Conflict" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /bank/push/subscriptions/{subscriptionId}:
@@ -1044,6 +1098,10 @@ paths:
           in: query
           required: false
           schema: { type: string, enum: [not_started, pending, approved, rejected, additional_information_required] }
+        - name: vaultSubscriptionStatus
+          in: query
+          required: false
+          schema: { type: string, enum: [inactive, pending, active, rejected, expired] }
       responses:
         "200":
           description: User records
@@ -1230,6 +1288,32 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+  /bank/admin/users/{userId}/vault-subscription:
+    patch:
+      operationId: updateAdminUserVaultSubscription
+      tags: [admin]
+      summary: Approve or decline a member's private vault subscription request
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string, minLength: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminVaultSubscriptionInput" }
+      responses:
+        "200":
+          description: Updated private vault subscription state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminVaultSubscriptionResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /bank/admin/identity-documents/{documentId}/content:
     get:
       operationId: getAdminIdentityDocumentContent
@@ -1694,7 +1778,27 @@ components:
       type: object
       properties:
         configured: { type: boolean }
-      required: [configured]
+        subscriptionStatus: { type: string, enum: [inactive, pending, active, rejected, expired] }
+        subscriptionActive: { type: boolean }
+        requestedAt: { type: ["string", "null"], format: date-time }
+        expiresAt: { type: ["string", "null"], format: date-time }
+      required: [configured, subscriptionStatus, subscriptionActive, requestedAt, expiresAt]
+    BankVaultSubscriptionRequestResult:
+      $ref: "#/components/schemas/BankVaultStatus"
+    BankVaultEmailPreferences:
+      type: object
+      properties:
+        bannerTheme: { type: string, enum: [navy, teal, gold] }
+        bannerHeadline: { type: string, minLength: 1, maxLength: 60 }
+        includeSupportLink: { type: boolean }
+      required: [bannerTheme, bannerHeadline, includeSupportLink]
+    BankVaultEmailPreferencesInput:
+      type: object
+      properties:
+        bannerTheme: { type: string, enum: [navy, teal, gold] }
+        bannerHeadline: { type: string, minLength: 1, maxLength: 60 }
+        includeSupportLink: { type: boolean }
+      minProperties: 1
     BankVaultPasscodeInput:
       type: object
       properties:
@@ -1719,7 +1823,7 @@ components:
         transfersEnabled: { type: boolean }
         depositsEnabled: { type: boolean }
         withdrawalsEnabled: { type: boolean }
-        futureTransferMode: { type: string, enum: [normal, hold, reject] }
+        futureTransferMode: { type: string, enum: [successful, pending, failed] }
       required: [walletId, currency, transfersEnabled, depositsEnabled, withdrawalsEnabled, futureTransferMode]
     BankVaultWalletControlInput:
       type: object
@@ -1727,7 +1831,7 @@ components:
         transfersEnabled: { type: boolean }
         depositsEnabled: { type: boolean }
         withdrawalsEnabled: { type: boolean }
-        futureTransferMode: { type: string, enum: [normal, hold, reject] }
+        futureTransferMode: { type: string, enum: [successful, pending, failed] }
       minProperties: 1
     BankNotification:
       type: object
@@ -2041,6 +2145,10 @@ components:
         accountRestrictionReason: { type: ["string", "null"] }
         accountRestrictionNotes: { type: ["string", "null"] }
         accountRestrictedAt: { type: ["string", "null"], format: date-time }
+        vaultSubscriptionStatus: { type: string, enum: [inactive, pending, active, rejected, expired] }
+        vaultSubscriptionRequestedAt: { type: ["string", "null"], format: date-time }
+        vaultSubscriptionExpiresAt: { type: ["string", "null"], format: date-time }
+        vaultSubscriptionReason: { type: ["string", "null"] }
         walletCount: { type: integer }
         createdAt: { type: string, format: date-time }
       required: [id, email, customerId, firstName, lastName, country, verificationStatus, verificationNote, accountStatus, accountRestrictionReason, accountRestrictionNotes, accountRestrictedAt, walletCount, createdAt]
@@ -2089,6 +2197,20 @@ components:
         reason: { type: string, minLength: 5, maxLength: 500 }
         transactionPin: { type: string, pattern: "^[0-9]{6}$" }
       required: [reason, transactionPin]
+    AdminVaultSubscriptionInput:
+      type: object
+      properties:
+        status: { type: string, enum: [active, rejected, inactive] }
+        expiresAt: { type: ["string", "null"], format: date-time }
+        reason: { type: string, minLength: 5, maxLength: 500 }
+      required: [status, reason]
+    AdminVaultSubscriptionResult:
+      type: object
+      properties:
+        userId: { type: string }
+        status: { type: string, enum: [inactive, pending, active, rejected, expired] }
+        expiresAt: { type: ["string", "null"], format: date-time }
+      required: [userId, status, expiresAt]
     AdminIdentityVerificationInput:
       type: object
       properties:

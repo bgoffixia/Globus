@@ -3,23 +3,28 @@ import { LockKeyhole, ShieldCheck } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   getGetBankVaultStatusQueryKey,
+  getGetBankVaultEmailPreferencesQueryKey,
   getListBankVaultWalletControlsQueryKey,
+  useGetBankVaultEmailPreferences,
   useGetBankVaultStatus,
   useInitializeBankVaultPasscode,
   useListBankVaultWalletControls,
+  useRequestBankVaultSubscription,
   useUnlockBankVault,
+  useUpdateBankVaultEmailPreferences,
   useUpdateBankVaultPasscode,
   useUpdateBankVaultWalletControl,
 } from '@workspace/api-client-react';
-import type { BankVaultWalletControl } from '@workspace/api-client-react';
+import type { BankVaultEmailPreferences, BankVaultWalletControl } from '@workspace/api-client-react';
 
 const fieldClass = 'h-9 w-full rounded-lg border border-[#dfe6eb] bg-white px-3 text-[11px] text-[#344b64] outline-none focus:border-[#77aeb0] focus:ring-2 focus:ring-[#77aeb0]/15';
 
 export function PrivateVaultPanel() {
   const queryClient = useQueryClient();
-  const status = useGetBankVaultStatus({ query: { queryKey: getGetBankVaultStatusQueryKey(), retry: false } });
+  const status = useGetBankVaultStatus({ query: { queryKey: getGetBankVaultStatusQueryKey(), retry: false, refetchInterval: 60_000 } });
   const initialize = useInitializeBankVaultPasscode();
   const unlock = useUnlockBankVault();
+  const requestSubscription = useRequestBankVaultSubscription();
   const [sessionToken, setSessionToken] = useState('');
   const [expiresAt, setExpiresAt] = useState('');
   const [passcode, setPasscode] = useState('');
@@ -27,9 +32,14 @@ export function PrivateVaultPanel() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [busyWallet, setBusyWallet] = useState('');
+  const [bannerTheme, setBannerTheme] = useState<BankVaultEmailPreferences['bannerTheme']>('navy');
+  const [bannerHeadline, setBannerHeadline] = useState('A Globus transfer notice');
+  const [includeSupportLink, setIncludeSupportLink] = useState(false);
   useEffect(() => () => {
     void queryClient.cancelQueries({ queryKey: getListBankVaultWalletControlsQueryKey() });
+    void queryClient.cancelQueries({ queryKey: getGetBankVaultEmailPreferencesQueryKey() });
     queryClient.removeQueries({ queryKey: getListBankVaultWalletControlsQueryKey() });
+    queryClient.removeQueries({ queryKey: getGetBankVaultEmailPreferencesQueryKey() });
   }, [queryClient]);
 
   const controls = useListBankVaultWalletControls({
@@ -40,6 +50,17 @@ export function PrivateVaultPanel() {
     },
     request: sessionToken ? { headers: { 'X-Globus-Vault-Session': sessionToken } } : undefined,
   });
+  const emailPreferences = useGetBankVaultEmailPreferences({
+    query: {
+      queryKey: getGetBankVaultEmailPreferencesQueryKey(),
+      enabled: !!sessionToken,
+      retry: false,
+    },
+    request: sessionToken ? { headers: { 'X-Globus-Vault-Session': sessionToken } } : undefined,
+  });
+  const saveEmailPreferences = useUpdateBankVaultEmailPreferences({
+    request: sessionToken ? { headers: { 'X-Globus-Vault-Session': sessionToken } } : undefined,
+  });
   const updatePasscode = useUpdateBankVaultPasscode({
     request: sessionToken ? { headers: { 'X-Globus-Vault-Session': sessionToken } } : undefined,
   });
@@ -47,17 +68,26 @@ export function PrivateVaultPanel() {
     request: sessionToken ? { headers: { 'X-Globus-Vault-Session': sessionToken } } : undefined,
   });
   useEffect(() => {
+    if (!emailPreferences.data) return;
+    setBannerTheme(emailPreferences.data.bannerTheme);
+    setBannerHeadline(emailPreferences.data.bannerHeadline);
+    setIncludeSupportLink(emailPreferences.data.includeSupportLink);
+  }, [emailPreferences.data]);
+  useEffect(() => {
     if (!sessionToken || !expiresAt) return;
     const remaining = Date.parse(expiresAt) - Date.now();
     if (remaining <= 0) {
       queryClient.removeQueries({ queryKey: getListBankVaultWalletControlsQueryKey() });
+      queryClient.removeQueries({ queryKey: getGetBankVaultEmailPreferencesQueryKey() });
       setSessionToken('');
       setExpiresAt('');
       return;
     }
     const timeout = window.setTimeout(() => {
       void queryClient.cancelQueries({ queryKey: getListBankVaultWalletControlsQueryKey() });
+      void queryClient.cancelQueries({ queryKey: getGetBankVaultEmailPreferencesQueryKey() });
       queryClient.removeQueries({ queryKey: getListBankVaultWalletControlsQueryKey() });
+      queryClient.removeQueries({ queryKey: getGetBankVaultEmailPreferencesQueryKey() });
       setSessionToken('');
       setExpiresAt('');
     }, remaining);
@@ -95,7 +125,9 @@ export function PrivateVaultPanel() {
       setSessionToken('');
       setExpiresAt('');
       void queryClient.cancelQueries({ queryKey: getListBankVaultWalletControlsQueryKey() });
+      void queryClient.cancelQueries({ queryKey: getGetBankVaultEmailPreferencesQueryKey() });
       queryClient.removeQueries({ queryKey: getListBankVaultWalletControlsQueryKey() });
+      queryClient.removeQueries({ queryKey: getGetBankVaultEmailPreferencesQueryKey() });
       setMessage('Vault passcode updated.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Vault passcode could not be updated.');
@@ -103,11 +135,42 @@ export function PrivateVaultPanel() {
   };
   const lockVault = () => {
     void queryClient.cancelQueries({ queryKey: getListBankVaultWalletControlsQueryKey() });
+    void queryClient.cancelQueries({ queryKey: getGetBankVaultEmailPreferencesQueryKey() });
     queryClient.removeQueries({ queryKey: getListBankVaultWalletControlsQueryKey() });
+    queryClient.removeQueries({ queryKey: getGetBankVaultEmailPreferencesQueryKey() });
     setSessionToken('');
     setExpiresAt('');
     setPasscode('');
     setNewPasscode('');
+  };
+  const submitSubscriptionRequest = async () => {
+    setError('');
+    setMessage('');
+    try {
+      await requestSubscription.mutateAsync();
+      await queryClient.invalidateQueries({ queryKey: getGetBankVaultStatusQueryKey() });
+      setMessage('Access request sent for administrator review. No payment was collected.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'The access request could not be submitted.');
+    }
+  };
+  const submitEmailPreferences = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError('');
+    setMessage('');
+    try {
+      await saveEmailPreferences.mutateAsync({
+        data: {
+          bannerTheme,
+          bannerHeadline: bannerHeadline.trim(),
+          includeSupportLink,
+        },
+      });
+      await queryClient.invalidateQueries({ queryKey: getGetBankVaultEmailPreferencesQueryKey() });
+      setMessage('Transfer email banner preferences saved for future alerts.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'The email preferences could not be saved.');
+    }
   };
   const changeControl = async (control: BankVaultWalletControl, input: Partial<BankVaultWalletControl>) => {
     if (!sessionToken || busyWallet) return;
@@ -138,7 +201,29 @@ export function PrivateVaultPanel() {
       </div>
       {status.isLoading ? <div className="mt-4 h-10 animate-pulse rounded-lg bg-[#f0f4f6]" /> :
         status.isError ? <div className="mt-4 flex items-center justify-between rounded-lg border border-[#eadfda] bg-[#fff8f6] px-3 py-2 text-[10px] text-[#a24940]"><span>Vault status is unavailable.</span><button type="button" data-testid="button-retry-vault-status" onClick={() => void status.refetch()} className="font-bold underline">Try again</button></div> :
-          !status.data?.configured ? (
+          !status.data?.subscriptionActive ? (
+            <div className="mt-4 rounded-xl border border-[#e8e1cc] bg-[#fbf8ef] p-4" data-testid="vault-subscription-access">
+              <p className="text-[10px] font-bold uppercase tracking-[.12em] text-[#8a784c]">Vault access · {status.data?.subscriptionStatus || 'inactive'}</p>
+              <p className="mt-2 max-w-2xl text-[10px] leading-5 text-[#786e55]">
+                {status.data?.subscriptionStatus === 'pending'
+                  ? 'Your access request is waiting for administrator review.'
+                  : status.data?.subscriptionStatus === 'rejected'
+                    ? 'Your last request was declined. You may submit a new request for review.'
+                    : status.data?.subscriptionStatus === 'expired'
+                      ? 'Vault access has expired. Request administrator approval to restore access.'
+                      : 'Request administrator approval to use the Private Vault. This app does not collect subscription payments.'}
+              </p>
+              <button
+                type="button"
+                disabled={status.data?.subscriptionStatus === 'pending' || requestSubscription.isPending}
+                onClick={() => void submitSubscriptionRequest()}
+                data-testid="button-vault-subscribe"
+                className="mt-3 h-9 rounded-lg bg-[#173858] px-4 text-[10px] font-bold text-white disabled:opacity-50"
+              >
+                {requestSubscription.isPending ? 'Sending request…' : status.data?.subscriptionStatus === 'pending' ? 'Request pending' : 'Request subscription'}
+              </button>
+            </div>
+          ) : !status.data?.configured ? (
             <form onSubmit={submitPasscode} className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-end" data-testid="form-vault-setup">
               <label className="min-w-0 flex-1 text-[9px] font-bold text-[#5c7085]">Create a four-digit vault passcode
                 <input required pattern="[0-9]{4}" inputMode="numeric" autoComplete="new-password" maxLength={4} value={passcode} onChange={event => setPasscode(event.target.value.replace(/\D/g, '').slice(0, 4))} className={`${fieldClass} mt-1`} data-testid="input-vault-passcode" />
@@ -178,7 +263,7 @@ export function PrivateVaultPanel() {
                       </div>
                       <label className="mt-2 flex items-center gap-2 text-[8px] font-semibold text-[#64798d]">Future transfer requests
                         <select value={control.futureTransferMode} disabled={busyWallet === control.walletId} onChange={event => void changeControl(control, { futureTransferMode: event.target.value as BankVaultWalletControl['futureTransferMode'] })} className="h-7 flex-1 rounded-md border border-[#dfe6eb] bg-white px-2 text-[9px]" data-testid={`select-vault-future-transfer-mode-${control.walletId}`}>
-                          <option value="reject">Reject new requests (default)</option><option value="hold">Hold for review</option><option value="normal">Normal processing</option>
+                          <option value="successful">Successful after ledger posting</option><option value="pending">Pending administrator review</option><option value="failed">Fail without posting</option>
                         </select>
                       </label>
                       {busyWallet === control.walletId && <p role="status" className="mt-1 text-[8px] text-[#55868b]">Saving wallet policy…</p>}
@@ -186,6 +271,25 @@ export function PrivateVaultPanel() {
                   ) : <p className="mt-2 rounded-lg border border-dashed border-[#dfe6eb] p-3 text-center text-[9px] text-[#8492a1]">No wallet controls are available.</p>}
                 </div>
               </div>
+              <details className="mt-3 rounded-xl border border-[#e7ecef] bg-[#fbfcfd] p-3" data-testid="vault-email-banner-settings">
+                <summary className="cursor-pointer text-[10px] font-bold text-[#344b64]">Transaction email banner</summary>
+                <p className="mt-2 text-[9px] leading-4 text-[#8190a0]">Customize the banner for future transfer alerts. Globus branding stays in place; only approved colors and a short headline can be changed.</p>
+                {emailPreferences.isLoading ? <div className="mt-2 h-8 animate-pulse rounded-lg bg-[#f0f4f6]" /> : emailPreferences.isError ? <p role="alert" className="mt-2 text-[9px] text-[#a24940]">Email banner settings could not be loaded.</p> : <form onSubmit={submitEmailPreferences} className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <label className="text-[9px] font-semibold text-[#5c7085]">Banner color
+                    <select value={bannerTheme} onChange={event => setBannerTheme(event.target.value as BankVaultEmailPreferences['bannerTheme'])} className={`${fieldClass} mt-1`} data-testid="select-vault-email-banner-theme">
+                      <option value="navy">Globus navy</option><option value="teal">Globus teal</option><option value="gold">Globus gold</option>
+                    </select>
+                  </label>
+                  <label className="text-[9px] font-semibold text-[#5c7085]">Banner headline
+                    <input required maxLength={60} value={bannerHeadline} onChange={event => setBannerHeadline(event.target.value)} className={`${fieldClass} mt-1`} data-testid="input-vault-email-banner-headline" />
+                  </label>
+                  <label className="flex items-start gap-2 text-[9px] leading-4 text-[#64798d] sm:col-span-2">
+                    <input type="checkbox" checked={includeSupportLink} onChange={event => setIncludeSupportLink(event.target.checked)} className="mt-0.5 accent-[#438481]" data-testid="toggle-vault-email-support-link" />
+                    <span>I confirm that future recipient alert emails may include the Globus Contact page link.</span>
+                  </label>
+                  <button type="submit" disabled={saveEmailPreferences.isPending || !bannerHeadline.trim()} data-testid="button-save-vault-email-banner" className="h-8 justify-self-start rounded-lg bg-[#173858] px-3 text-[9px] font-bold text-white disabled:opacity-50 sm:col-span-2">{saveEmailPreferences.isPending ? 'Saving…' : 'Save email design'}</button>
+                </form>}
+              </details>
             </div>
           )}
       {(error || updateControl.isError) && <p role="alert" data-testid="status-vault-error" className="mt-3 rounded-lg bg-[#fff1ef] px-3 py-2 text-[9px] text-[#a24940]">{error || 'A wallet policy could not be saved.'}</p>}

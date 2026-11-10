@@ -31,8 +31,11 @@ import {
   GetBankProfileResponse,
   GetBankPushConfigResponse,
   GetBankVaultStatusResponse,
+  GetBankVaultEmailPreferencesHeader,
+  GetBankVaultEmailPreferencesResponse,
   InitializeBankVaultPasscodeBody,
   InitializeBankVaultPasscodeResponse,
+  RequestBankVaultSubscriptionResponse,
   ListBankNotificationsResponse,
   ListBankVaultWalletControlsHeader,
   ListBankVaultWalletControlsResponse,
@@ -54,6 +57,9 @@ import {
   UpdateBankVaultPasscodeBody,
   UpdateBankVaultPasscodeHeader,
   UpdateBankVaultPasscodeResponse,
+  UpdateBankVaultEmailPreferencesBody,
+  UpdateBankVaultEmailPreferencesHeader,
+  UpdateBankVaultEmailPreferencesResponse,
   UpdateBankVaultWalletControlBody,
   UpdateBankVaultWalletControlHeader,
   UpdateBankVaultWalletControlParams,
@@ -122,9 +128,12 @@ import {
 } from "../lib/password-reset";
 import {
   initializeVaultPasscode,
+  hasActiveVaultSubscription,
   isVaultSessionActive,
+  resolveFutureTransferStatus,
   unlockVault,
   updateVaultPasscode,
+  vaultSubscriptionStatus,
 } from "../lib/bank-vault";
 import { decryptPrivateData, encryptPrivateData } from "../lib/private-data";
 import {
@@ -182,6 +191,45 @@ const pushSubscriptionLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: "Too many notification setup attempts. Try again later." },
 });
+const vaultSubscriptionRequestLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 3,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { error: "Too many private vault access requests. Try again later." },
+});
+
+function bankVaultStatusPayload(user: typeof bankUsersTable.$inferSelect) {
+  const subscriptionStatus = vaultSubscriptionStatus(
+    user.vaultSubscriptionStatus,
+    user.vaultSubscriptionExpiresAt,
+  );
+  return {
+    configured: Boolean(user.vaultPasscodeHash),
+    subscriptionStatus,
+    subscriptionActive: subscriptionStatus === "active",
+    requestedAt: user.vaultSubscriptionRequestedAt?.toISOString() ?? null,
+    expiresAt: user.vaultSubscriptionExpiresAt?.toISOString() ?? null,
+  };
+}
+
+function bankVaultEmailPreferencesPayload(user: typeof bankUsersTable.$inferSelect) {
+  return {
+    bannerTheme: user.vaultEmailBannerTheme,
+    bannerHeadline: user.vaultEmailBannerHeadline,
+    includeSupportLink: user.vaultEmailIncludeSupportLink,
+  };
+}
+
+function normalizedFutureTransferMode(value: string): "successful" | "pending" | "failed" {
+  if (value === "normal") return "successful";
+  if (value === "hold") return "pending";
+  if (value === "reject") return "failed";
+  if (value === "successful" || value === "pending" || value === "failed") {
+    return value;
+  }
+  return "failed";
+}
 
 type FrankfurterRateReply = {
   date?: unknown;
@@ -1674,12 +1722,10 @@ router.post(
       return { error: "There is not enough available ledger balance for this request." };
     }
 
-    const status =
-      lockedWallet.futureTransferMode === "reject"
-        ? "failed"
-        : lockedWallet.futureTransferMode === "hold" || !completedByMember
-          ? "pending"
-          : "completed";
+    const status = resolveFutureTransferStatus(
+      lockedWallet.futureTransferMode,
+      completedByMember,
+    );
     const reference = createReference();
     const conversionSummary = `${formatMinorAmount(amountMinor)} ${parsed.data.sourceCurrency} converted to ${formatMinorAmount(destinationAmountMinor, parsed.data.destinationCurrency)} ${parsed.data.destinationCurrency} at ${rate}`;
     const [transaction] = await tx
@@ -1723,7 +1769,7 @@ router.post(
         remark: parsed.data.remark?.trim() ?? "",
       })
       .returning();
-    if (completedByMember) {
+    if (status === "completed") {
       await tx.insert(bankLedgerEntriesTable).values([
         {
           transactionId: transaction.id,
@@ -1752,7 +1798,7 @@ router.post(
       status === "completed"
         ? `${formatMinorAmount(amountMinor, parsed.data.sourceCurrency)} ${parsed.data.sourceCurrency} was recorded in Globus.`
         : status === "failed"
-          ? "This wallet is set to reject new transfers. No wallet balance changed."
+          ? "This wallet is configured to fail future transfers. No wallet balance changed."
           : "Your transfer is pending review. No wallet balance has changed.";
     const senderNotification = await storeNotification(tx, {
       userId: sender.id,
@@ -1791,6 +1837,7 @@ router.post(
   if (result.notifications.length) {
     const emailSent = await notifyTransferRecipient({
       notificationId: result.notifications[0]?.id,
+      senderUserId: sender.id,
       encryptedEmail: result.request.recipientEmailEncrypted,
       recipientName: result.request.recipientAccountName,
       bankName: result.request.recipientBank,
@@ -2363,10 +2410,71 @@ router.get("/bank/vault/status", async (req, res): Promise<void> => {
   }
   const user = await getOrCreateBankUser(authUserId);
   res.json(
-    GetBankVaultStatusResponse.parse({
-      configured: Boolean(user.vaultPasscodeHash),
-    }),
+    GetBankVaultStatusResponse.parse(bankVaultStatusPayload(user)),
   );
+});
+
+router.post("/bank/vault/subscription", vaultSubscriptionRequestLimiter, async (req, res): Promise<void> => {
+  const authUserId = getAuth(req).userId;
+  if (!authUserId) {
+    res.status(401).json({ error: "Sign in to request private vault access." });
+    return;
+  }
+  const user = await getOrCreateBankUser(authUserId);
+  const result = await db.transaction(async (tx) => {
+    const [lockedUser] = await tx
+      .select()
+      .from(bankUsersTable)
+      .where(eq(bankUsersTable.id, user.id))
+      .for("update");
+    if (!lockedUser) return { missing: true as const };
+    const currentStatus = vaultSubscriptionStatus(
+      lockedUser.vaultSubscriptionStatus,
+      lockedUser.vaultSubscriptionExpiresAt,
+    );
+    if (currentStatus === "active" || currentStatus === "pending") {
+      return { conflict: true as const, user: lockedUser };
+    }
+    const now = new Date();
+    const [updated] = await tx
+      .update(bankUsersTable)
+      .set({
+        vaultSubscriptionStatus: "pending",
+        vaultSubscriptionRequestedAt: now,
+        vaultSubscriptionReviewedAt: null,
+        vaultSubscriptionReviewedByUserId: null,
+        vaultSubscriptionReason: null,
+        vaultSubscriptionExpiresAt: null,
+        updatedAt: now,
+      })
+      .where(eq(bankUsersTable.id, user.id))
+      .returning();
+    await tx.insert(bankAuditLogsTable).values({
+      actorUserId: user.id,
+      targetUserId: user.id,
+      action: "request_private_vault_subscription",
+      reason: "Member requested manual administrator approval for private vault access.",
+    });
+    const notification = await storeNotification(tx, {
+      userId: user.id,
+      category: "security",
+      title: "Private Vault access requested",
+      body: "Your access request is awaiting administrator review. No payment was collected in the app.",
+    });
+    return { user: updated, notification };
+  });
+  if ("missing" in result) {
+    res.status(404).json({ error: "The Globus account could not be found." });
+    return;
+  }
+  if ("conflict" in result) {
+    res.status(409).json({ error: result.user.vaultSubscriptionStatus === "pending"
+      ? "Your private vault access request is already awaiting review."
+      : "Private vault access is already active for this account." });
+    return;
+  }
+  void sendPushToUser(user.id, result.notification);
+  res.json(RequestBankVaultSubscriptionResponse.parse(bankVaultStatusPayload(result.user)));
 });
 
 router.post(
@@ -2384,6 +2492,10 @@ router.post(
       return;
     }
     const user = await getOrCreateBankUser(authUserId);
+    if (!hasActiveVaultSubscription(user)) {
+      res.status(403).json({ error: "Request administrator approval for private vault access first." });
+      return;
+    }
     const initialized = await initializeVaultPasscode(
       user.id,
       parsed.data.passcode,
@@ -2400,7 +2512,10 @@ router.post(
       action: "initialize_private_vault",
       reason: "Member initialized their separate four-digit private vault passcode.",
     });
-    res.json(InitializeBankVaultPasscodeResponse.parse({ configured: true }));
+    const refreshed = await getOrCreateBankUser(authUserId);
+    res.json(
+      InitializeBankVaultPasscodeResponse.parse(bankVaultStatusPayload(refreshed)),
+    );
   },
 );
 
@@ -2419,10 +2534,16 @@ router.post(
       return;
     }
     const user = await getOrCreateBankUser(authUserId);
+    if (!hasActiveVaultSubscription(user)) {
+      res.status(403).json({ error: "Private vault access is not active for this account." });
+      return;
+    }
     const result = await unlockVault(user.id, parsed.data.passcode);
     if (result.result !== "valid") {
       if (result.result === "not_configured") {
         res.status(409).json({ error: "Set up a private vault passcode first." });
+      } else if (result.result === "subscription_required") {
+        res.status(403).json({ error: "Private vault access is not active for this account." });
       } else if (result.result === "locked") {
         res.status(429).json({ error: "Too many incorrect passcodes. Try again in 15 minutes." });
       } else if (result.result === "invalid") {
@@ -2474,7 +2595,134 @@ router.patch(
       action: "update_private_vault_passcode",
       reason: "Member changed their private vault passcode. Previous vault sessions were revoked.",
     });
-    res.json(UpdateBankVaultPasscodeResponse.parse({ configured: true }));
+    const refreshed = await getOrCreateBankUser(authUserId);
+    res.json(
+      UpdateBankVaultPasscodeResponse.parse(bankVaultStatusPayload(refreshed)),
+    );
+  },
+);
+
+router.get(
+  "/bank/vault/email-preferences",
+  async (req, res): Promise<void> => {
+    const authUserId = getAuth(req).userId;
+    if (!authUserId) {
+      res.status(401).json({ error: "Sign in to access your Globus account." });
+      return;
+    }
+    const sessionToken = req.get("X-Globus-Vault-Session") ?? "";
+    const parsedHeader = GetBankVaultEmailPreferencesHeader.safeParse({
+      "X-Globus-Vault-Session": sessionToken,
+    });
+    if (!parsedHeader.success) {
+      res.status(403).json({ error: "Unlock your private vault to view alert preferences." });
+      return;
+    }
+    const user = await getOrCreateBankUser(authUserId);
+    if (!(await isVaultSessionActive(user.id, sessionToken))) {
+      res.status(403).json({ error: "Your private vault session expired. Unlock it again." });
+      return;
+    }
+    res.json(
+      GetBankVaultEmailPreferencesResponse.parse(
+        bankVaultEmailPreferencesPayload(user),
+      ),
+    );
+  },
+);
+
+router.patch(
+  "/bank/vault/email-preferences",
+  async (req, res): Promise<void> => {
+    const authUserId = getAuth(req).userId;
+    if (!authUserId) {
+      res.status(401).json({ error: "Sign in to access your Globus account." });
+      return;
+    }
+    const sessionToken = req.get("X-Globus-Vault-Session") ?? "";
+    const parsedHeader = UpdateBankVaultEmailPreferencesHeader.safeParse({
+      "X-Globus-Vault-Session": sessionToken,
+    });
+    const parsed = UpdateBankVaultEmailPreferencesBody.safeParse(req.body);
+    if (!parsedHeader.success || !parsed.success) {
+      res.status(400).json({
+        error: !parsedHeader.success
+          ? parsedHeader.error.message
+          : parsed.error?.message ?? "Invalid email-alert preferences.",
+      });
+      return;
+    }
+    if (!Object.keys(parsed.data).length) {
+      res.status(400).json({ error: "Choose at least one email-alert preference." });
+      return;
+    }
+    const user = await getOrCreateBankUser(authUserId);
+    if (!(await isVaultSessionActive(user.id, sessionToken))) {
+      res.status(403).json({ error: "Your private vault session expired. Unlock it again." });
+      return;
+    }
+    const result = await db.transaction(async (tx) => {
+      const [lockedUser] = await tx
+        .select()
+        .from(bankUsersTable)
+        .where(eq(bankUsersTable.id, user.id))
+        .for("update");
+      if (!lockedUser) return { missing: true as const };
+      if (!(await isVaultSessionActive(user.id, sessionToken))) {
+        return { expired: true as const };
+      }
+      const changes = {
+        ...(parsed.data.bannerTheme !== undefined
+          ? { vaultEmailBannerTheme: parsed.data.bannerTheme }
+          : {}),
+        ...(parsed.data.bannerHeadline !== undefined
+          ? { vaultEmailBannerHeadline: parsed.data.bannerHeadline.trim() }
+          : {}),
+        ...(parsed.data.includeSupportLink !== undefined
+          ? { vaultEmailIncludeSupportLink: parsed.data.includeSupportLink }
+          : {}),
+        updatedAt: new Date(),
+      };
+      if (parsed.data.bannerHeadline !== undefined && !parsed.data.bannerHeadline.trim()) {
+        return { invalid: true as const };
+      }
+      const [updated] = await tx
+        .update(bankUsersTable)
+        .set(changes)
+        .where(eq(bankUsersTable.id, user.id))
+        .returning();
+      await tx.insert(bankAuditLogsTable).values({
+        actorUserId: user.id,
+        targetUserId: user.id,
+        action: "update_transfer_email_preferences",
+        reason: "Member updated their Globus transfer alert banner or support-link preference.",
+      });
+      const notification = await storeNotification(tx, {
+        userId: user.id,
+        category: "security",
+        title: "Transfer alert preferences updated",
+        body: "Your banner and support-link preferences apply to future transfer emails only.",
+      });
+      return { user: updated, notification };
+    });
+    if ("missing" in result) {
+      res.status(404).json({ error: "The Globus account could not be found." });
+      return;
+    }
+    if ("expired" in result) {
+      res.status(403).json({ error: "Your private vault session expired. Unlock it again." });
+      return;
+    }
+    if ("invalid" in result) {
+      res.status(400).json({ error: "Enter a non-empty email banner headline." });
+      return;
+    }
+    void sendPushToUser(user.id, result.notification);
+    res.json(
+      UpdateBankVaultEmailPreferencesResponse.parse(
+        bankVaultEmailPreferencesPayload(result.user),
+      ),
+    );
   },
 );
 
@@ -2511,7 +2759,14 @@ router.get(
       .from(bankWalletsTable)
       .where(eq(bankWalletsTable.userId, user.id))
       .orderBy(asc(bankWalletsTable.currency));
-    res.json(ListBankVaultWalletControlsResponse.parse(wallets));
+    res.json(
+      ListBankVaultWalletControlsResponse.parse(
+        wallets.map((wallet) => ({
+          ...wallet,
+          futureTransferMode: normalizedFutureTransferMode(wallet.futureTransferMode),
+        })),
+      ),
+    );
   },
 );
 
@@ -2614,7 +2869,7 @@ router.patch(
         transfersEnabled: result.wallet.transfersEnabled,
         depositsEnabled: result.wallet.depositsEnabled,
         withdrawalsEnabled: result.wallet.withdrawalsEnabled,
-        futureTransferMode: result.wallet.futureTransferMode,
+        futureTransferMode: normalizedFutureTransferMode(result.wallet.futureTransferMode),
       }),
     );
   },

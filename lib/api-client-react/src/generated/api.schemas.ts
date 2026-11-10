@@ -286,8 +286,65 @@ export interface BankProfile {
   createdAt: string;
 }
 
+export type BankVaultStatusSubscriptionStatus = typeof BankVaultStatusSubscriptionStatus[keyof typeof BankVaultStatusSubscriptionStatus];
+
+
+export const BankVaultStatusSubscriptionStatus = {
+  inactive: 'inactive',
+  pending: 'pending',
+  active: 'active',
+  rejected: 'rejected',
+  expired: 'expired',
+} as const;
+
 export interface BankVaultStatus {
   configured: boolean;
+  subscriptionStatus: BankVaultStatusSubscriptionStatus;
+  subscriptionActive: boolean;
+  /** @nullable */
+  requestedAt: string | null;
+  /** @nullable */
+  expiresAt: string | null;
+}
+
+export type BankVaultSubscriptionRequestResult = BankVaultStatus;
+
+export type BankVaultEmailPreferencesBannerTheme = typeof BankVaultEmailPreferencesBannerTheme[keyof typeof BankVaultEmailPreferencesBannerTheme];
+
+
+export const BankVaultEmailPreferencesBannerTheme = {
+  navy: 'navy',
+  teal: 'teal',
+  gold: 'gold',
+} as const;
+
+export interface BankVaultEmailPreferences {
+  bannerTheme: BankVaultEmailPreferencesBannerTheme;
+  /**
+     * @minLength 1
+     * @maxLength 60
+     */
+  bannerHeadline: string;
+  includeSupportLink: boolean;
+}
+
+export type BankVaultEmailPreferencesInputBannerTheme = typeof BankVaultEmailPreferencesInputBannerTheme[keyof typeof BankVaultEmailPreferencesInputBannerTheme];
+
+
+export const BankVaultEmailPreferencesInputBannerTheme = {
+  navy: 'navy',
+  teal: 'teal',
+  gold: 'gold',
+} as const;
+
+export interface BankVaultEmailPreferencesInput {
+  bannerTheme?: BankVaultEmailPreferencesInputBannerTheme;
+  /**
+     * @minLength 1
+     * @maxLength 60
+     */
+  bannerHeadline?: string;
+  includeSupportLink?: boolean;
 }
 
 export interface BankVaultPasscodeInput {
@@ -313,9 +370,9 @@ export type BankVaultWalletControlFutureTransferMode = typeof BankVaultWalletCon
 
 
 export const BankVaultWalletControlFutureTransferMode = {
-  normal: 'normal',
-  hold: 'hold',
-  reject: 'reject',
+  successful: 'successful',
+  pending: 'pending',
+  failed: 'failed',
 } as const;
 
 export interface BankVaultWalletControl {
@@ -331,9 +388,9 @@ export type BankVaultWalletControlInputFutureTransferMode = typeof BankVaultWall
 
 
 export const BankVaultWalletControlInputFutureTransferMode = {
-  normal: 'normal',
-  hold: 'hold',
-  reject: 'reject',
+  successful: 'successful',
+  pending: 'pending',
+  failed: 'failed',
 } as const;
 
 export interface BankVaultWalletControlInput {
@@ -891,6 +948,17 @@ export const AdminUserAccountStatus = {
   suspended: 'suspended',
 } as const;
 
+export type AdminUserVaultSubscriptionStatus = typeof AdminUserVaultSubscriptionStatus[keyof typeof AdminUserVaultSubscriptionStatus];
+
+
+export const AdminUserVaultSubscriptionStatus = {
+  inactive: 'inactive',
+  pending: 'pending',
+  active: 'active',
+  rejected: 'rejected',
+  expired: 'expired',
+} as const;
+
 export interface AdminUser {
   id: string;
   email: string;
@@ -915,6 +983,13 @@ export interface AdminUser {
   accountRestrictionNotes: string | null;
   /** @nullable */
   accountRestrictedAt: string | null;
+  vaultSubscriptionStatus?: AdminUserVaultSubscriptionStatus;
+  /** @nullable */
+  vaultSubscriptionRequestedAt?: string | null;
+  /** @nullable */
+  vaultSubscriptionExpiresAt?: string | null;
+  /** @nullable */
+  vaultSubscriptionReason?: string | null;
   walletCount: number;
   createdAt: string;
 }
@@ -990,6 +1065,44 @@ export interface AdminUserProfileInput {
   reason: string;
   /** @pattern ^[0-9]{6}$ */
   transactionPin: string;
+}
+
+export type AdminVaultSubscriptionInputStatus = typeof AdminVaultSubscriptionInputStatus[keyof typeof AdminVaultSubscriptionInputStatus];
+
+
+export const AdminVaultSubscriptionInputStatus = {
+  active: 'active',
+  rejected: 'rejected',
+  inactive: 'inactive',
+} as const;
+
+export interface AdminVaultSubscriptionInput {
+  status: AdminVaultSubscriptionInputStatus;
+  /** @nullable */
+  expiresAt?: string | null;
+  /**
+     * @minLength 5
+     * @maxLength 500
+     */
+  reason: string;
+}
+
+export type AdminVaultSubscriptionResultStatus = typeof AdminVaultSubscriptionResultStatus[keyof typeof AdminVaultSubscriptionResultStatus];
+
+
+export const AdminVaultSubscriptionResultStatus = {
+  inactive: 'inactive',
+  pending: 'pending',
+  active: 'active',
+  rejected: 'rejected',
+  expired: 'expired',
+} as const;
+
+export interface AdminVaultSubscriptionResult {
+  userId: string;
+  status: AdminVaultSubscriptionResultStatus;
+  /** @nullable */
+  expiresAt: string | null;
 }
 
 export type AdminIdentityVerificationInputVerificationStatus = typeof AdminIdentityVerificationInputVerificationStatus[keyof typeof AdminIdentityVerificationInputVerificationStatus];
@@ -1552,6 +1665,7 @@ limit?: number;
 page?: number;
 accountStatus?: ListAdminUsersAccountStatus;
 verificationStatus?: ListAdminUsersVerificationStatus;
+vaultSubscriptionStatus?: ListAdminUsersVaultSubscriptionStatus;
 };
 
 export type ListAdminUsersAccountStatus = typeof ListAdminUsersAccountStatus[keyof typeof ListAdminUsersAccountStatus];
@@ -1572,6 +1686,17 @@ export const ListAdminUsersVerificationStatus = {
   approved: 'approved',
   rejected: 'rejected',
   additional_information_required: 'additional_information_required',
+} as const;
+
+export type ListAdminUsersVaultSubscriptionStatus = typeof ListAdminUsersVaultSubscriptionStatus[keyof typeof ListAdminUsersVaultSubscriptionStatus];
+
+
+export const ListAdminUsersVaultSubscriptionStatus = {
+  inactive: 'inactive',
+  pending: 'pending',
+  active: 'active',
+  rejected: 'rejected',
+  expired: 'expired',
 } as const;
 
 export type ListAdminLedgerParams = {

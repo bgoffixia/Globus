@@ -88,6 +88,31 @@ export const bankUsersTable = pgTable("bank_users", {
   vaultPasscodeLockedUntil: timestamp("vault_passcode_locked_until", {
     withTimezone: true,
   }),
+  vaultSubscriptionStatus: text("vault_subscription_status")
+    .notNull()
+    .default("inactive"),
+  vaultSubscriptionRequestedAt: timestamp("vault_subscription_requested_at", {
+    withTimezone: true,
+  }),
+  vaultSubscriptionReviewedAt: timestamp("vault_subscription_reviewed_at", {
+    withTimezone: true,
+  }),
+  vaultSubscriptionReviewedByUserId: text(
+    "vault_subscription_reviewed_by_user_id",
+  ),
+  vaultSubscriptionReason: text("vault_subscription_reason"),
+  vaultSubscriptionExpiresAt: timestamp("vault_subscription_expires_at", {
+    withTimezone: true,
+  }),
+  vaultEmailBannerTheme: text("vault_email_banner_theme")
+    .notNull()
+    .default("navy"),
+  vaultEmailBannerHeadline: text("vault_email_banner_headline")
+    .notNull()
+    .default("A Globus transfer notice"),
+  vaultEmailIncludeSupportLink: boolean("vault_email_include_support_link")
+    .notNull()
+    .default(false),
   verificationStatus: text("verification_status").notNull().default("not_started"),
   verificationNote: text("verification_note"),
   accountStatus: text("account_status").notNull().default("active"),
@@ -116,7 +141,7 @@ export const bankWalletsTable = pgTable(
     transfersEnabled: boolean("transfers_enabled").notNull().default(true),
     depositsEnabled: boolean("deposits_enabled").notNull().default(true),
     withdrawalsEnabled: boolean("withdrawals_enabled").notNull().default(true),
-    futureTransferMode: text("future_transfer_mode").notNull().default("reject"),
+    futureTransferMode: text("future_transfer_mode").notNull().default("failed"),
     restrictionReason: text("restriction_reason"),
     restrictionNotes: text("restriction_notes"),
     restrictedByUserId: text("restricted_by_user_id").references(

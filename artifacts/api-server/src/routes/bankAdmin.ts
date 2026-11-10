@@ -60,6 +60,9 @@ import {
   UpdateAdminUserProfileBody,
   UpdateAdminUserProfileParams,
   UpdateAdminUserProfileResponse,
+  UpdateAdminUserVaultSubscriptionBody,
+  UpdateAdminUserVaultSubscriptionParams,
+  UpdateAdminUserVaultSubscriptionResponse,
   UpdateAdminSettingsBody,
   UpdateAdminSettingsResponse,
   UpdateAdminWalletStatusBody,
@@ -100,6 +103,7 @@ import {
   bankSandboxRequestsTable,
   bankTransactionsTable,
   bankUsersTable,
+  bankVaultSessionsTable,
   bankWalletsTable,
   db,
 } from "@workspace/db";
@@ -126,6 +130,7 @@ import {
   getIdentityDocumentFile,
 } from "../lib/identityDocumentStorage";
 import { verifyTransactionPin } from "../lib/transaction-pin";
+import { vaultSubscriptionStatus } from "../lib/bank-vault";
 import {
   notifyTransferRecipient,
   sendPushToUser,
@@ -1561,6 +1566,28 @@ router.get("/bank/admin/users", requireAdmin, async (req, res): Promise<void> =>
       eq(bankUsersTable.verificationStatus, parsed.data.verificationStatus),
     );
   }
+  if (parsed.data.vaultSubscriptionStatus === "expired") {
+    filters.push(
+      and(
+        eq(bankUsersTable.vaultSubscriptionStatus, "active"),
+        lte(bankUsersTable.vaultSubscriptionExpiresAt, now),
+      ),
+    );
+  } else if (parsed.data.vaultSubscriptionStatus === "active") {
+    filters.push(
+      and(
+        eq(bankUsersTable.vaultSubscriptionStatus, "active"),
+        or(
+          isNull(bankUsersTable.vaultSubscriptionExpiresAt),
+          gt(bankUsersTable.vaultSubscriptionExpiresAt, now),
+        ),
+      ),
+    );
+  } else if (parsed.data.vaultSubscriptionStatus) {
+    filters.push(
+      eq(bankUsersTable.vaultSubscriptionStatus, parsed.data.vaultSubscriptionStatus),
+    );
+  }
   const page = parsed.data.page ?? 1;
   const pageSize = parsed.data.limit ?? 50;
   const [totalRows] = await db
@@ -1764,6 +1791,15 @@ router.get(
             user.accountRestrictedAt?.toISOString() ??
             primaryRestriction?.effectiveAt.toISOString() ??
             null,
+          vaultSubscriptionStatus: vaultSubscriptionStatus(
+            user.vaultSubscriptionStatus,
+            user.vaultSubscriptionExpiresAt,
+          ),
+          vaultSubscriptionRequestedAt:
+            user.vaultSubscriptionRequestedAt?.toISOString() ?? null,
+          vaultSubscriptionExpiresAt:
+            user.vaultSubscriptionExpiresAt?.toISOString() ?? null,
+          vaultSubscriptionReason: user.vaultSubscriptionReason,
           walletCount: wallets.length,
           createdAt: user.createdAt.toISOString(),
         },
@@ -2190,6 +2226,103 @@ router.patch(
           updated.user.accountRestrictedAt?.toISOString() ?? null,
         walletCount: updated.walletCount,
         createdAt: updated.user.createdAt.toISOString(),
+      }),
+    );
+  },
+);
+
+router.patch(
+  "/bank/admin/users/:userId/vault-subscription",
+  requireAdmin,
+  async (req, res): Promise<void> => {
+    const authUserId = getAuth(req).userId;
+    if (!authUserId) {
+      res.status(401).json({ error: "Sign in with an administrator account." });
+      return;
+    }
+    const params = UpdateAdminUserVaultSubscriptionParams.safeParse(req.params);
+    const parsed = UpdateAdminUserVaultSubscriptionBody.safeParse(req.body);
+    if (!params.success || !parsed.success) {
+      res.status(400).json({
+        error: !params.success
+          ? params.error.message
+          : parsed.error?.message ?? "Invalid subscription decision.",
+      });
+      return;
+    }
+    const expiresAt = parsed.data.status === "active"
+      ? parsed.data.expiresAt ?? null
+      : null;
+    if (expiresAt && expiresAt <= new Date()) {
+      res.status(400).json({ error: "The access expiration must be in the future." });
+      return;
+    }
+    const admin = await ensureBankUser(authUserId);
+    const result = await db.transaction(async (tx) => {
+      const [user] = await tx
+        .select()
+        .from(bankUsersTable)
+        .where(eq(bankUsersTable.id, params.data.userId))
+        .for("update");
+      if (!user) return { notFound: true as const };
+      const now = new Date();
+      const [updated] = await tx
+        .update(bankUsersTable)
+        .set({
+          vaultSubscriptionStatus: parsed.data.status,
+          vaultSubscriptionReviewedAt: now,
+          vaultSubscriptionReviewedByUserId: admin.id,
+          vaultSubscriptionReason: parsed.data.reason.trim(),
+          vaultSubscriptionExpiresAt: expiresAt,
+          updatedAt: now,
+        })
+        .where(eq(bankUsersTable.id, user.id))
+        .returning();
+      await tx
+        .delete(bankVaultSessionsTable)
+        .where(eq(bankVaultSessionsTable.userId, user.id));
+      await tx.insert(bankAuditLogsTable).values({
+        actorUserId: admin.id,
+        targetUserId: user.id,
+        action:
+          parsed.data.status === "active"
+            ? "approve_private_vault_subscription"
+            : parsed.data.status === "rejected"
+              ? "reject_private_vault_subscription"
+              : "revoke_private_vault_subscription",
+        reason: parsed.data.reason.trim(),
+      });
+      const notification = await storeNotification(tx, {
+        userId: user.id,
+        category: "security",
+        title:
+          parsed.data.status === "active"
+            ? "Private Vault access approved"
+            : parsed.data.status === "rejected"
+              ? "Private Vault access request declined"
+              : "Private Vault access updated",
+        body:
+          parsed.data.status === "active"
+            ? "Private Vault access is active. Set up or unlock your separate passcode in Profile."
+            : parsed.data.status === "rejected"
+              ? "Your Private Vault access request was declined. Contact Globus support if you need help."
+              : "Private Vault access was removed. Existing vault sessions have been closed.",
+      });
+      return { user: updated, notification };
+    });
+    if ("notFound" in result) {
+      res.status(404).json({ error: "User record not found." });
+      return;
+    }
+    void sendPushToUser(result.user.id, result.notification);
+    res.json(
+      UpdateAdminUserVaultSubscriptionResponse.parse({
+        userId: result.user.id,
+        status: vaultSubscriptionStatus(
+          result.user.vaultSubscriptionStatus,
+          result.user.vaultSubscriptionExpiresAt,
+        ),
+        expiresAt: result.user.vaultSubscriptionExpiresAt?.toISOString() ?? null,
       }),
     );
   },
@@ -3849,6 +3982,7 @@ router.post(
       void sendPushToUser(result.request.userId, result.notification);
       const emailSent = await notifyTransferRecipient({
         notificationId: result.notification.id,
+        senderUserId: result.request.userId,
         encryptedEmail: result.request.recipientEmailEncrypted,
         recipientName: result.request.recipientAccountName,
         bankName: result.request.recipientBank,
@@ -4049,6 +4183,7 @@ router.patch(
       void sendPushToUser(result.transferRequest.userId, result.notification);
       const emailSent = await notifyTransferRecipient({
         notificationId: result.notification.id,
+        senderUserId: result.transferRequest.userId,
         encryptedEmail: result.transferRequest.recipientEmailEncrypted,
         recipientName: result.transferRequest.recipientAccountName,
         bankName: result.transferRequest.recipientBank,

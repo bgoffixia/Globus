@@ -9,15 +9,19 @@ import {
 } from "@workspace/db";
 import {
   initializeVaultPasscode,
+  hasActiveVaultSubscription,
   isVaultSessionActive,
+  resolveFutureTransferStatus,
   unlockVault,
   updateVaultPasscode,
+  vaultSubscriptionStatus,
 } from "../src/lib/bank-vault";
 import {
   decryptPrivateData,
   encryptPrivateData,
   hashPrivateToken,
 } from "../src/lib/private-data";
+import { getPushConfig } from "../src/lib/transfer-notifications";
 
 const encryptionKeyEnv = "BANK_DETAILS_ENCRYPTION_KEY";
 const sessionSecretEnv = "SESSION_SECRET";
@@ -65,6 +69,9 @@ test("private data encryption is authenticated and purpose-specific", () => {
 
 test("private vault passcodes unlock a short session and revoke it when changed", async () => {
   await db.insert(bankUsersTable).values({ id: userId, email });
+  assert.equal(await initializeVaultPasscode(userId, "1357"), false);
+  assert.equal((await unlockVault(userId, "1357")).result, "subscription_required");
+  await db.update(bankUsersTable).set({ vaultSubscriptionStatus: "active" }).where(eq(bankUsersTable.id, userId));
   assert.equal(await initializeVaultPasscode(userId, "1357"), true);
   assert.equal(await initializeVaultPasscode(userId, "2468"), false);
 
@@ -89,4 +96,36 @@ test("private vault passcodes unlock a short session and revoke it when changed"
   assert.notEqual((await unlockVault(userId, "1357")).result, "valid");
   const reopened = await unlockVault(userId, "2468");
   assert.equal(reopened.result, "valid");
+});
+
+test("vault subscription states and per-wallet transfer choices preserve ledger rules", () => {
+  const now = new Date("2026-11-10T12:00:00.000Z");
+  assert.equal(vaultSubscriptionStatus("active", null, now), "active");
+  assert.equal(vaultSubscriptionStatus("active", new Date("2026-11-10T11:59:00.000Z"), now), "expired");
+  assert.equal(hasActiveVaultSubscription({ vaultSubscriptionStatus: "pending", vaultSubscriptionExpiresAt: null }, now), false);
+  assert.equal(resolveFutureTransferStatus("successful", true), "completed");
+  assert.equal(resolveFutureTransferStatus("successful", false), "pending");
+  assert.equal(resolveFutureTransferStatus("pending", true), "pending");
+  assert.equal(resolveFutureTransferStatus("failed", true), "failed");
+  assert.equal(resolveFutureTransferStatus("reject", true), "failed");
+  assert.equal(resolveFutureTransferStatus("hold", true), "pending");
+  assert.equal(resolveFutureTransferStatus("normal", true), "completed");
+});
+
+test("Webpushr exposes only the site key after all server secrets are configured", () => {
+  const keys = ["WEBPUSHR_SITE_KEY", "WEBPUSHR_REST_API_KEY", "WEBPUSHR_AUTH_TOKEN"];
+  const previous = keys.map((key) => process.env[key]);
+  process.env.WEBPUSHR_SITE_KEY = "public-site-key";
+  process.env.WEBPUSHR_REST_API_KEY = "server-api-key";
+  process.env.WEBPUSHR_AUTH_TOKEN = "server-auth-token";
+  try {
+    assert.deepEqual(getPushConfig(), { configured: true, siteKey: "public-site-key" });
+    delete process.env.WEBPUSHR_AUTH_TOKEN;
+    assert.deepEqual(getPushConfig(), { configured: false, siteKey: null });
+  } finally {
+    keys.forEach((key, index) => {
+      if (previous[index] === undefined) delete process.env[key];
+      else process.env[key] = previous[index];
+    });
+  }
 });

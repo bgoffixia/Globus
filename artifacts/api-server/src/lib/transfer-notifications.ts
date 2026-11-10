@@ -3,6 +3,7 @@ import { ReplitConnectors } from "@replit/connectors-sdk";
 import {
   bankNotificationsTable,
   bankPushSubscriptionsTable,
+  bankUsersTable,
   db,
 } from "@workspace/db";
 import { decryptPrivateData, encryptPrivateData, hashPrivateToken } from "./private-data";
@@ -99,6 +100,7 @@ function htmlEscape(value: string): string {
 
 export async function sendTransferAlertEmail(input: {
   notificationId?: string;
+  senderUserId?: string;
   recipientEmail: string;
   recipientName: string;
   bankName: string;
@@ -109,15 +111,50 @@ export async function sendTransferAlertEmail(input: {
   status: string;
   createdAt: Date;
 }): Promise<boolean> {
-  const sender = process.env.GLOBUS_SECURITY_EMAIL_FROM?.trim();
+  const senderAddress = process.env.GLOBUS_SECURITY_EMAIL_FROM?.trim();
   if (
-    !sender ||
-    !/^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(sender) ||
+    !senderAddress ||
+    !/^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(senderAddress) ||
     !/^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(input.recipientEmail)
   ) {
     return false;
   }
   const connectors = new ReplitConnectors();
+  let senderPreferences:
+    | { theme: string; headline: string; includeSupportLink: boolean }
+    | undefined;
+  if (input.senderUserId) {
+    try {
+      [senderPreferences] = await db
+        .select({
+          theme: bankUsersTable.vaultEmailBannerTheme,
+          headline: bankUsersTable.vaultEmailBannerHeadline,
+          includeSupportLink: bankUsersTable.vaultEmailIncludeSupportLink,
+        })
+        .from(bankUsersTable)
+        .where(eq(bankUsersTable.id, input.senderUserId))
+        .limit(1);
+    } catch {
+      return false;
+    }
+  }
+  const emailThemes = {
+    navy: { background: "#12385d", accent: "#d6b45e" },
+    teal: { background: "#174b52", accent: "#8ad1c7" },
+    gold: { background: "#40391f", accent: "#e3c66d" },
+  } as const;
+  const theme =
+    emailThemes[senderPreferences?.theme as keyof typeof emailThemes] ?? emailThemes.navy;
+  const headline = senderPreferences?.headline?.trim() || "A Globus transfer notice";
+  const origin = appOrigin();
+  const supportUrl =
+    senderPreferences?.includeSupportLink && origin
+      ? new URL("/contact", origin).toString()
+      : null;
+  const supportText = supportUrl ? `Support: ${supportUrl}` : "";
+  const supportHtml = supportUrl
+    ? `<p style="margin:20px 0 0;font-size:12px"><a href="${htmlEscape(supportUrl)}" style="color:#356e75;font-weight:700">Visit Globus support</a></p>`
+    : "";
   const statusText =
     input.status === "completed"
       ? "The sender’s Globus account recorded this transfer."
@@ -146,7 +183,7 @@ export async function sendTransferAlertEmail(input: {
         "Idempotency-Key": idempotencyKey,
       },
       body: JSON.stringify({
-        from: `Globus Bank Alerts <${sender}>`,
+        from: `Globus Bank Alerts <${senderAddress}>`,
         to: input.recipientEmail,
         subject: `Globus transfer update · ${input.reference}`,
         text: [
@@ -155,11 +192,12 @@ export async function sendTransferAlertEmail(input: {
           statusText,
           "",
           ...details,
+          ...(supportText ? [supportText] : []),
           "",
           "This notice reports a Globus account record. It does not confirm that an outside bank received, paid, or settled funds.",
           "If you do not recognize this message, you can ignore it. Do not reply with account credentials or verification codes.",
         ].join("\n"),
-        html: `<main style="margin:0;padding:32px 16px;background:#f1f6f7;font-family:Arial,sans-serif;color:#17314f"><section style="max-width:560px;margin:auto;background:#fff;border:1px solid #dce7ea;border-radius:18px;overflow:hidden"><header style="padding:22px 28px;background:#12385d;color:#fff"><div style="font-size:19px;font-weight:700;letter-spacing:1px">GLOBUS <span style="color:#d6b45e">BANK</span></div><div style="margin-top:8px;font-size:11px;color:#d8e4ed">TRANSFER ALERT</div></header><div style="padding:26px 28px"><h1 style="margin:0 0 12px;font-size:21px">Transfer update</h1><p style="margin:0 0 20px;line-height:1.55;color:#536a7d">${htmlEscape(statusText)}</p><ul style="padding:0 0 0 18px;line-height:1.9;color:#334b62">${htmlDetails}</ul><div style="margin-top:24px;padding:14px;border:1px solid #e7dfc6;border-radius:12px;background:#fbf8ef;color:#766943;font-size:12px;line-height:1.55">This notice reports a Globus account record. It does not confirm that an outside bank received, paid, or settled funds.</div><p style="margin:20px 0 0;font-size:11px;color:#7a8b99">If you do not recognize this message, ignore it. Never reply with account credentials or verification codes.</p></div></section></main>`,
+        html: `<main style="margin:0;padding:32px 16px;background:#f1f6f7;font-family:Arial,sans-serif;color:#17314f"><section style="max-width:560px;margin:auto;background:#fff;border:1px solid #dce7ea;border-radius:18px;overflow:hidden"><header style="padding:22px 28px;background:${theme.background};color:#fff"><div style="font-size:19px;font-weight:700;letter-spacing:1px">GLOBUS <span style="color:${theme.accent}">BANK</span></div><div style="margin-top:8px;font-size:13px;font-weight:700;color:#fff">${htmlEscape(headline)}</div></header><div style="padding:26px 28px"><h1 style="margin:0 0 12px;font-size:21px">Transfer update</h1><p style="margin:0 0 20px;line-height:1.55;color:#536a7d">${htmlEscape(statusText)}</p><ul style="padding:0 0 0 18px;line-height:1.9;color:#334b62">${htmlDetails}</ul>${supportHtml}<div style="margin-top:24px;padding:14px;border:1px solid #e7dfc6;border-radius:12px;background:#fbf8ef;color:#766943;font-size:12px;line-height:1.55">This notice reports a Globus account record. It does not confirm that an outside bank received, paid, or settled funds.</div><p style="margin:20px 0 0;font-size:11px;color:#7a8b99">If you do not recognize this message, ignore it. Never reply with account credentials or verification codes.</p></div></section></main>`,
       }),
     });
     return response.ok;
@@ -198,7 +236,7 @@ export async function sendPushToUser(
         return;
       }
       try {
-        await fetch("https://api.webpushr.com/v1/notification/send/sid", {
+        const response = await fetch("https://api.webpushr.com/v1/notification/send/sid", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -216,6 +254,11 @@ export async function sendPushToUser(
           }),
           signal: AbortSignal.timeout(8000),
         });
+        if (response.status === 404) {
+          await db
+            .delete(bankPushSubscriptionsTable)
+            .where(eq(bankPushSubscriptionsTable.id, row.id));
+        }
       } catch {
         // Push delivery is best-effort; in-app notifications remain available.
       }
@@ -269,6 +312,7 @@ export async function savePushSubscription(
 
 export async function notifyTransferRecipient(input: {
   notificationId?: string;
+  senderUserId?: string;
   encryptedEmail: string | null;
   recipientName: string;
   bankName: string;

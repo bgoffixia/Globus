@@ -10,7 +10,7 @@ export type BankVaultWalletControlInputFutureTransferMode = typeof BankVaultWall
 
 
 export const BankVaultWalletControlInputFutureTransferMode = {
-  normal: 'normal',
-  hold: 'hold',
-  reject: 'reject',
+  successful: 'successful',
+  pending: 'pending',
+  failed: 'failed',
 } as const;

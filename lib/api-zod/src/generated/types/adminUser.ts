@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AdminUserAccountStatus } from './adminUserAccountStatus';
+import type { AdminUserVaultSubscriptionStatus } from './adminUserVaultSubscriptionStatus';
 import type { AdminUserVerificationStatus } from './adminUserVerificationStatus';
 
 export interface AdminUser {
@@ -32,6 +33,13 @@ export interface AdminUser {
   accountRestrictionNotes: string | null;
   /** @nullable */
   accountRestrictedAt: Date | null;
+  vaultSubscriptionStatus?: AdminUserVaultSubscriptionStatus;
+  /** @nullable */
+  vaultSubscriptionRequestedAt?: Date | null;
+  /** @nullable */
+  vaultSubscriptionExpiresAt?: Date | null;
+  /** @nullable */
+  vaultSubscriptionReason?: string | null;
   walletCount: number;
   createdAt: Date;
 }
