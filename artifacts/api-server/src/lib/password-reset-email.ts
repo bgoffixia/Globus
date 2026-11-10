@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { ReplitConnectors } from "@replit/connectors-sdk";
+import { sendResendEmail } from "./resend-email";
 
 const EMAIL_FROM_ADDRESS_PATTERN = /^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/;
 
@@ -35,14 +35,8 @@ export async function sendPasswordResetEmail(input: {
   const recoveryUrl = new URL("/sign-in/recover", origin);
   recoveryUrl.hash = new URLSearchParams({ ticket: input.ticket }).toString();
   const link = recoveryUrl.toString();
-  const connectors = new ReplitConnectors();
-  const response = await connectors.proxy("resend", "/emails", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Idempotency-Key": `password-reset-${randomUUID()}`,
-    },
-    body: JSON.stringify({
+  return sendResendEmail(
+    {
       from: `Globus Bank Security <${sender}>`,
       to: input.recipient,
       subject: "Reset your Globus Bank password",
@@ -54,8 +48,7 @@ export async function sendPasswordResetEmail(input: {
         "If you did not expect this message, contact Globus Bank support.",
       ].join("\n\n"),
       html: `<p>An administrator required a password update for your Globus Bank account.</p><p><a href="${link}">Sign in and choose a new password</a></p><p>This secure link expires in 15 minutes and can only be used once.</p><p>If you did not expect this message, contact Globus Bank support.</p>`,
-    }),
-  });
-
-  return response.ok;
+    },
+    `password-reset-${randomUUID()}`,
+  );
 }
