@@ -111,6 +111,7 @@ import {
   bankOperationRestrictionError,
   convertMinorAmount,
   createReference,
+  currencies,
   ensureBankUser,
   formatMinorAmount,
   conversionRatesMatch,
@@ -3184,7 +3185,12 @@ router.get(
         futureTransferMode: bankWalletsTable.futureTransferMode,
       })
       .from(bankWalletsTable)
-      .where(eq(bankWalletsTable.userId, user.id))
+      .where(
+        and(
+          eq(bankWalletsTable.userId, user.id),
+          inArray(bankWalletsTable.currency, currencies),
+        ),
+      )
       .orderBy(asc(bankWalletsTable.currency));
     res.json(
       ListBankVaultWalletControlsResponse.parse(
@@ -3238,6 +3244,7 @@ router.patch(
           and(
             eq(bankWalletsTable.id, params.data.walletId),
             eq(bankWalletsTable.userId, user.id),
+            inArray(bankWalletsTable.currency, currencies),
           ),
         )
         .for("update");

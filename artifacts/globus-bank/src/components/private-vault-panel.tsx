@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { ArrowLeft, ArrowRight, CheckCircle2, LockKeyhole, ShieldCheck } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useUser } from '@clerk/react';
+import { useLocation } from 'wouter';
 import {
   getGetBankVaultBillingQueryKey,
   getGetBankVaultEmailPreferencesQueryKey,
@@ -63,6 +64,7 @@ function bannerForeground(hex: string) {
 export function PrivateVaultPanel() {
   const queryClient = useQueryClient();
   const { user } = useUser();
+  const [, navigate] = useLocation();
   const status = useGetBankVaultStatus({ query: { queryKey: getGetBankVaultStatusQueryKey(), retry: false, refetchInterval: 60_000 } });
   const initialize = useInitializeBankVaultPasscode();
   const unlock = useUnlockBankVault();
@@ -641,9 +643,11 @@ export function PrivateVaultPanel() {
                 <div className="rounded-xl border border-[#e7ecef] p-3">
                   <div className="flex items-center justify-between gap-2"><h3 className="text-[10px] font-bold text-[#344b64]">Wallet policies</h3><button type="button" onClick={() => void controls.refetch()} data-testid="button-refresh-wallet-controls" className="text-[9px] font-bold text-[#397b80]">Refresh</button></div>
                   <p className="mt-1 text-[9px] leading-4 text-[#8190a0]">Policy choices apply to future requests only. Existing transactions keep their recorded status.</p>
+                  <p className="mt-1 text-[9px] leading-4 text-[#8190a0]">Deposit requests are reviewed by an administrator; balances change only after approval.</p>
                   {controls.isLoading ? <div className="mt-2 h-10 animate-pulse rounded-lg bg-[#f0f4f6]" /> : controls.isError ? <p role="alert" className="mt-2 text-[9px] text-[#a24940]">Wallet controls could not be loaded. Refresh to try again.</p> : controls.data?.length ? (
                     <div className="mt-2 space-y-2">{controls.data.map(control => <article key={control.walletId} data-testid={`vault-wallet-control-${control.walletId}`} className="rounded-lg bg-[#f8fafb] p-2.5">
                       <div className="flex items-center justify-between gap-2"><strong className="text-[10px] text-[#324962]">{control.currency} wallet</strong><label className="flex items-center gap-1.5 text-[8px] text-[#64798d]"><input type="checkbox" checked={control.transfersEnabled} disabled={!subscriptionActive || busyWallet === control.walletId} onChange={event => void changeControl(control, { transfersEnabled: event.target.checked })} data-testid={`toggle-vault-transfers-${control.walletId}`} />Transfers</label></div>
+                      <button type="button" onClick={() => navigate(`/add-money?currency=${encodeURIComponent(control.currency)}`)} data-testid={`button-vault-request-deposit-${control.currency}`} className="mt-2 h-7 rounded-md border border-[#b9d2d0] bg-white px-2.5 text-[8px] font-bold text-[#397b80]">Request deposit to {control.currency}</button>
                       <div className="mt-2 grid grid-cols-2 gap-2">
                         <label className="flex items-center gap-1.5 text-[8px] text-[#64798d]"><input type="checkbox" checked={control.depositsEnabled} disabled={!subscriptionActive || busyWallet === control.walletId} onChange={event => void changeControl(control, { depositsEnabled: event.target.checked })} data-testid={`toggle-vault-deposits-${control.walletId}`} />Deposits</label>
                         <label className="flex items-center gap-1.5 text-[8px] text-[#64798d]"><input type="checkbox" checked={control.withdrawalsEnabled} disabled={!subscriptionActive || busyWallet === control.walletId} onChange={event => void changeControl(control, { withdrawalsEnabled: event.target.checked })} data-testid={`toggle-vault-withdrawals-${control.walletId}`} />Withdrawals</label>
