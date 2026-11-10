@@ -109,6 +109,7 @@ export function NotificationsCenter() {
   const [pushError, setPushError] = useState('');
   const [notificationError, setNotificationError] = useState('');
   const subscriptionStorageKey = user?.id ? `globus-push-subscription-id:${user.id}` : '';
+  const permissionPromptStorageKey = user?.id ? `globus-push-permission-prompted:${user.id}` : '';
   const [savedSubscriptionId, setSavedSubscriptionId] = useState(() =>
     subscriptionStorageKey ? localStorage.getItem(subscriptionStorageKey) ?? '' : '',
   );
@@ -150,9 +151,60 @@ export function NotificationsCenter() {
   const markRead = useMarkBankNotificationRead();
   const clearNotifications = useClearBankNotifications();
   const saveSubscription = useSaveBankPushSubscription();
+  const saveSubscriber = saveSubscription.mutateAsync;
   const deleteSubscription = useDeleteBankPushSubscription();
   const unreadCount = notifications.data?.filter(item => !item.readAt).length ?? 0;
   const supported = typeof window !== 'undefined' && 'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window;
+
+  useEffect((): (() => void) | undefined => {
+    if (!user?.id || !push.data?.configured || !push.data.siteKey || !supported) return undefined;
+    if (Notification.permission === 'granted') {
+      if (subscriptionStorageKey && localStorage.getItem(subscriptionStorageKey)) return undefined;
+      let cancelled = false;
+      void (async () => {
+        try {
+          const siteKey = push.data?.siteKey;
+          if (!siteKey) return;
+          const api = await loadWebpushr(siteKey);
+          const subscriberId = await fetchWebpushrSubscriberId(api);
+          if (!subscriberId || cancelled) return;
+          const result = await saveSubscriber({ data: { subscriberId } });
+          if (cancelled) return;
+          setSavedSubscriptionId(result.id ?? '');
+          if (result.id && subscriptionStorageKey) {
+            localStorage.setItem(subscriptionStorageKey, result.id);
+          }
+          setPushMessage('Browser alerts are enabled on this device.');
+          await queryClient.invalidateQueries({ queryKey: getGetBankPushConfigQueryKey() });
+        } catch (err) {
+          if (!cancelled) {
+            setPushError(err instanceof Error ? err.message : 'Browser alerts could not be linked automatically.');
+          }
+        }
+      })();
+      return () => { cancelled = true; };
+    }
+
+    if (
+      Notification.permission === 'default' &&
+      permissionPromptStorageKey &&
+      !localStorage.getItem(permissionPromptStorageKey)
+    ) {
+      localStorage.setItem(permissionPromptStorageKey, 'shown');
+      setPushMessage('In-app notifications are on for your account. Tap Enable alerts to allow browser notifications on this device.');
+      setOpen(true);
+    }
+    return undefined;
+  }, [
+    permissionPromptStorageKey,
+    push.data?.configured,
+    push.data?.siteKey,
+    queryClient,
+    saveSubscriber,
+    subscriptionStorageKey,
+    supported,
+    user?.id,
+  ]);
 
   const enablePush = async () => {
     setPushError('');
@@ -166,7 +218,11 @@ export function NotificationsCenter() {
       return;
     }
     try {
-      if (Notification.permission === 'denied') {
+      let permission = Notification.permission;
+      if (permission === 'default') {
+        permission = await Notification.requestPermission();
+      }
+      if (permission !== 'granted') {
         setPushError('Notifications are blocked in browser settings. Allow them there, then try again.');
         return;
       }
@@ -176,7 +232,7 @@ export function NotificationsCenter() {
         setPushMessage('Complete the Webpushr permission prompt, then select Enable alerts again to link this device.');
         return;
       }
-      const result = await saveSubscription.mutateAsync({
+      const result = await saveSubscriber({
         data: { subscriberId },
       });
       setSavedSubscriptionId(result.id ?? '');
@@ -256,7 +312,7 @@ export function NotificationsCenter() {
         </div>
         <div className="shrink-0 border-t border-[#edf0f3] bg-[#fbfcfd] p-3">
           <p className="text-[9px] font-bold text-[#40576f]">Browser alerts</p>
-          <p className="mt-0.5 text-[8px] leading-4 text-[#8492a1]">Opt in to device notifications for account activity.</p>
+          <p className="mt-0.5 text-[8px] leading-4 text-[#8492a1]">In-app notifications are enabled for every account. Browser alerts are linked automatically where permission is already granted.</p>
           {push.isError && <p role="alert" className="mt-1 text-[8px] text-[#a24940]">Push settings are unavailable.</p>}
           {pushError && <p role="alert" data-testid="status-browser-push-error" className="mt-1 rounded-md bg-[#fff1ef] px-2 py-1.5 text-[8px] text-[#a24940]">{pushError}</p>}
           {pushMessage && <p role="status" data-testid="status-browser-push-message" className="mt-1 rounded-md bg-[#eef7f1] px-2 py-1.5 text-[8px] text-[#41755f]">{pushMessage}</p>}

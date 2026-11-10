@@ -2624,13 +2624,7 @@ router.post("/bank/vault/subscription", vaultSubscriptionRequestLimiter, async (
       action: "request_private_vault_subscription",
       reason: `Member submitted payment proof for the ${requestedPlan} plan at NGN ${minorAmountToDecimal(requestedAmountMinor)}.`,
     });
-    const notification = await storeNotification(tx, {
-      userId: user.id,
-      category: "security",
-      title: "Private Vault payment proof received",
-      body: "Your subscription request and payment proof are awaiting administrator review.",
-    });
-    return { user: updated, notification };
+    return { user: updated };
   });
   if ("missing" in result) {
     res.status(404).json({ error: "The Globus account could not be found." });
@@ -2650,7 +2644,6 @@ router.post("/bank/vault/subscription", vaultSubscriptionRequestLimiter, async (
     res.status(403).json({ error: "Your Private Vault session expired. Unlock it again." });
     return;
   }
-  void sendPushToUser(user.id, result.notification);
   res.json(RequestBankVaultSubscriptionResponse.parse(bankVaultStatusPayload(result.user)));
 });
 
@@ -2864,13 +2857,7 @@ router.patch(
         action: "update_transfer_email_preferences",
         reason: "Member updated their Globus transfer alert banner or support-link preference.",
       });
-      const notification = await storeNotification(tx, {
-        userId: user.id,
-        category: "security",
-        title: "Transfer alert preferences updated",
-        body: "Your banner and support-link preferences apply to future transfer emails only.",
-      });
-      return { user: updated, notification };
+      return { user: updated };
     });
     if ("missing" in result) {
       res.status(404).json({ error: "The Globus account could not be found." });
@@ -2884,7 +2871,6 @@ router.patch(
       res.status(400).json({ error: "Enter a non-empty email banner headline." });
       return;
     }
-    void sendPushToUser(user.id, result.notification);
     res.json(
       UpdateBankVaultEmailPreferencesResponse.parse(
         bankVaultEmailPreferencesPayload(result.user),
@@ -3012,13 +2998,7 @@ router.patch(
         action: "update_private_vault_wallet_controls",
         reason: `Member updated ${wallet.currency} wallet controls: ${changedFields}.`,
       });
-      const notification = await storeNotification(tx, {
-        userId: user.id,
-        category: "wallet",
-        title: `${wallet.currency} wallet controls updated`,
-        body: "Your new controls apply to future wallet requests only. Existing transaction records were not changed.",
-      });
-      return { wallet: updated, notification };
+      return { wallet: updated };
     });
     if ("notFound" in result) {
       res.status(404).json({ error: "Wallet not found." });
@@ -3028,7 +3008,6 @@ router.patch(
       res.status(403).json({ error: "Your private vault session expired. Unlock it again." });
       return;
     }
-    void sendPushToUser(user.id, result.notification);
     res.json(
       UpdateBankVaultWalletControlResponse.parse({
         walletId: result.wallet.id,

@@ -2927,23 +2927,7 @@ router.patch(
               : "revoke_private_vault_subscription",
         reason: `${parsed.data.reason.trim()}${paymentDescription}`,
       });
-      const notification = await storeNotification(tx, {
-        userId: user.id,
-        category: "security",
-        title:
-          parsed.data.status === "active"
-            ? "Private Vault access approved"
-            : parsed.data.status === "rejected"
-              ? "Private Vault access request declined"
-              : "Private Vault access updated",
-        body:
-          parsed.data.status === "active"
-            ? `Private Vault access is active${expiresAt ? ` until ${expiresAt.toISOString()}` : ""}. Enter your separate passcode to continue.`
-            : parsed.data.status === "rejected"
-              ? "Your Private Vault access request was declined. Contact Globus support if you need help."
-              : "Private Vault access was removed. Existing vault sessions have been closed.",
-      });
-      return { user: updated, notification, proofPathToDelete };
+      return { user: updated, proofPathToDelete };
     });
     if ("notFound" in result) {
       res.status(404).json({ error: "User record not found." });
@@ -2965,7 +2949,6 @@ router.patch(
           req.log.error({ error }, "Could not delete reviewed private vault payment proof"),
       );
     }
-    void sendPushToUser(result.user.id, result.notification);
     res.json(
       UpdateAdminUserVaultSubscriptionResponse.parse({
         userId: result.user.id,
