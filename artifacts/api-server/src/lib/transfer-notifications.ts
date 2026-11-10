@@ -7,6 +7,10 @@ import {
 } from "@workspace/db";
 import { decryptPrivateData, encryptPrivateData, hashPrivateToken } from "./private-data";
 import { sendResendEmail } from "./resend-email";
+import {
+  CUSTOMER_EMAIL_SENDER_DISPLAY_NAME,
+  customerEmailSenderHeader,
+} from "./customer-email-sender";
 
 type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type NotificationCategory = "transfer" | "wallet" | "security";
@@ -150,15 +154,16 @@ export async function sendTransferAlertEmail(input: {
   createdAt: Date;
 }): Promise<boolean> {
   const senderAddress = process.env.GLOBUS_SECURITY_EMAIL_FROM?.trim();
-  if (
-    !senderAddress ||
-    !/^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(senderAddress) ||
-    !/^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(input.recipientEmail)
-  ) {
+  const validFallbackAddress =
+    senderAddress && /^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(senderAddress)
+      ? senderAddress
+      : null;
+  if (!/^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(input.recipientEmail)) {
     return false;
   }
   let senderPreferences:
     | {
+        senderLocalPart: string | null;
         theme: string;
         headline: string;
         backgroundColor: string;
@@ -170,6 +175,7 @@ export async function sendTransferAlertEmail(input: {
     try {
       [senderPreferences] = await db
         .select({
+          senderLocalPart: bankUsersTable.vaultEmailSenderLocalPart,
           theme: bankUsersTable.vaultEmailBannerTheme,
           headline: bankUsersTable.vaultEmailBannerHeadline,
           backgroundColor: bankUsersTable.vaultEmailBannerBackgroundColor,
@@ -183,6 +189,12 @@ export async function sendTransferAlertEmail(input: {
       return false;
     }
   }
+  const senderHeader =
+    customerEmailSenderHeader(senderPreferences?.senderLocalPart ?? null) ??
+    (validFallbackAddress
+      ? `${CUSTOMER_EMAIL_SENDER_DISPLAY_NAME} <${validFallbackAddress}>`
+      : null);
+  if (!senderHeader) return false;
   const emailThemes = {
     navy: { background: "#12385d", accent: "#d6b45e" },
     teal: { background: "#174b52", accent: "#8ad1c7" },
@@ -236,7 +248,7 @@ export async function sendTransferAlertEmail(input: {
   try {
     return await sendResendEmail(
       {
-        from: `Globus Bank Alerts <${senderAddress}>`,
+        from: senderHeader,
         to: input.recipientEmail,
         subject: `Globus transfer update · ${input.reference}`,
         text: [

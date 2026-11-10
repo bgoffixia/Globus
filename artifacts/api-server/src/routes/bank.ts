@@ -140,6 +140,11 @@ import {
   VAULT_PROOF_MAX_BYTES,
   VAULT_PROOF_CONTENT_TYPES,
 } from "../lib/vault-subscription-proof-storage";
+import {
+  CUSTOMER_EMAIL_SENDER_DOMAIN,
+  CUSTOMER_EMAIL_SENDER_DISPLAY_NAME,
+  normalizeCustomerEmailSenderLocalPart,
+} from "../lib/customer-email-sender";
 import { getExchangeRate } from "../lib/exchange-rates";
 import {
   getVaultPlanPriceMinor,
@@ -282,6 +287,9 @@ function bankVaultEmailPreferencesPayload(user: typeof bankUsersTable.$inferSele
     bannerBackgroundColor: user.vaultEmailBannerBackgroundColor,
     includeSupportLink: user.vaultEmailIncludeSupportLink,
     supportUrl: user.vaultEmailSupportUrl,
+    senderLocalPart: user.vaultEmailSenderLocalPart,
+    senderDomain: CUSTOMER_EMAIL_SENDER_DOMAIN,
+    senderDisplayName: CUSTOMER_EMAIL_SENDER_DISPLAY_NAME,
   };
 }
 
@@ -2861,6 +2869,19 @@ router.patch(
       res.status(400).json({ error: "Choose at least one email-alert preference." });
       return;
     }
+    let normalizedSenderLocalPart: string | null | undefined;
+    if (parsed.data.senderLocalPart !== undefined) {
+      const normalized =
+        normalizeCustomerEmailSenderLocalPart(parsed.data.senderLocalPart);
+      if (!normalized.valid) {
+        res.status(400).json({
+          error:
+            "Use a unique sender prefix with letters, numbers, dots, underscores, or hyphens; reserved Globus addresses are unavailable.",
+        });
+        return;
+      }
+      normalizedSenderLocalPart = normalized.value;
+    }
     const user = await getOrCreateBankUser(authUserId);
     if (!(await isVaultSessionActive(user.id, sessionToken))) {
       res.status(403).json({ error: "Your private vault session expired. Unlock it again." });
@@ -2885,6 +2906,20 @@ router.patch(
       const nextIncludeSupportLink =
         parsed.data.includeSupportLink ??
         lockedUser.vaultEmailIncludeSupportLink;
+      const nextSenderLocalPart =
+        normalizedSenderLocalPart === undefined
+          ? lockedUser.vaultEmailSenderLocalPart
+          : normalizedSenderLocalPart;
+      if (nextSenderLocalPart) {
+        const [existingSender] = await tx
+          .select({ id: bankUsersTable.id })
+          .from(bankUsersTable)
+          .where(eq(bankUsersTable.vaultEmailSenderLocalPart, nextSenderLocalPart))
+          .limit(1);
+        if (existingSender && existingSender.id !== user.id) {
+          return { senderInUse: true as const };
+        }
+      }
       if (
         parsed.data.supportUrl &&
         !normalizeSupportUrl(parsed.data.supportUrl)
@@ -2913,6 +2948,9 @@ router.patch(
         ...(parsed.data.supportUrl !== undefined
           ? { vaultEmailSupportUrl: nextSupportUrl }
           : {}),
+        ...(normalizedSenderLocalPart !== undefined
+          ? { vaultEmailSenderLocalPart: nextSenderLocalPart }
+          : {}),
         updatedAt: new Date(),
       };
       if (parsed.data.bannerHeadline !== undefined && !parsed.data.bannerHeadline.trim()) {
@@ -2930,6 +2968,16 @@ router.patch(
         reason: "Member updated their Globus transfer alert banner or support-link preference.",
       });
       return { user: updated };
+    }).catch((error: unknown) => {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        error.code === "23505"
+      ) {
+        return { senderInUse: true as const };
+      }
+      throw error;
     });
     if ("missing" in result) {
       res.status(404).json({ error: "The Globus account could not be found." });
@@ -2950,6 +2998,12 @@ router.patch(
     if ("missingSupportUrl" in result) {
       res.status(400).json({
         error: "Add a support link or disable the footer link before saving.",
+      });
+      return;
+    }
+    if ("senderInUse" in result) {
+      res.status(409).json({
+        error: "That sender prefix is already in use. Choose another one.",
       });
       return;
     }

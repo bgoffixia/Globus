@@ -80,6 +80,7 @@ export function PrivateVaultPanel() {
   const [bannerBackgroundColor, setBannerBackgroundColor] = useState('#12385d');
   const [includeSupportLink, setIncludeSupportLink] = useState(false);
   const [supportUrl, setSupportUrl] = useState('');
+  const [senderLocalPart, setSenderLocalPart] = useState('');
   const [browserPushMessage, setBrowserPushMessage] = useState('');
   const [browserPushError, setBrowserPushError] = useState('');
   const subscriptionStorageKey = user?.id ? `globus-push-subscription-id:${user.id}` : '';
@@ -194,6 +195,7 @@ export function PrivateVaultPanel() {
     setBannerBackgroundColor(emailPreferences.data.bannerBackgroundColor);
     setIncludeSupportLink(emailPreferences.data.includeSupportLink);
     setSupportUrl(emailPreferences.data.supportUrl ?? '');
+    setSenderLocalPart(emailPreferences.data.senderLocalPart ?? '');
   }, [emailPreferences.data]);
   useEffect(() => {
     if (!selectedTransactionId && transactions.data?.length) {
@@ -392,10 +394,11 @@ export function PrivateVaultPanel() {
           bannerBackgroundColor,
           includeSupportLink,
           supportUrl: supportUrl.trim() || null,
+          senderLocalPart: senderLocalPart.trim().toLowerCase() || null,
         },
       });
       await queryClient.invalidateQueries({ queryKey: getGetBankVaultEmailPreferencesQueryKey() });
-      setMessage('Transfer email banner preferences saved for future alerts.');
+       setMessage('Transfer email banner and sender preferences saved for future alerts.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'The email preferences could not be saved.');
     }
@@ -728,6 +731,13 @@ export function PrivateVaultPanel() {
                   </label>
                   <label className="text-[9px] font-semibold text-[#5c7085]">Banner headline
                     <input disabled={!subscriptionActive} required maxLength={60} value={bannerHeadline} onChange={event => setBannerHeadline(event.target.value)} className={`${fieldClass} mt-1 disabled:bg-[#f3f5f5]`} data-testid="input-vault-email-banner-headline" />
+                  </label>
+                  <label className="text-[9px] font-semibold text-[#5c7085] sm:col-span-2">Customer sender address
+                    <span className="mt-1 flex h-9 items-center overflow-hidden rounded-lg border border-[#dfe6eb] bg-white focus-within:border-[#77aeb0]">
+                      <input disabled={!subscriptionActive} maxLength={64} pattern="[A-Za-z0-9](?:[A-Za-z0-9._-]{0,62}[A-Za-z0-9])?" value={senderLocalPart} onChange={event => setSenderLocalPart(event.target.value)} autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="choose-a-prefix" className="h-full min-w-0 flex-1 bg-transparent px-3 text-[10px] text-[#344b64] outline-none disabled:bg-[#f3f5f5]" data-testid="input-vault-email-sender-prefix" />
+                      <span className="shrink-0 pr-3 text-[9px] font-medium text-[#8190a0]">@{emailPreferences.data?.senderDomain ?? 'globus.website'}</span>
+                    </span>
+                    <span className="mt-1 block text-[8px] font-normal leading-4 text-[#8794a2]">Recipients see “{emailPreferences.data?.senderDisplayName ?? 'GLOBUS BANK'}”. The domain and display name are fixed; this sender identity applies only to transfer alerts.</span>
                   </label>
                   <label className="text-[9px] font-semibold text-[#5c7085]">Custom banner background
                     <span className="mt-1 flex h-9 items-center gap-2 rounded-lg border border-[#dfe6eb] bg-white px-2">

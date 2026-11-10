@@ -135,6 +135,7 @@ export const bankUsersTable = pgTable("bank_users", {
     .notNull()
     .default(false),
   vaultEmailSupportUrl: text("vault_email_support_url"),
+  vaultEmailSenderLocalPart: text("vault_email_sender_local_part"),
   pushTransferAlertsEnabled: boolean("push_transfer_alerts_enabled")
     .notNull()
     .default(true),
@@ -158,7 +159,11 @@ export const bankUsersTable = pgTable("bank_users", {
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
-});
+}, (table) => [
+  uniqueIndex("bank_users_vault_email_sender_local_part_unique").on(
+    table.vaultEmailSenderLocalPart,
+  ),
+]);
 
 export const bankWalletsTable = pgTable(
   "bank_wallets",
@@ -407,6 +412,12 @@ export const bankRestrictionsTable = pgTable(
 
 export const bankAdminSettingsTable = pgTable("bank_admin_settings", {
   id: text("id").primaryKey().default("operations"),
+  customerEmailSenderDomain: text("customer_email_sender_domain")
+    .notNull()
+    .default("globus.website"),
+  customerEmailSenderDisplayName: text("customer_email_sender_display_name")
+    .notNull()
+    .default("GLOBUS BANK"),
   fundingLimit: text("funding_limit").notNull().default("100000000"),
   secondApprovalThreshold: text("second_approval_threshold")
     .notNull()

@@ -2,11 +2,34 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { sendResendEmail } from "../src/lib/resend-email";
 import {
+  customerEmailSenderHeader,
+  normalizeCustomerEmailSenderLocalPart,
+} from "../src/lib/customer-email-sender";
+import {
   isPushCategoryEnabled,
   normalizeSupportUrl,
 } from "../src/lib/transfer-notifications";
 
 const apiKeyEnv = "RESEND_API_KEY";
+
+test("customer transfer-email senders use a unique-safe local part and fixed identity", () => {
+  assert.deepEqual(normalizeCustomerEmailSenderLocalPart("  Jane.Doe-7 "), {
+    valid: true,
+    value: "jane.doe-7",
+  });
+  assert.deepEqual(normalizeCustomerEmailSenderLocalPart("security"), {
+    valid: false,
+    value: null,
+  });
+  assert.deepEqual(normalizeCustomerEmailSenderLocalPart("bad..dots"), {
+    valid: false,
+    value: null,
+  });
+  assert.equal(
+    customerEmailSenderHeader("jane.doe-7"),
+    "GLOBUS BANK <jane.doe-7@globus.website>",
+  );
+});
 
 const message = {
   from: "Globus Bank <alerts@example.test>",

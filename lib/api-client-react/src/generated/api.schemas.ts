@@ -415,6 +415,20 @@ export const BankVaultEmailPreferencesBannerTheme = {
   gold: 'gold',
 } as const;
 
+export type BankVaultEmailPreferencesSenderDomain = typeof BankVaultEmailPreferencesSenderDomain[keyof typeof BankVaultEmailPreferencesSenderDomain];
+
+
+export const BankVaultEmailPreferencesSenderDomain = {
+  globuswebsite: 'globus.website',
+} as const;
+
+export type BankVaultEmailPreferencesSenderDisplayName = typeof BankVaultEmailPreferencesSenderDisplayName[keyof typeof BankVaultEmailPreferencesSenderDisplayName];
+
+
+export const BankVaultEmailPreferencesSenderDisplayName = {
+  GLOBUS_BANK: 'GLOBUS BANK',
+} as const;
+
 export interface BankVaultEmailPreferences {
   bannerTheme: BankVaultEmailPreferencesBannerTheme;
   /**
@@ -430,6 +444,15 @@ export interface BankVaultEmailPreferences {
      * @nullable
      */
   supportUrl: string | null;
+  /**
+     * @minLength 1
+     * @maxLength 64
+     * @nullable
+     * @pattern ^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,62}[A-Za-z0-9])?$
+     */
+  senderLocalPart: string | null;
+  senderDomain: BankVaultEmailPreferencesSenderDomain;
+  senderDisplayName: BankVaultEmailPreferencesSenderDisplayName;
 }
 
 export type BankVaultEmailPreferencesInputBannerTheme = typeof BankVaultEmailPreferencesInputBannerTheme[keyof typeof BankVaultEmailPreferencesInputBannerTheme];
@@ -456,6 +479,13 @@ export interface BankVaultEmailPreferencesInput {
      * @nullable
      */
   supportUrl?: string | null;
+  /**
+     * @minLength 1
+     * @maxLength 64
+     * @nullable
+     * @pattern ^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,62}[A-Za-z0-9])?$
+     */
+  senderLocalPart?: string | null;
 }
 
 export interface BankVaultTransactionNote {
@@ -1632,6 +1662,20 @@ export interface AdminAuditLogPage {
   pageSize: number;
 }
 
+export type AdminSettingsCustomerEmailSenderDomain = typeof AdminSettingsCustomerEmailSenderDomain[keyof typeof AdminSettingsCustomerEmailSenderDomain];
+
+
+export const AdminSettingsCustomerEmailSenderDomain = {
+  globuswebsite: 'globus.website',
+} as const;
+
+export type AdminSettingsCustomerEmailSenderDisplayName = typeof AdminSettingsCustomerEmailSenderDisplayName[keyof typeof AdminSettingsCustomerEmailSenderDisplayName];
+
+
+export const AdminSettingsCustomerEmailSenderDisplayName = {
+  GLOBUS_BANK: 'GLOBUS BANK',
+} as const;
+
 export type AdminSettingsFrozenIncomingPolicy = typeof AdminSettingsFrozenIncomingPolicy[keyof typeof AdminSettingsFrozenIncomingPolicy];
 
 
@@ -1640,6 +1684,8 @@ export const AdminSettingsFrozenIncomingPolicy = {
 } as const;
 
 export interface AdminSettings {
+  customerEmailSenderDomain: AdminSettingsCustomerEmailSenderDomain;
+  customerEmailSenderDisplayName: AdminSettingsCustomerEmailSenderDisplayName;
   fundingLimit: string;
   secondApprovalThreshold: string;
   frozenIncomingPolicy: AdminSettingsFrozenIncomingPolicy;

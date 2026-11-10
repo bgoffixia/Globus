@@ -274,6 +274,7 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /bank/vault/unlock:
     post:
       operationId: unlockBankVault
@@ -2051,7 +2052,10 @@ components:
         bannerBackgroundColor: { type: string, pattern: "^#[0-9A-Fa-f]{6}$" }
         includeSupportLink: { type: boolean }
         supportUrl: { type: ["string", "null"], format: uri, maxLength: 500 }
-      required: [bannerTheme, bannerHeadline, bannerBackgroundColor, includeSupportLink, supportUrl]
+        senderLocalPart: { type: ["string", "null"], minLength: 1, maxLength: 64, pattern: "^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,62}[A-Za-z0-9])?$" }
+        senderDomain: { type: string, enum: [globus.website] }
+        senderDisplayName: { type: string, enum: ["GLOBUS BANK"] }
+      required: [bannerTheme, bannerHeadline, bannerBackgroundColor, includeSupportLink, supportUrl, senderLocalPart, senderDomain, senderDisplayName]
     BankVaultEmailPreferencesInput:
       type: object
       properties:
@@ -2060,6 +2064,7 @@ components:
         bannerBackgroundColor: { type: string, pattern: "^#[0-9A-Fa-f]{6}$" }
         includeSupportLink: { type: boolean }
         supportUrl: { type: ["string", "null"], format: uri, maxLength: 500 }
+        senderLocalPart: { type: ["string", "null"], minLength: 1, maxLength: 64, pattern: "^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,62}[A-Za-z0-9])?$" }
       minProperties: 1
     BankVaultTransactionNote:
       type: object
@@ -2744,6 +2749,8 @@ components:
     AdminSettings:
       type: object
       properties:
+        customerEmailSenderDomain: { type: string, enum: [globus.website] }
+        customerEmailSenderDisplayName: { type: string, enum: ["GLOBUS BANK"] }
         fundingLimit: { type: string }
         secondApprovalThreshold: { type: string }
         frozenIncomingPolicy: { type: string, enum: [allow_frozen] }
@@ -2757,7 +2764,7 @@ components:
         vaultPlan3mPrice: { type: string, pattern: "^[0-9]{1,12}(\\.[0-9]{1,2})?$" }
         vaultPlan1yPrice: { type: string, pattern: "^[0-9]{1,12}(\\.[0-9]{1,2})?$" }
         updatedAt: { type: string, format: date-time }
-      required: [fundingLimit, secondApprovalThreshold, frozenIncomingPolicy, unverifiedDashboardMessage, vaultPaymentMethod, vaultPaymentBankName, vaultPaymentAccountName, vaultPaymentAccountNumber, vaultPaymentInstructions, vaultPlan1mPrice, vaultPlan3mPrice, vaultPlan1yPrice, updatedAt]
+      required: [customerEmailSenderDomain, customerEmailSenderDisplayName, fundingLimit, secondApprovalThreshold, frozenIncomingPolicy, unverifiedDashboardMessage, vaultPaymentMethod, vaultPaymentBankName, vaultPaymentAccountName, vaultPaymentAccountNumber, vaultPaymentInstructions, vaultPlan1mPrice, vaultPlan3mPrice, vaultPlan1yPrice, updatedAt]
     AdminSettingsInput:
       type: object
       properties:

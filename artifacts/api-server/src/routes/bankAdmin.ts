@@ -115,6 +115,10 @@ import {
   isPasswordResetRequired,
   setPasswordResetCache,
 } from "../lib/password-reset";
+import {
+  CUSTOMER_EMAIL_SENDER_DOMAIN,
+  CUSTOMER_EMAIL_SENDER_DISPLAY_NAME,
+} from "../lib/customer-email-sender";
 import { sendPasswordResetEmail } from "../lib/password-reset-email";
 import {
   balanceForWallet,
@@ -313,7 +317,11 @@ const requireAdmin: RequestHandler = async (req, res, next) => {
 async function getOrCreateAdminSettings() {
   await db
     .insert(bankAdminSettingsTable)
-    .values({ id: "operations" })
+    .values({
+      id: "operations",
+      customerEmailSenderDomain: CUSTOMER_EMAIL_SENDER_DOMAIN,
+      customerEmailSenderDisplayName: CUSTOMER_EMAIL_SENDER_DISPLAY_NAME,
+    })
     .onConflictDoNothing();
   const [settings] = await db
     .select()
@@ -326,6 +334,8 @@ async function getOrCreateAdminSettings() {
 
 function adminSettingsPayload(settings: Awaited<ReturnType<typeof getOrCreateAdminSettings>>) {
   return {
+    customerEmailSenderDomain: settings.customerEmailSenderDomain,
+    customerEmailSenderDisplayName: settings.customerEmailSenderDisplayName,
     fundingLimit: settings.fundingLimit,
     secondApprovalThreshold: settings.secondApprovalThreshold,
     frozenIncomingPolicy: "allow_frozen" as const,

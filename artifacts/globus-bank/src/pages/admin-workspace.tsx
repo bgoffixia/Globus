@@ -895,6 +895,19 @@ function SettingsPage() {
             </div>
           </Panel>
         </div>
+        <Panel title="Customer transfer-email identity" eyebrow="Server-managed sender">
+          <div className="grid gap-3 p-5 sm:grid-cols-2">
+            <div className="rounded-xl bg-[#f2f6f1] p-4">
+              <p className="text-[9px] font-bold uppercase tracking-[.1em] text-[#7d8d8e]">Display name</p>
+              <p className="mt-2 text-[13px] font-semibold">{settings.data?.customerEmailSenderDisplayName || 'GLOBUS BANK'}</p>
+            </div>
+            <div className="rounded-xl bg-[#f2f6f1] p-4">
+              <p className="text-[9px] font-bold uppercase tracking-[.1em] text-[#7d8d8e]">Fixed email domain</p>
+              <p className="mt-2 font-mono text-[13px] font-semibold">@{settings.data?.customerEmailSenderDomain || 'globus.website'}</p>
+            </div>
+            <p className="text-[9px] leading-4 text-[#829294] sm:col-span-2">Customers may choose a unique sender prefix in their Private Vault. This fixed identity applies to transfer alerts only; password and security emails keep the configured system sender. The domain must be verified with Resend before it can send.</p>
+          </div>
+        </Panel>
         <Panel title="Exchange-rate quotes" eyebrow="Current rate sources" note="Frankfurter is primary; Grey is a read-only fallback. Neither is used to move money.">
           <div className="space-y-3 p-5 text-[10px] leading-5 text-[#657c82]">
             <p>Globus uses Frankfurter’s published reference rates when a transfer pair is selected. Quotes are cached briefly and refreshed; the rate and retrieval time used are saved with the Globus transaction record.</p>

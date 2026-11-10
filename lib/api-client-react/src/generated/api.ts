@@ -1160,7 +1160,7 @@ return customFetch<BankVaultEmailPreferences>(getUpdateBankVaultEmailPreferences
 
 export const getUpdateBankVaultEmailPreferencesMutationKey = () => ['updateBankVaultEmailPreferences'] as const;
 
-export const getUpdateBankVaultEmailPreferencesMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>,
+export const getUpdateBankVaultEmailPreferencesMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateBankVaultEmailPreferences>>, TError,UpdateBankVaultEmailPreferencesMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof updateBankVaultEmailPreferences>>, TError,UpdateBankVaultEmailPreferencesMutationVariables, TContext> => {
 
@@ -1189,13 +1189,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type UpdateBankVaultEmailPreferencesMutationResult = NonNullable<Awaited<ReturnType<typeof updateBankVaultEmailPreferences>>>
     export type UpdateBankVaultEmailPreferencesMutationBody = BodyType<BankVaultEmailPreferencesInput>
-    export type UpdateBankVaultEmailPreferencesMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>
+    export type UpdateBankVaultEmailPreferencesMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse>
     export type UpdateBankVaultEmailPreferencesMutationVariables = {data: BodyType<BankVaultEmailPreferencesInput>}
 
     /**
  * @summary Update private vault transfer alert branding preferences
  */
-export const useUpdateBankVaultEmailPreferences = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>,
+export const useUpdateBankVaultEmailPreferences = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateBankVaultEmailPreferences>>, TError,UpdateBankVaultEmailPreferencesMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof updateBankVaultEmailPreferences>>,
