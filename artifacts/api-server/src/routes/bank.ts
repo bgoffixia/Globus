@@ -1562,10 +1562,14 @@ router.post(
         "transfer-recipient-email",
       );
     } catch {
-      recipientEmailNotificationSkipped = true;
       req.log.warn(
-        "Optional recipient email could not be encrypted; continuing without recipient notification",
+        "Recipient email could not be secured; transfer was not submitted",
       );
+      res.status(503).json({
+        error:
+          "Recipient email delivery is temporarily unavailable. No transfer was submitted; try again later.",
+      });
+      return;
     }
   }
   const transactionPinResult = await verifyTransactionPin(
