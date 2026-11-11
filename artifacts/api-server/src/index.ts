@@ -1,6 +1,7 @@
 import app from "./app";
 import { backfillCustomerIds } from "./lib/bank";
 import { logger } from "./lib/logger";
+import { isPrivateDataEncryptionConfigured } from "./lib/private-data";
 
 const rawPort = process.env["PORT"];
 
@@ -25,6 +26,10 @@ async function startServer() {
       process.exit(1);
     }
 
+    logger.info(
+      { privateDataEncryptionConfigured: isPrivateDataEncryptionConfigured() },
+      "Private data encryption readiness",
+    );
     logger.info({ port }, "Server listening");
   });
 }

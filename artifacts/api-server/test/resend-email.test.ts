@@ -11,8 +11,25 @@ import {
   normalizeSupportUrl,
   renderSupportFooter,
 } from "../src/lib/transfer-notifications";
+import { isPrivateDataEncryptionConfigured } from "../src/lib/private-data";
 
 const apiKeyEnv = "RESEND_API_KEY";
+const encryptionKeyEnv = "BANK_DETAILS_ENCRYPTION_KEY";
+
+test("private-data encryption readiness validates without returning the key", () => {
+  const previousKey = process.env[encryptionKeyEnv];
+  try {
+    delete process.env[encryptionKeyEnv];
+    assert.equal(isPrivateDataEncryptionConfigured(), false);
+    process.env[encryptionKeyEnv] = "too-short";
+    assert.equal(isPrivateDataEncryptionConfigured(), false);
+    process.env[encryptionKeyEnv] = "x".repeat(32);
+    assert.equal(isPrivateDataEncryptionConfigured(), true);
+  } finally {
+    if (previousKey === undefined) delete process.env[encryptionKeyEnv];
+    else process.env[encryptionKeyEnv] = previousKey;
+  }
+});
 
 test("customer transfer-email senders use a unique-safe local part and fixed identity", () => {
   assert.deepEqual(normalizeCustomerEmailSenderLocalPart("  Jane.Doe-7 "), {

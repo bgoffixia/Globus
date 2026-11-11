@@ -18,6 +18,15 @@ function encryptionKey(): Buffer {
   return key;
 }
 
+export function isPrivateDataEncryptionConfigured(): boolean {
+  const key = process.env[KEY_ENV_NAME]
+    ? decodeAes256Key(process.env[KEY_ENV_NAME]!)
+    : null;
+  if (!key) return false;
+  key.fill(0);
+  return true;
+}
+
 export function encryptPrivateData(value: string, purpose: string): string {
   const key = encryptionKey();
   const iv = randomBytes(12);
