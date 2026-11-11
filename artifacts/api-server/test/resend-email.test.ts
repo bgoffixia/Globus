@@ -7,7 +7,9 @@ import {
 } from "../src/lib/customer-email-sender";
 import {
   isPushCategoryEnabled,
+  normalizeSupportLabel,
   normalizeSupportUrl,
+  renderSupportFooter,
 } from "../src/lib/transfer-notifications";
 
 const apiKeyEnv = "RESEND_API_KEY";
@@ -51,6 +53,21 @@ test("normalizes only safe HTTPS support URLs", () => {
     null,
   );
   assert.equal(normalizeSupportUrl("x".repeat(501)), null);
+});
+
+test("custom footer labels are normalized and safely rendered", () => {
+  assert.equal(normalizeSupportLabel("  Get account help  "), "Get account help");
+  assert.equal(normalizeSupportLabel("   "), null);
+  assert.equal(normalizeSupportLabel("x".repeat(41)), null);
+  assert.equal(normalizeSupportLabel("Help\nSupport"), null);
+  assert.deepEqual(
+    renderSupportFooter("https://support.example.test/help", "<Help & support>"),
+    {
+      text: "<Help & support>: https://support.example.test/help",
+      html: '<footer style="padding:16px 28px 20px;border-top:1px solid #e7ecee;text-align:center"><a href="https://support.example.test/help" style="color:#356e75;font-size:13px;font-weight:700;text-decoration:none">&lt;Help &amp; support&gt;</a></footer>',
+    },
+  );
+  assert.equal(renderSupportFooter(null, "Help").html, "");
 });
 
 test("push delivery rules honor each customer's alert category choices", () => {

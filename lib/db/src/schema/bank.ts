@@ -135,6 +135,9 @@ export const bankUsersTable = pgTable("bank_users", {
     .notNull()
     .default(false),
   vaultEmailSupportUrl: text("vault_email_support_url"),
+  vaultEmailSupportLabel: text("vault_email_support_label")
+    .notNull()
+    .default("Contact support"),
   vaultEmailSenderLocalPart: text("vault_email_sender_local_part"),
   pushTransferAlertsEnabled: boolean("push_transfer_alerts_enabled")
     .notNull()

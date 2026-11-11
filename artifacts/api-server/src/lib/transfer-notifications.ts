@@ -140,6 +140,31 @@ export function normalizeSupportUrl(value: unknown): string | null {
   }
 }
 
+export const DEFAULT_SUPPORT_LINK_LABEL = "Contact support";
+
+export function normalizeSupportLabel(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const label = value.trim();
+  return label.length >= 1 &&
+    label.length <= 40 &&
+    !/[\u0000-\u001f\u007f]/.test(label)
+    ? label
+    : null;
+}
+
+export function renderSupportFooter(
+  supportUrl: string | null,
+  requestedLabel: string | null | undefined,
+): { text: string; html: string } {
+  if (!supportUrl) return { text: "", html: "" };
+  const label =
+    normalizeSupportLabel(requestedLabel) ?? DEFAULT_SUPPORT_LINK_LABEL;
+  return {
+    text: `${label}: ${supportUrl}`,
+    html: `<footer style="padding:16px 28px 20px;border-top:1px solid #e7ecee;text-align:center"><a href="${htmlEscape(supportUrl)}" style="color:#356e75;font-size:13px;font-weight:700;text-decoration:none">${htmlEscape(label)}</a></footer>`,
+  };
+}
+
 export async function sendTransferAlertEmail(input: {
   notificationId?: string;
   senderUserId?: string;
@@ -169,6 +194,7 @@ export async function sendTransferAlertEmail(input: {
         backgroundColor: string;
         includeSupportLink: boolean;
         supportUrl: string | null;
+        supportLabel: string;
       }
     | undefined;
   if (input.senderUserId) {
@@ -181,6 +207,7 @@ export async function sendTransferAlertEmail(input: {
           backgroundColor: bankUsersTable.vaultEmailBannerBackgroundColor,
           includeSupportLink: bankUsersTable.vaultEmailIncludeSupportLink,
           supportUrl: bankUsersTable.vaultEmailSupportUrl,
+          supportLabel: bankUsersTable.vaultEmailSupportLabel,
         })
         .from(bankUsersTable)
         .where(eq(bankUsersTable.id, input.senderUserId))
@@ -221,10 +248,10 @@ export async function sendTransferAlertEmail(input: {
     senderPreferences?.includeSupportLink
       ? normalizeSupportUrl(senderPreferences.supportUrl)
       : null;
-  const supportText = supportUrl ? `Support: ${supportUrl}` : "";
-  const supportHtml = supportUrl
-    ? `<footer style="padding:16px 28px 20px;border-top:1px solid #e7ecee;text-align:center"><a href="${htmlEscape(supportUrl)}" style="color:#356e75;font-size:13px;font-weight:700;text-decoration:none">Sender-provided support link</a></footer>`
-    : "";
+  const { text: supportText, html: supportHtml } = renderSupportFooter(
+    supportUrl,
+    senderPreferences?.supportLabel,
+  );
   const statusText =
     input.status === "completed"
       ? "The sender’s Globus account recorded this transfer."

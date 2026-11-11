@@ -177,6 +177,7 @@ import {
 } from "../lib/bank-vault";
 import { decryptPrivateData, encryptPrivateData } from "../lib/private-data";
 import {
+  normalizeSupportLabel,
   normalizeSupportUrl,
   notificationResponse,
   WebpushrSubscriberAlreadyLinkedError,
@@ -287,6 +288,7 @@ function bankVaultEmailPreferencesPayload(user: typeof bankUsersTable.$inferSele
     bannerBackgroundColor: user.vaultEmailBannerBackgroundColor,
     includeSupportLink: user.vaultEmailIncludeSupportLink,
     supportUrl: user.vaultEmailSupportUrl,
+    supportLabel: user.vaultEmailSupportLabel,
     senderLocalPart: user.vaultEmailSenderLocalPart,
     senderDomain: CUSTOMER_EMAIL_SENDER_DOMAIN,
     senderDisplayName: CUSTOMER_EMAIL_SENDER_DISPLAY_NAME,
@@ -2869,6 +2871,19 @@ router.patch(
       res.status(400).json({ error: "Choose at least one email-alert preference." });
       return;
     }
+    let requestedSupportLabel: string | undefined;
+    if (parsed.data.supportLabel !== undefined) {
+      const normalizedSupportLabel = normalizeSupportLabel(
+        parsed.data.supportLabel,
+      );
+      if (!normalizedSupportLabel) {
+        res.status(400).json({
+          error: "Enter a footer link label from 1 to 40 characters.",
+        });
+        return;
+      }
+      requestedSupportLabel = normalizedSupportLabel;
+    }
     let normalizedSenderLocalPart: string | null | undefined;
     if (parsed.data.senderLocalPart !== undefined) {
       const normalized =
@@ -2906,6 +2921,10 @@ router.patch(
       const nextIncludeSupportLink =
         parsed.data.includeSupportLink ??
         lockedUser.vaultEmailIncludeSupportLink;
+      const nextSupportLabel =
+        requestedSupportLabel === undefined
+          ? lockedUser.vaultEmailSupportLabel
+          : requestedSupportLabel;
       const nextSenderLocalPart =
         normalizedSenderLocalPart === undefined
           ? lockedUser.vaultEmailSenderLocalPart
@@ -2947,6 +2966,9 @@ router.patch(
           : {}),
         ...(parsed.data.supportUrl !== undefined
           ? { vaultEmailSupportUrl: nextSupportUrl }
+          : {}),
+        ...(requestedSupportLabel !== undefined
+          ? { vaultEmailSupportLabel: nextSupportLabel }
           : {}),
         ...(normalizedSenderLocalPart !== undefined
           ? { vaultEmailSenderLocalPart: nextSenderLocalPart }

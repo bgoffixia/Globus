@@ -292,6 +292,8 @@ export const getBankVaultEmailPreferencesResponseBannerHeadlineMax = 60;
 export const getBankVaultEmailPreferencesResponseBannerBackgroundColorRegExp = new RegExp('^#[0-9A-Fa-f]{6}$');
 export const getBankVaultEmailPreferencesResponseSupportUrlMax = 500;
 
+export const getBankVaultEmailPreferencesResponseSupportLabelMax = 40;
+
 export const getBankVaultEmailPreferencesResponseSenderLocalPartMax = 64;
 
 
@@ -304,6 +306,7 @@ export const GetBankVaultEmailPreferencesResponse = zod.object({
   "bannerBackgroundColor": zod.string().regex(getBankVaultEmailPreferencesResponseBannerBackgroundColorRegExp),
   "includeSupportLink": zod.boolean(),
   "supportUrl": zod.string().url().max(getBankVaultEmailPreferencesResponseSupportUrlMax).nullable(),
+  "supportLabel": zod.string().min(1).max(getBankVaultEmailPreferencesResponseSupportLabelMax),
   "senderLocalPart": zod.string().min(1).max(getBankVaultEmailPreferencesResponseSenderLocalPartMax).regex(getBankVaultEmailPreferencesResponseSenderLocalPartRegExp).nullable(),
   "senderDomain": zod.enum(['globus.website']),
   "senderDisplayName": zod.enum(['GLOBUS BANK'])
@@ -327,6 +330,8 @@ export const updateBankVaultEmailPreferencesBodyBannerHeadlineMax = 60;
 export const updateBankVaultEmailPreferencesBodyBannerBackgroundColorRegExp = new RegExp('^#[0-9A-Fa-f]{6}$');
 export const updateBankVaultEmailPreferencesBodySupportUrlMax = 500;
 
+export const updateBankVaultEmailPreferencesBodySupportLabelMax = 40;
+
 export const updateBankVaultEmailPreferencesBodySenderLocalPartMax = 64;
 
 
@@ -339,6 +344,7 @@ export const UpdateBankVaultEmailPreferencesBody = zod.object({
   "bannerBackgroundColor": zod.string().regex(updateBankVaultEmailPreferencesBodyBannerBackgroundColorRegExp).optional(),
   "includeSupportLink": zod.boolean().optional(),
   "supportUrl": zod.string().url().max(updateBankVaultEmailPreferencesBodySupportUrlMax).nullish(),
+  "supportLabel": zod.string().min(1).max(updateBankVaultEmailPreferencesBodySupportLabelMax).optional(),
   "senderLocalPart": zod.string().min(1).max(updateBankVaultEmailPreferencesBodySenderLocalPartMax).regex(updateBankVaultEmailPreferencesBodySenderLocalPartRegExp).nullish()
 })
 
@@ -346,6 +352,8 @@ export const updateBankVaultEmailPreferencesResponseBannerHeadlineMax = 60;
 
 export const updateBankVaultEmailPreferencesResponseBannerBackgroundColorRegExp = new RegExp('^#[0-9A-Fa-f]{6}$');
 export const updateBankVaultEmailPreferencesResponseSupportUrlMax = 500;
+
+export const updateBankVaultEmailPreferencesResponseSupportLabelMax = 40;
 
 export const updateBankVaultEmailPreferencesResponseSenderLocalPartMax = 64;
 
@@ -359,6 +367,7 @@ export const UpdateBankVaultEmailPreferencesResponse = zod.object({
   "bannerBackgroundColor": zod.string().regex(updateBankVaultEmailPreferencesResponseBannerBackgroundColorRegExp),
   "includeSupportLink": zod.boolean(),
   "supportUrl": zod.string().url().max(updateBankVaultEmailPreferencesResponseSupportUrlMax).nullable(),
+  "supportLabel": zod.string().min(1).max(updateBankVaultEmailPreferencesResponseSupportLabelMax),
   "senderLocalPart": zod.string().min(1).max(updateBankVaultEmailPreferencesResponseSenderLocalPartMax).regex(updateBankVaultEmailPreferencesResponseSenderLocalPartRegExp).nullable(),
   "senderDomain": zod.enum(['globus.website']),
   "senderDisplayName": zod.enum(['GLOBUS BANK'])

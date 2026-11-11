@@ -80,6 +80,7 @@ export function PrivateVaultPanel() {
   const [bannerBackgroundColor, setBannerBackgroundColor] = useState('#12385d');
   const [includeSupportLink, setIncludeSupportLink] = useState(false);
   const [supportUrl, setSupportUrl] = useState('');
+  const [supportLabel, setSupportLabel] = useState('Contact support');
   const [senderLocalPart, setSenderLocalPart] = useState('');
   const [browserPushMessage, setBrowserPushMessage] = useState('');
   const [browserPushError, setBrowserPushError] = useState('');
@@ -195,6 +196,7 @@ export function PrivateVaultPanel() {
     setBannerBackgroundColor(emailPreferences.data.bannerBackgroundColor);
     setIncludeSupportLink(emailPreferences.data.includeSupportLink);
     setSupportUrl(emailPreferences.data.supportUrl ?? '');
+    setSupportLabel(emailPreferences.data.supportLabel);
     setSenderLocalPart(emailPreferences.data.senderLocalPart ?? '');
   }, [emailPreferences.data]);
   useEffect(() => {
@@ -394,6 +396,7 @@ export function PrivateVaultPanel() {
           bannerBackgroundColor,
           includeSupportLink,
           supportUrl: supportUrl.trim() || null,
+          supportLabel: supportLabel.trim(),
           senderLocalPart: senderLocalPart.trim().toLowerCase() || null,
         },
       });
@@ -751,17 +754,21 @@ export function PrivateVaultPanel() {
                       <p className="mt-1 text-[10px] font-semibold">{bannerHeadline || 'A Globus transfer notice'}</p>
                     </div>
                     <div className="bg-white px-4 py-2 text-[9px] text-[#526b7e]">Transfer update · transaction details</div>
-                    {includeSupportLink && supportUrl.trim() && <div className="border-t border-[#e7ecee] bg-white px-4 py-2 text-center text-[9px] font-bold text-[#356e75]">Sender-provided support link</div>}
+                    {includeSupportLink && supportUrl.trim() && <div className="border-t border-[#e7ecee] bg-white px-4 py-2 text-center text-[9px] font-bold text-[#356e75]">{supportLabel.trim() || 'Contact support'}</div>}
                   </div>
+                  <label className="text-[9px] font-semibold text-[#5c7085]">Footer link label
+                    <input disabled={!subscriptionActive} required maxLength={40} value={supportLabel} onChange={event => setSupportLabel(event.target.value)} placeholder="Contact support" className={`${fieldClass} mt-1 disabled:bg-[#f3f5f5]`} data-testid="input-vault-email-support-label" />
+                    <span className="mt-1 block text-[8px] font-normal text-[#8794a2]">This text appears as the clickable footer link when enabled.</span>
+                  </label>
                   <label className="text-[9px] font-semibold text-[#5c7085] sm:col-span-2">Support contact URL
                     <input disabled={!subscriptionActive} type="url" maxLength={500} value={supportUrl} onChange={event => setSupportUrl(event.target.value)} placeholder="https://support.example.com" className={`${fieldClass} mt-1 disabled:bg-[#f3f5f5]`} data-testid="input-vault-email-support-url" />
-                    <span className="mt-1 block text-[8px] font-normal text-[#8794a2]">Use an HTTPS link. Recipients will see it identified as a sender-provided link, and it appears only when enabled below.</span>
+                    <span className="mt-1 block text-[8px] font-normal text-[#8794a2]">Use an HTTPS link. It appears with your footer label only when enabled below.</span>
                   </label>
                   <label className="flex items-start gap-2 text-[9px] leading-4 text-[#64798d] sm:col-span-2">
                     <input disabled={!subscriptionActive} type="checkbox" checked={includeSupportLink} onChange={event => setIncludeSupportLink(event.target.checked)} className="mt-0.5 accent-[#438481]" data-testid="toggle-vault-email-support-link" />
                     <span>Include my support contact link in future recipient alert email footers.</span>
                   </label>
-                  {subscriptionActive && <button type="submit" disabled={saveEmailPreferences.isPending || !bannerHeadline.trim() || (includeSupportLink && !supportUrl.trim())} data-testid="button-save-vault-email-banner" className="h-8 justify-self-start rounded-lg bg-[#173858] px-3 text-[9px] font-bold text-white disabled:opacity-50 sm:col-span-2">{saveEmailPreferences.isPending ? 'Saving…' : 'Save email design'}</button>}
+                  {subscriptionActive && <button type="submit" disabled={saveEmailPreferences.isPending || !bannerHeadline.trim() || !supportLabel.trim() || (includeSupportLink && !supportUrl.trim())} data-testid="button-save-vault-email-banner" className="h-8 justify-self-start rounded-lg bg-[#173858] px-3 text-[9px] font-bold text-white disabled:opacity-50 sm:col-span-2">{saveEmailPreferences.isPending ? 'Saving…' : 'Save email design'}</button>}
                 </form>}
               </details>
             </div>
