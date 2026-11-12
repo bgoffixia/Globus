@@ -313,6 +313,16 @@ export const BankVaultStatusPlanCode = {
   '1y': '1y',
 } as const;
 
+export type BankVaultStatusPaymentStatus = typeof BankVaultStatusPaymentStatus[keyof typeof BankVaultStatusPaymentStatus];
+
+
+export const BankVaultStatusPaymentStatus = {
+  none: 'none',
+  pending: 'pending',
+  failed: 'failed',
+  success: 'success',
+} as const;
+
 export interface BankVaultStatus {
   configured: boolean;
   subscriptionStatus: BankVaultStatusSubscriptionStatus;
@@ -330,9 +340,20 @@ export interface BankVaultStatus {
   amountMinor: string | null;
   /** @nullable */
   proofUploadedAt: string | null;
+  paymentStatus: BankVaultStatusPaymentStatus;
+  /** @nullable */
+  paymentReference: string | null;
 }
 
 export type BankVaultSubscriptionRequestResult = BankVaultStatus;
+
+export type BankVaultBillingProvider = typeof BankVaultBillingProvider[keyof typeof BankVaultBillingProvider];
+
+
+export const BankVaultBillingProvider = {
+  paystack: 'paystack',
+  manual: 'manual',
+} as const;
 
 export type BankVaultBillingPlansItemCode = typeof BankVaultBillingPlansItemCode[keyof typeof BankVaultBillingPlansItemCode];
 
@@ -361,12 +382,47 @@ export type BankVaultBillingPlansItem = {
 
 export interface BankVaultBilling {
   configured: boolean;
+  provider: BankVaultBillingProvider;
   paymentMethod: string;
   bankName: string;
   accountName: string;
   accountNumber: string;
   instructions: string;
   plans: BankVaultBillingPlansItem[];
+}
+
+export type BankVaultPaystackInitializeInputPlanCode = typeof BankVaultPaystackInitializeInputPlanCode[keyof typeof BankVaultPaystackInitializeInputPlanCode];
+
+
+export const BankVaultPaystackInitializeInputPlanCode = {
+  '1m': '1m',
+  '3m': '3m',
+  '1y': '1y',
+} as const;
+
+export interface BankVaultPaystackInitializeInput {
+  planCode: BankVaultPaystackInitializeInputPlanCode;
+}
+
+export interface BankVaultPaystackCheckout {
+  authorizationUrl: string;
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  reference: string;
+}
+
+export interface BankVaultPaystackVerifyInput {
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  reference: string;
+}
+
+export interface BankVaultTransferEmailAlert {
+  enabled: boolean;
 }
 
 export type BankVaultProofUploadInputPlanCode = typeof BankVaultProofUploadInputPlanCode[keyof typeof BankVaultProofUploadInputPlanCode];
@@ -430,6 +486,7 @@ export const BankVaultEmailPreferencesSenderDisplayName = {
 } as const;
 
 export interface BankVaultEmailPreferences {
+  transactionEmailAlertsEnabled: boolean;
   bannerTheme: BankVaultEmailPreferencesBannerTheme;
   /**
      * @minLength 1
@@ -470,6 +527,7 @@ export const BankVaultEmailPreferencesInputBannerTheme = {
 } as const;
 
 export interface BankVaultEmailPreferencesInput {
+  transactionEmailAlertsEnabled?: boolean;
   bannerTheme?: BankVaultEmailPreferencesInputBannerTheme;
   /**
      * @minLength 1
@@ -1904,7 +1962,7 @@ export type ConflictResponse = ErrorResponse;
 export type TooManyRequestsResponse = ErrorResponse;
 
 /**
- * The external rate provider is unavailable or does not support this pair
+ * A required external service is temporarily unavailable
  */
 export type ServiceUnavailableResponse = ErrorResponse;
 

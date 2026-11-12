@@ -1,6 +1,7 @@
 import { Router, type IRouter, type RequestHandler, type Response } from "express";
 import { clerkClient, getAuth } from "@clerk/express";
 import { rateLimit } from "express-rate-limit";
+import { randomUUID } from "node:crypto";
 import { and, asc, count, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import {
   DeleteBankVaultTransactionNoteHeader,
@@ -37,6 +38,13 @@ import {
   GetBankPushConfigResponse,
   GetBankPushPreferencesResponse,
   GetBankVaultStatusResponse,
+  GetBankVaultTransferEmailAlertResponse,
+  InitializeBankVaultPaystackPaymentBody,
+  InitializeBankVaultPaystackPaymentHeader,
+  InitializeBankVaultPaystackPaymentResponse,
+  VerifyBankVaultPaystackPaymentBody,
+  VerifyBankVaultPaystackPaymentHeader,
+  VerifyBankVaultPaystackPaymentResponse,
   GetBankVaultBillingHeader,
   GetBankVaultBillingResponse,
   GetBankVaultEmailPreferencesHeader,
@@ -81,6 +89,7 @@ import {
   UpdateBankVaultWalletControlParams,
   UpdateBankVaultWalletControlResponse,
   UpdateBankPushPreferencesBody,
+  UpdateBankPushPreferencesHeader,
   UpdateBankPushPreferencesResponse,
   UnlockBankVaultBody,
   UnlockBankVaultResponse,
@@ -147,11 +156,17 @@ import {
 } from "../lib/customer-email-sender";
 import { getExchangeRate } from "../lib/exchange-rates";
 import {
+  addVaultSubscriptionMonths,
   getVaultPlanPriceMinor,
   getVaultSubscriptionPlan,
   isVaultSubscriptionPlanCode,
   minorAmountToDecimal,
 } from "../lib/vault-subscription";
+import {
+  getPaystackSecretKey,
+  initializePaystackVaultCheckout,
+  verifyPaystackVaultCheckout,
+} from "../lib/paystack-vault";
 import {
   updateTransactionPin as saveTransactionPin,
   verifyTransactionPin,
@@ -173,6 +188,7 @@ import {
   resolveFutureTransferStatus,
   unlockVault,
   updateVaultPasscode,
+  vaultTransferEmailAlertsEnabled,
   vaultSubscriptionStatus,
 } from "../lib/bank-vault";
 import { decryptPrivateData, encryptPrivateData } from "../lib/private-data";
@@ -278,11 +294,18 @@ function bankVaultStatusPayload(user: typeof bankUsersTable.$inferSelect) {
     amountMinor: user.vaultSubscriptionAmountMinor,
     proofUploadedAt:
       user.vaultSubscriptionProofUploadedAt?.toISOString() ?? null,
+    paymentStatus: ["pending", "failed", "success"].includes(
+      user.vaultSubscriptionPaymentStatus,
+    )
+      ? user.vaultSubscriptionPaymentStatus
+      : "none",
+    paymentReference: user.vaultSubscriptionPaymentReference,
   };
 }
 
 function bankVaultEmailPreferencesPayload(user: typeof bankUsersTable.$inferSelect) {
   return {
+    transactionEmailAlertsEnabled: vaultTransferEmailAlertsEnabled(user),
     bannerTheme: user.vaultEmailBannerTheme,
     bannerHeadline: user.vaultEmailBannerHeadline,
     bannerBackgroundColor: user.vaultEmailBannerBackgroundColor,
@@ -1552,7 +1575,17 @@ router.post(
   const accountNumber = parsed.data.recipientAccountNumber
     .replace(/\s+/g, "")
     .toUpperCase();
-  const recipientEmail = parsed.data.recipientEmail?.trim().toLowerCase() ?? "";
+  const requestedRecipientEmail =
+    parsed.data.recipientEmail?.trim().toLowerCase() ?? "";
+  const recipientEmailAlertsEnabled =
+    vaultTransferEmailAlertsEnabled(sender);
+  if (requestedRecipientEmail && !recipientEmailAlertsEnabled) {
+    res.status(409).json({
+      error: "Recipient email alerts are turned off. Enable them in your Private Vault before adding an email.",
+    });
+    return;
+  }
+  const recipientEmail = requestedRecipientEmail;
   let recipientEmailEncrypted: string | null = null;
   let recipientEmailNotificationSkipped = false;
   if (recipientEmail) {
@@ -1608,7 +1641,6 @@ router.post(
     return;
   }
 
-  const completedByMember = sender.verificationStatus === "approved";
   const routingCode = parsed.data.routingCode?.trim().toUpperCase() || null;
   const swiftBic = parsed.data.swiftBic?.trim().toUpperCase() || null;
   const result = await db.transaction(async (tx) => {
@@ -1640,6 +1672,25 @@ router.post(
       return existingRequest
         ? { request: existingRequest, transaction: duplicate, notifications: [] }
         : { error: "The existing request record could not be loaded." };
+    }
+
+    const [lockedSender] = await tx
+      .select()
+      .from(bankUsersTable)
+      .where(eq(bankUsersTable.id, sender.id))
+      .for("update");
+    if (!lockedSender) return { error: "The Globus account could not be found." };
+    if (
+      requestedRecipientEmail &&
+      !vaultTransferEmailAlertsEnabled(lockedSender)
+    ) {
+      return {
+        error:
+          "Recipient email alerts are turned off. Enable them in your Private Vault before adding an email.",
+      };
+    }
+    if (lockedSender.accountStatus !== "active") {
+      return { error: "This account is currently restricted." };
     }
 
     let destinationAmountMinor: bigint;
@@ -1698,7 +1749,7 @@ router.post(
 
     const status = resolveFutureTransferStatus(
       lockedWallet.futureTransferMode,
-      completedByMember,
+      lockedSender.verificationStatus === "approved",
     );
     const reference = createReference();
     const conversionSummary = `${formatMinorAmount(amountMinor)} ${parsed.data.sourceCurrency} converted to ${formatMinorAmount(destinationAmountMinor, parsed.data.destinationCurrency)} ${parsed.data.destinationCurrency} at ${rate}`;
@@ -1738,7 +1789,7 @@ router.post(
         routingCode,
         swiftBic,
         senderName:
-          [sender.firstName, sender.lastName].filter(Boolean).join(" ") ||
+          [lockedSender.firstName, lockedSender.lastName].filter(Boolean).join(" ") ||
           "Globus member",
         recipientAccountName: parsed.data.recipientAccountName.trim(),
         recipientAccountLast4: accountNumber.slice(-4),
@@ -2418,12 +2469,14 @@ router.get("/bank/vault/billing", async (req, res): Promise<void> => {
     return;
   }
   const settings = await getOrCreateAdminSettings();
+  const paystackConfigured = getPaystackSecretKey() !== null;
   res.json(
     GetBankVaultBillingResponse.parse({
-      configured: Boolean(
+      configured: paystackConfigured || Boolean(
         settings.vaultPaymentMethod.trim() &&
           settings.vaultPaymentInstructions.trim(),
       ),
+      provider: paystackConfigured ? "paystack" : "manual",
       paymentMethod: settings.vaultPaymentMethod,
       bankName: settings.vaultPaymentBankName,
       accountName: settings.vaultPaymentAccountName,
@@ -2443,6 +2496,374 @@ router.get("/bank/vault/billing", async (req, res): Promise<void> => {
     }),
   );
 });
+
+router.get("/bank/vault/transfer-email-alert", async (req, res): Promise<void> => {
+  const authUserId = getAuth(req).userId;
+  if (!authUserId) {
+    res.status(401).json({ error: "Sign in to access your Globus account." });
+    return;
+  }
+  const user = await getOrCreateBankUser(authUserId);
+  res.json(
+    GetBankVaultTransferEmailAlertResponse.parse({
+      enabled:
+        vaultTransferEmailAlertsEnabled(user),
+    }),
+  );
+});
+
+router.post(
+  "/bank/vault/paystack/initialize",
+  vaultSubscriptionRequestLimiter,
+  async (req, res): Promise<void> => {
+    const authUserId = getAuth(req).userId;
+    if (!authUserId) {
+      res.status(401).json({ error: "Sign in to purchase Private Vault access." });
+      return;
+    }
+    const sessionToken = req.get("X-Globus-Vault-Session") ?? "";
+    const parsedHeader = InitializeBankVaultPaystackPaymentHeader.safeParse({
+      "X-Globus-Vault-Session": sessionToken,
+    });
+    const parsed = InitializeBankVaultPaystackPaymentBody.safeParse(req.body);
+    if (!parsedHeader.success || !parsed.success) {
+      res.status(400).json({
+        error: !parsedHeader.success
+          ? parsedHeader.error.message
+          : parsed.error?.message ?? "Choose a valid Private Vault plan.",
+      });
+      return;
+    }
+    const secretKey = getPaystackSecretKey();
+    if (!secretKey) {
+      res.status(503).json({ error: "Vault checkout is temporarily unavailable." });
+      return;
+    }
+    const user = await getOrCreateBankUser(authUserId);
+    if (!(await isVaultPasscodeSessionValid(user.id, sessionToken))) {
+      res.status(403).json({ error: "Enter your Private Vault passcode before checkout." });
+      return;
+    }
+    if (!user.email || !isVaultSubscriptionPlanCode(parsed.data.planCode)) {
+      res.status(400).json({ error: "A valid account email and subscription plan are required." });
+      return;
+    }
+    const settings = await getOrCreateAdminSettings();
+    const amountMinor = getVaultPlanPriceMinor(settings, parsed.data.planCode);
+    if (!/^[0-9]+$/.test(amountMinor) || BigInt(amountMinor) <= 0n) {
+      res.status(409).json({ error: "This access plan is temporarily unavailable." });
+      return;
+    }
+    const forwardedHost = req.get("x-forwarded-host")?.split(",")[0]?.trim();
+    const requestHost = forwardedHost || req.get("host");
+    const originHeader = req.get("origin");
+    let callbackUrl: string;
+    try {
+      if (!requestHost) throw new Error("Missing request host.");
+      const origin = originHeader
+        ? new URL(originHeader)
+        : new URL(`${req.protocol}://${requestHost}`);
+      if (origin.host !== requestHost) throw new Error("Origin mismatch.");
+      callbackUrl = new URL("/private-vault", origin).toString();
+    } catch {
+      res.status(400).json({ error: "The checkout return address could not be validated." });
+      return;
+    }
+    const reference = `GBV-${randomUUID()}`;
+    const now = new Date();
+    const prepared = await db.transaction(async (tx) => {
+      const [lockedUser] = await tx
+        .select()
+        .from(bankUsersTable)
+        .where(eq(bankUsersTable.id, user.id))
+        .for("update");
+      if (!lockedUser) return { missing: true as const };
+      const currentStatus = vaultSubscriptionStatus(
+        lockedUser.vaultSubscriptionStatus,
+        lockedUser.vaultSubscriptionExpiresAt,
+      );
+      if (currentStatus === "active" || currentStatus === "pending") {
+        return { conflict: currentStatus };
+      }
+      if (lockedUser.vaultSubscriptionPaymentStatus === "pending") {
+        return {
+          paymentPending: true as const,
+          reference: lockedUser.vaultSubscriptionPaymentReference,
+        };
+      }
+      if (!(await isVaultPasscodeSessionValid(user.id, sessionToken))) {
+        return { expired: true as const };
+      }
+      const oldProofPath = lockedUser.vaultSubscriptionProofObjectPath;
+      const [updated] = await tx
+        .update(bankUsersTable)
+        .set({
+          vaultSubscriptionPlan: parsed.data.planCode,
+          vaultSubscriptionAmountMinor: amountMinor,
+          vaultSubscriptionPaymentReference: reference,
+          vaultSubscriptionPaymentStatus: "pending",
+          vaultSubscriptionPaymentInitializedAt: now,
+          vaultSubscriptionPaymentVerifiedAt: null,
+          vaultSubscriptionRequestedAt: now,
+          vaultSubscriptionReviewedAt: null,
+          vaultSubscriptionReviewedByUserId: null,
+          vaultSubscriptionReason: null,
+          vaultSubscriptionExpiresAt: null,
+          vaultSubscriptionProofObjectPath: null,
+          vaultSubscriptionProofContentType: null,
+          vaultSubscriptionProofSizeBytes: null,
+          vaultSubscriptionProofFileName: null,
+          vaultSubscriptionProofUploadedAt: null,
+          updatedAt: now,
+        })
+        .where(eq(bankUsersTable.id, user.id))
+        .returning();
+      return { user: updated, oldProofPath };
+    });
+    if ("missing" in prepared) {
+      res.status(404).json({ error: "The Globus account could not be found." });
+      return;
+    }
+    if ("expired" in prepared) {
+      res.status(403).json({ error: "Your Private Vault session expired. Unlock it again." });
+      return;
+    }
+    if ("conflict" in prepared) {
+      res.status(409).json({
+        error: prepared.conflict === "pending"
+          ? "A subscription request is already awaiting administrator review."
+          : "Private Vault access is already active.",
+      });
+      return;
+    }
+    if ("paymentPending" in prepared) {
+      res.status(409).json({
+        error: "A Paystack payment is already in progress. Verify it before starting another checkout.",
+      });
+      return;
+    }
+    if (prepared.oldProofPath) {
+      void deleteVaultSubscriptionProof(prepared.oldProofPath, user.id).catch(
+        (error) =>
+          req.log.error(
+            { error },
+            "Could not remove replaced Private Vault payment proof",
+          ),
+      );
+    }
+
+    try {
+      const checkout = await initializePaystackVaultCheckout({
+        secretKey,
+        email: user.email,
+        amountMinor,
+        reference,
+        callbackUrl,
+        userId: user.id,
+        planCode: parsed.data.planCode,
+      });
+      await db.insert(bankAuditLogsTable).values({
+        actorUserId: user.id,
+        targetUserId: user.id,
+        action: "initialize_private_vault_paystack_payment",
+        reason: `Member started Paystack checkout for the ${parsed.data.planCode} Private Vault plan (${amountMinor} NGN minor units).`,
+      });
+      res.json(InitializeBankVaultPaystackPaymentResponse.parse(checkout));
+    } catch (error) {
+      req.log.error({ error, reference }, "Private Vault Paystack checkout initialization failed");
+      await db
+        .update(bankUsersTable)
+        .set({
+          vaultSubscriptionPaymentStatus: "failed",
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(bankUsersTable.id, user.id),
+            eq(bankUsersTable.vaultSubscriptionPaymentReference, reference),
+            eq(bankUsersTable.vaultSubscriptionPaymentStatus, "pending"),
+          ),
+        );
+      res.status(503).json({ error: "Paystack checkout is temporarily unavailable. Try again." });
+    }
+  },
+);
+
+router.post(
+  "/bank/vault/paystack/verify",
+  vaultSubscriptionRequestLimiter,
+  async (req, res): Promise<void> => {
+    const authUserId = getAuth(req).userId;
+    if (!authUserId) {
+      res.status(401).json({ error: "Sign in to verify your Private Vault payment." });
+      return;
+    }
+    const sessionToken = req.get("X-Globus-Vault-Session") ?? "";
+    const parsedHeader = VerifyBankVaultPaystackPaymentHeader.safeParse({
+      "X-Globus-Vault-Session": sessionToken,
+    });
+    const parsed = VerifyBankVaultPaystackPaymentBody.safeParse(req.body);
+    if (!parsedHeader.success || !parsed.success) {
+      res.status(400).json({
+        error: !parsedHeader.success
+          ? parsedHeader.error.message
+          : parsed.error?.message ?? "Enter a valid payment reference.",
+      });
+      return;
+    }
+    const secretKey = getPaystackSecretKey();
+    if (!secretKey) {
+      res.status(503).json({ error: "Payment verification is temporarily unavailable." });
+      return;
+    }
+    const user = await getOrCreateBankUser(authUserId);
+    if (!(await isVaultPasscodeSessionValid(user.id, sessionToken))) {
+      res.status(403).json({ error: "Enter your Private Vault passcode before verifying payment." });
+      return;
+    }
+    if (user.vaultSubscriptionPaymentReference !== parsed.data.reference) {
+      res.status(404).json({ error: "That payment reference does not belong to this account." });
+      return;
+    }
+    if (user.vaultSubscriptionPaymentStatus === "success") {
+      res.json(VerifyBankVaultPaystackPaymentResponse.parse(bankVaultStatusPayload(user)));
+      return;
+    }
+    if (user.vaultSubscriptionPaymentStatus !== "pending") {
+      res.status(409).json({ error: "There is no pending Paystack payment to verify." });
+      return;
+    }
+
+    let payment;
+    try {
+      payment = await verifyPaystackVaultCheckout({
+        secretKey,
+        reference: parsed.data.reference,
+      });
+    } catch (error) {
+      req.log.error(
+        { error, reference: parsed.data.reference },
+        "Private Vault Paystack payment verification failed",
+      );
+      res.status(503).json({ error: "Paystack verification is temporarily unavailable. Try again." });
+      return;
+    }
+    if (
+      payment.amount !== Number(user.vaultSubscriptionAmountMinor) ||
+      payment.currency !== "NGN" ||
+      payment.metadata?.userId !== user.id ||
+      payment.metadata?.planCode !== user.vaultSubscriptionPlan
+    ) {
+      req.log.warn(
+        { reference: parsed.data.reference },
+        "Paystack payment details did not match the stored Private Vault checkout",
+      );
+      res.status(409).json({ error: "The verified payment does not match this account’s selected plan." });
+      return;
+    }
+    if (payment.status !== "success") {
+      if (["failed", "abandoned"].includes(payment.status)) {
+        await db.transaction(async (tx) => {
+          const [lockedUser] = await tx
+            .select()
+            .from(bankUsersTable)
+            .where(eq(bankUsersTable.id, user.id))
+            .for("update");
+          if (
+            !lockedUser ||
+            lockedUser.vaultSubscriptionPaymentReference !== parsed.data.reference ||
+            lockedUser.vaultSubscriptionPaymentStatus !== "pending"
+          ) return;
+          await tx
+            .update(bankUsersTable)
+            .set({
+              vaultSubscriptionPaymentStatus: "failed",
+              updatedAt: new Date(),
+            })
+            .where(eq(bankUsersTable.id, user.id));
+          await tx.insert(bankAuditLogsTable).values({
+            actorUserId: user.id,
+            targetUserId: user.id,
+            action: "fail_private_vault_paystack_payment",
+            reason: `Paystack verified the ${user.vaultSubscriptionPlan} Private Vault checkout as ${payment.status}.`,
+          });
+        });
+        res.status(409).json({ error: "Paystack reports that this payment did not complete. Start a new checkout to retry." });
+        return;
+      }
+      res.status(409).json({ error: "Payment is not complete yet. Wait a moment, then check again." });
+      return;
+    }
+
+    const result = await db.transaction(async (tx) => {
+      const [lockedUser] = await tx
+        .select()
+        .from(bankUsersTable)
+        .where(eq(bankUsersTable.id, user.id))
+        .for("update");
+      if (!lockedUser) return { missing: true as const };
+      if (lockedUser.vaultSubscriptionPaymentReference !== parsed.data.reference) {
+        return { mismatch: true as const };
+      }
+      if (lockedUser.vaultSubscriptionPaymentStatus === "success") {
+        return { user: lockedUser };
+      }
+      if (
+        lockedUser.vaultSubscriptionPaymentStatus !== "pending" ||
+        !lockedUser.vaultSubscriptionPlan ||
+        !isVaultSubscriptionPlanCode(lockedUser.vaultSubscriptionPlan) ||
+        lockedUser.vaultSubscriptionAmountMinor !== String(payment.amount)
+      ) {
+        return { changed: true as const };
+      }
+      if (!(await isVaultPasscodeSessionValid(user.id, sessionToken))) {
+        return { expired: true as const };
+      }
+      const plan = getVaultSubscriptionPlan(lockedUser.vaultSubscriptionPlan);
+      if (!plan) return { changed: true as const };
+      const now = new Date();
+      const expiresAt = addVaultSubscriptionMonths(now, plan.durationMonths);
+      const [updated] = await tx
+        .update(bankUsersTable)
+        .set({
+          vaultSubscriptionStatus: "active",
+          vaultSubscriptionExpiresAt: expiresAt,
+          vaultSubscriptionPaymentStatus: "success",
+          vaultSubscriptionPaymentVerifiedAt: now,
+          vaultSubscriptionReason: `Paystack verified payment ${parsed.data.reference} for the ${plan.label} Private Vault plan.`,
+          vaultSubscriptionReviewedAt: null,
+          vaultSubscriptionReviewedByUserId: null,
+          updatedAt: now,
+        })
+        .where(eq(bankUsersTable.id, user.id))
+        .returning();
+      await tx.insert(bankAuditLogsTable).values({
+        actorUserId: user.id,
+        targetUserId: user.id,
+        action: "activate_private_vault_paystack_subscription",
+        reason: `Paystack verified reference ${parsed.data.reference} for ${plan.label} at ${lockedUser.vaultSubscriptionAmountMinor} NGN minor units. Access expires ${expiresAt.toISOString()}.`,
+      });
+      return { user: updated };
+    });
+    if ("missing" in result) {
+      res.status(404).json({ error: "The Globus account could not be found." });
+      return;
+    }
+    if ("mismatch" in result || "changed" in result) {
+      res.status(409).json({ error: "This payment no longer matches the pending Private Vault checkout." });
+      return;
+    }
+    if ("expired" in result) {
+      res.status(403).json({ error: "Your Private Vault session expired. Unlock it again." });
+      return;
+    }
+    res.json(
+      VerifyBankVaultPaystackPaymentResponse.parse(
+        bankVaultStatusPayload(result.user),
+      ),
+    );
+  },
+);
 
 router.post(
   "/bank/vault/subscription/proof-upload-url",
@@ -2953,6 +3374,12 @@ router.patch(
         return { missingSupportUrl: true as const };
       }
       const changes = {
+        ...(parsed.data.transactionEmailAlertsEnabled !== undefined
+          ? {
+              vaultEmailAlertsEnabled:
+                parsed.data.transactionEmailAlertsEnabled,
+            }
+          : {}),
         ...(parsed.data.bannerTheme !== undefined
           ? { vaultEmailBannerTheme: parsed.data.bannerTheme }
           : {}),
@@ -2991,7 +3418,7 @@ router.patch(
         actorUserId: user.id,
         targetUserId: user.id,
         action: "update_transfer_email_preferences",
-        reason: "Member updated their Globus transfer alert banner or support-link preference.",
+        reason: "Member updated private vault transaction-email delivery or alert design preferences.",
       });
       return { user: updated };
     }).catch((error: unknown) => {
@@ -3484,9 +3911,17 @@ router.patch(
       res.status(401).json({ error: "Sign in to access your Globus account." });
       return;
     }
+    const sessionToken = req.get("X-Globus-Vault-Session") ?? "";
+    const parsedHeader = UpdateBankPushPreferencesHeader.safeParse({
+      "X-Globus-Vault-Session": sessionToken,
+    });
     const parsed = UpdateBankPushPreferencesBody.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.message });
+    if (!parsedHeader.success || !parsed.success) {
+      res.status(400).json({
+        error: !parsedHeader.success
+          ? parsedHeader.error.message
+          : parsed.error?.message ?? "Invalid push alert preferences.",
+      });
       return;
     }
     if (!Object.keys(parsed.data).length) {
@@ -3494,6 +3929,10 @@ router.patch(
       return;
     }
     const user = await getOrCreateBankUser(authUserId);
+    if (!(await isVaultSessionActive(user.id, sessionToken))) {
+      res.status(403).json({ error: "An active Private Vault subscription is required to change alert settings." });
+      return;
+    }
     const result = await db.transaction(async (tx) => {
       const [lockedUser] = await tx
         .select()
@@ -3501,6 +3940,9 @@ router.patch(
         .where(eq(bankUsersTable.id, user.id))
         .for("update");
       if (!lockedUser) return null;
+      if (!(await isVaultSessionActive(user.id, sessionToken))) {
+        return { expired: true as const };
+      }
       const [updated] = await tx
         .update(bankUsersTable)
         .set({
@@ -3523,15 +3965,19 @@ router.patch(
         action: "update_push_notification_preferences",
         reason: "Member updated push notification category preferences.",
       });
-      return updated;
+      return { updated };
     });
     if (!result) {
       res.status(404).json({ error: "The Globus account could not be found." });
       return;
     }
+    if ("expired" in result) {
+      res.status(403).json({ error: "Your Private Vault session expired or the subscription is no longer active." });
+      return;
+    }
     res.json(
       UpdateBankPushPreferencesResponse.parse(
-        bankPushPreferencesPayload(result),
+        bankPushPreferencesPayload(result.updated),
       ),
     );
   },

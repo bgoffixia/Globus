@@ -120,7 +120,7 @@ paths:
     get:
       operationId: getBankVaultBilling
       tags: [bank]
-      summary: Read private vault manual payment instructions and access plans
+      summary: Read private vault subscription checkout options and access plans
       parameters:
         - name: X-Globus-Vault-Session
           in: header
@@ -128,12 +128,76 @@ paths:
           schema: { type: string, minLength: 32, maxLength: 128 }
       responses:
         "200":
-          description: Current manual payment instructions and plans
+          description: Subscription checkout provider and access plans
           content:
             application/json:
               schema: { $ref: "#/components/schemas/BankVaultBilling" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+  /bank/vault/paystack/initialize:
+    post:
+      operationId: initializeBankVaultPaystackPayment
+      tags: [bank]
+      summary: Initialize a server-verified Paystack checkout for a vault plan
+      parameters:
+        - name: X-Globus-Vault-Session
+          in: header
+          required: true
+          schema: { type: string, minLength: 32, maxLength: 128 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BankVaultPaystackInitializeInput" }
+      responses:
+        "200":
+          description: Hosted Paystack checkout URL
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankVaultPaystackCheckout" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /bank/vault/paystack/verify:
+    post:
+      operationId: verifyBankVaultPaystackPayment
+      tags: [bank]
+      summary: Verify a Paystack checkout and activate the matching vault plan
+      parameters:
+        - name: X-Globus-Vault-Session
+          in: header
+          required: true
+          schema: { type: string, minLength: 32, maxLength: 128 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BankVaultPaystackVerifyInput" }
+      responses:
+        "200":
+          description: Verified payment and current vault subscription
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankVaultStatus" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /bank/vault/transfer-email-alert:
+    get:
+      operationId: getBankVaultTransferEmailAlert
+      tags: [bank]
+      summary: Read whether recipient email alerts are enabled for the signed-in customer
+      responses:
+        "200":
+          description: Current transaction email alert toggle
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankVaultTransferEmailAlert" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
   /bank/vault/subscription/proof-upload-url:
     post:
       operationId: createBankVaultSubscriptionProofUploadUrl
@@ -427,6 +491,11 @@ paths:
       operationId: updateBankPushPreferences
       tags: [bank]
       summary: Update the authenticated customer's push alert categories
+      parameters:
+        - name: X-Globus-Vault-Session
+          in: header
+          required: true
+          schema: { type: string, minLength: 32, maxLength: 128 }
       requestBody:
         required: true
         content:
@@ -440,6 +509,7 @@ paths:
               schema: { $ref: "#/components/schemas/BankPushPreferences" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
   /bank/push/config:
     get:
@@ -1858,7 +1928,7 @@ components:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
     ServiceUnavailable:
-      description: The external rate provider is unavailable or does not support this pair
+      description: A required external service is temporarily unavailable
       content:
         application/json:
           schema:
@@ -2007,13 +2077,16 @@ components:
         planCode: { type: ["string", "null"], enum: [1m, 3m, 1y, null] }
         amountMinor: { type: ["string", "null"], pattern: "^[0-9]+$" }
         proofUploadedAt: { type: ["string", "null"], format: date-time }
-      required: [configured, subscriptionStatus, subscriptionActive, requestedAt, expiresAt, planCode, amountMinor, proofUploadedAt]
+        paymentStatus: { type: string, enum: [none, pending, failed, success] }
+        paymentReference: { type: ["string", "null"] }
+      required: [configured, subscriptionStatus, subscriptionActive, requestedAt, expiresAt, planCode, amountMinor, proofUploadedAt, paymentStatus, paymentReference]
     BankVaultSubscriptionRequestResult:
       $ref: "#/components/schemas/BankVaultStatus"
     BankVaultBilling:
       type: object
       properties:
         configured: { type: boolean }
+        provider: { type: string, enum: [paystack, manual] }
         paymentMethod: { type: string }
         bankName: { type: string }
         accountName: { type: string }
@@ -2030,7 +2103,28 @@ components:
               priceMinor: { type: string, pattern: "^[0-9]+$" }
               currency: { type: string, enum: [NGN] }
             required: [code, label, durationMonths, priceMinor, currency]
-      required: [configured, paymentMethod, bankName, accountName, accountNumber, instructions, plans]
+      required: [configured, provider, paymentMethod, bankName, accountName, accountNumber, instructions, plans]
+    BankVaultPaystackInitializeInput:
+      type: object
+      properties:
+        planCode: { type: string, enum: [1m, 3m, 1y] }
+      required: [planCode]
+    BankVaultPaystackCheckout:
+      type: object
+      properties:
+        authorizationUrl: { type: string, format: uri }
+        reference: { type: string, minLength: 1, maxLength: 100 }
+      required: [authorizationUrl, reference]
+    BankVaultPaystackVerifyInput:
+      type: object
+      properties:
+        reference: { type: string, minLength: 1, maxLength: 100 }
+      required: [reference]
+    BankVaultTransferEmailAlert:
+      type: object
+      properties:
+        enabled: { type: boolean }
+      required: [enabled]
     BankVaultProofUploadInput:
       type: object
       properties:
@@ -2047,6 +2141,7 @@ components:
     BankVaultEmailPreferences:
       type: object
       properties:
+        transactionEmailAlertsEnabled: { type: boolean }
         bannerTheme: { type: string, enum: [navy, teal, gold] }
         bannerHeadline: { type: string, minLength: 1, maxLength: 60 }
         bannerBackgroundColor: { type: string, pattern: "^#[0-9A-Fa-f]{6}$" }
@@ -2056,10 +2151,11 @@ components:
         senderLocalPart: { type: ["string", "null"], minLength: 1, maxLength: 64, pattern: "^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,62}[A-Za-z0-9])?$" }
         senderDomain: { type: string, enum: [globus.website] }
         senderDisplayName: { type: string, enum: ["GLOBUS BANK"] }
-      required: [bannerTheme, bannerHeadline, bannerBackgroundColor, includeSupportLink, supportUrl, supportLabel, senderLocalPart, senderDomain, senderDisplayName]
+      required: [transactionEmailAlertsEnabled, bannerTheme, bannerHeadline, bannerBackgroundColor, includeSupportLink, supportUrl, supportLabel, senderLocalPart, senderDomain, senderDisplayName]
     BankVaultEmailPreferencesInput:
       type: object
       properties:
+        transactionEmailAlertsEnabled: { type: boolean }
         bannerTheme: { type: string, enum: [navy, teal, gold] }
         bannerHeadline: { type: string, minLength: 1, maxLength: 60 }
         bannerBackgroundColor: { type: string, pattern: "^#[0-9A-Fa-f]{6}$" }

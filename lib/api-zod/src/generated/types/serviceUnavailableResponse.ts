@@ -8,6 +8,6 @@
 import type { ErrorResponse } from './errorResponse';
 
 /**
- * The external rate provider is unavailable or does not support this pair
+ * A required external service is temporarily unavailable
  */
 export type ServiceUnavailableResponse = ErrorResponse;

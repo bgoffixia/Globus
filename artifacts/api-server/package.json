@@ -12,6 +12,7 @@
     "test:financial-access": "tsx --test test/financial-access.test.ts",
     "test:sensitive-bank-details": "tsx --test test/sensitive-bank-details.test.ts",
     "test:private-vault": "tsx --test test/private-vault.test.ts",
+    "test:paystack-vault": "tsx --test test/paystack-vault.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

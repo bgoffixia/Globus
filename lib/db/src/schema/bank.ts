@@ -106,6 +106,20 @@ export const bankUsersTable = pgTable("bank_users", {
   }),
   vaultSubscriptionPlan: text("vault_subscription_plan"),
   vaultSubscriptionAmountMinor: text("vault_subscription_amount_minor"),
+  vaultSubscriptionPaymentReference: text(
+    "vault_subscription_payment_reference",
+  ),
+  vaultSubscriptionPaymentStatus: text("vault_subscription_payment_status")
+    .notNull()
+    .default("none"),
+  vaultSubscriptionPaymentInitializedAt: timestamp(
+    "vault_subscription_payment_initialized_at",
+    { withTimezone: true },
+  ),
+  vaultSubscriptionPaymentVerifiedAt: timestamp(
+    "vault_subscription_payment_verified_at",
+    { withTimezone: true },
+  ),
   vaultSubscriptionProofObjectPath: text(
     "vault_subscription_proof_object_path",
   ),
@@ -139,15 +153,18 @@ export const bankUsersTable = pgTable("bank_users", {
     .notNull()
     .default("Contact support"),
   vaultEmailSenderLocalPart: text("vault_email_sender_local_part"),
+  vaultEmailAlertsEnabled: boolean("vault_email_alerts_enabled")
+    .notNull()
+    .default(false),
   pushTransferAlertsEnabled: boolean("push_transfer_alerts_enabled")
     .notNull()
-    .default(true),
+    .default(false),
   pushWalletAlertsEnabled: boolean("push_wallet_alerts_enabled")
     .notNull()
-    .default(true),
+    .default(false),
   pushSecurityAlertsEnabled: boolean("push_security_alerts_enabled")
     .notNull()
-    .default(true),
+    .default(false),
   verificationStatus: text("verification_status").notNull().default("not_started"),
   verificationNote: text("verification_note"),
   accountStatus: text("account_status").notNull().default("active"),
@@ -165,6 +182,9 @@ export const bankUsersTable = pgTable("bank_users", {
 }, (table) => [
   uniqueIndex("bank_users_vault_email_sender_local_part_unique").on(
     table.vaultEmailSenderLocalPart,
+  ),
+  uniqueIndex("bank_users_vault_subscription_payment_reference_unique").on(
+    table.vaultSubscriptionPaymentReference,
   ),
 ]);
 

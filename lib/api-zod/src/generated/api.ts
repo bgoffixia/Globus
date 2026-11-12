@@ -72,7 +72,9 @@ export const GetBankVaultStatusResponse = zod.object({
   "expiresAt": zod.coerce.date().nullable(),
   "planCode": zod.union([zod.literal('1m'),zod.literal('3m'),zod.literal('1y'),zod.literal(null)]).nullable(),
   "amountMinor": zod.string().regex(getBankVaultStatusResponseAmountMinorRegExp).nullable(),
-  "proofUploadedAt": zod.coerce.date().nullable()
+  "proofUploadedAt": zod.coerce.date().nullable(),
+  "paymentStatus": zod.enum(['none', 'pending', 'failed', 'success']),
+  "paymentReference": zod.string().nullable()
 })
 
 
@@ -97,7 +99,9 @@ export const InitializeBankVaultPasscodeResponse = zod.object({
   "expiresAt": zod.coerce.date().nullable(),
   "planCode": zod.union([zod.literal('1m'),zod.literal('3m'),zod.literal('1y'),zod.literal(null)]).nullable(),
   "amountMinor": zod.string().regex(initializeBankVaultPasscodeResponseAmountMinorRegExp).nullable(),
-  "proofUploadedAt": zod.coerce.date().nullable()
+  "proofUploadedAt": zod.coerce.date().nullable(),
+  "paymentStatus": zod.enum(['none', 'pending', 'failed', 'success']),
+  "paymentReference": zod.string().nullable()
 })
 
 
@@ -124,12 +128,14 @@ export const RequestBankVaultSubscriptionResponse = zod.object({
   "expiresAt": zod.coerce.date().nullable(),
   "planCode": zod.union([zod.literal('1m'),zod.literal('3m'),zod.literal('1y'),zod.literal(null)]).nullable(),
   "amountMinor": zod.string().regex(requestBankVaultSubscriptionResponseAmountMinorRegExp).nullable(),
-  "proofUploadedAt": zod.coerce.date().nullable()
+  "proofUploadedAt": zod.coerce.date().nullable(),
+  "paymentStatus": zod.enum(['none', 'pending', 'failed', 'success']),
+  "paymentReference": zod.string().nullable()
 })
 
 
 /**
- * @summary Read private vault manual payment instructions and access plans
+ * @summary Read private vault subscription checkout options and access plans
  */
 export const getBankVaultBillingHeaderXGlobusVaultSessionMin = 32;
 export const getBankVaultBillingHeaderXGlobusVaultSessionMax = 128;
@@ -145,6 +151,7 @@ export const getBankVaultBillingResponsePlansItemPriceMinorRegExp = new RegExp('
 
 export const GetBankVaultBillingResponse = zod.object({
   "configured": zod.boolean(),
+  "provider": zod.enum(['paystack', 'manual']),
   "paymentMethod": zod.string(),
   "bankName": zod.string(),
   "accountName": zod.string(),
@@ -157,6 +164,77 @@ export const GetBankVaultBillingResponse = zod.object({
   "priceMinor": zod.string().regex(getBankVaultBillingResponsePlansItemPriceMinorRegExp),
   "currency": zod.enum(['NGN'])
 }))
+})
+
+
+/**
+ * @summary Initialize a server-verified Paystack checkout for a vault plan
+ */
+export const initializeBankVaultPaystackPaymentHeaderXGlobusVaultSessionMin = 32;
+export const initializeBankVaultPaystackPaymentHeaderXGlobusVaultSessionMax = 128;
+
+
+
+export const InitializeBankVaultPaystackPaymentHeader = zod.object({
+  "X-Globus-Vault-Session": zod.string().min(initializeBankVaultPaystackPaymentHeaderXGlobusVaultSessionMin).max(initializeBankVaultPaystackPaymentHeaderXGlobusVaultSessionMax)
+})
+
+export const InitializeBankVaultPaystackPaymentBody = zod.object({
+  "planCode": zod.enum(['1m', '3m', '1y'])
+})
+
+export const initializeBankVaultPaystackPaymentResponseReferenceMax = 100;
+
+
+
+export const InitializeBankVaultPaystackPaymentResponse = zod.object({
+  "authorizationUrl": zod.string().url(),
+  "reference": zod.string().min(1).max(initializeBankVaultPaystackPaymentResponseReferenceMax)
+})
+
+
+/**
+ * @summary Verify a Paystack checkout and activate the matching vault plan
+ */
+export const verifyBankVaultPaystackPaymentHeaderXGlobusVaultSessionMin = 32;
+export const verifyBankVaultPaystackPaymentHeaderXGlobusVaultSessionMax = 128;
+
+
+
+export const VerifyBankVaultPaystackPaymentHeader = zod.object({
+  "X-Globus-Vault-Session": zod.string().min(verifyBankVaultPaystackPaymentHeaderXGlobusVaultSessionMin).max(verifyBankVaultPaystackPaymentHeaderXGlobusVaultSessionMax)
+})
+
+export const verifyBankVaultPaystackPaymentBodyReferenceMax = 100;
+
+
+
+export const VerifyBankVaultPaystackPaymentBody = zod.object({
+  "reference": zod.string().min(1).max(verifyBankVaultPaystackPaymentBodyReferenceMax)
+})
+
+export const verifyBankVaultPaystackPaymentResponseAmountMinorRegExp = new RegExp('^[0-9]+$');
+
+
+export const VerifyBankVaultPaystackPaymentResponse = zod.object({
+  "configured": zod.boolean(),
+  "subscriptionStatus": zod.enum(['inactive', 'pending', 'active', 'rejected', 'expired']),
+  "subscriptionActive": zod.boolean(),
+  "requestedAt": zod.coerce.date().nullable(),
+  "expiresAt": zod.coerce.date().nullable(),
+  "planCode": zod.union([zod.literal('1m'),zod.literal('3m'),zod.literal('1y'),zod.literal(null)]).nullable(),
+  "amountMinor": zod.string().regex(verifyBankVaultPaystackPaymentResponseAmountMinorRegExp).nullable(),
+  "proofUploadedAt": zod.coerce.date().nullable(),
+  "paymentStatus": zod.enum(['none', 'pending', 'failed', 'success']),
+  "paymentReference": zod.string().nullable()
+})
+
+
+/**
+ * @summary Read whether recipient email alerts are enabled for the signed-in customer
+ */
+export const GetBankVaultTransferEmailAlertResponse = zod.object({
+  "enabled": zod.boolean()
 })
 
 
@@ -301,6 +379,7 @@ export const getBankVaultEmailPreferencesResponseSenderLocalPartRegExp = new Reg
 
 
 export const GetBankVaultEmailPreferencesResponse = zod.object({
+  "transactionEmailAlertsEnabled": zod.boolean(),
   "bannerTheme": zod.enum(['navy', 'teal', 'gold']),
   "bannerHeadline": zod.string().min(1).max(getBankVaultEmailPreferencesResponseBannerHeadlineMax),
   "bannerBackgroundColor": zod.string().regex(getBankVaultEmailPreferencesResponseBannerBackgroundColorRegExp),
@@ -339,6 +418,7 @@ export const updateBankVaultEmailPreferencesBodySenderLocalPartRegExp = new RegE
 
 
 export const UpdateBankVaultEmailPreferencesBody = zod.object({
+  "transactionEmailAlertsEnabled": zod.boolean().optional(),
   "bannerTheme": zod.enum(['navy', 'teal', 'gold']).optional(),
   "bannerHeadline": zod.string().min(1).max(updateBankVaultEmailPreferencesBodyBannerHeadlineMax).optional(),
   "bannerBackgroundColor": zod.string().regex(updateBankVaultEmailPreferencesBodyBannerBackgroundColorRegExp).optional(),
@@ -362,6 +442,7 @@ export const updateBankVaultEmailPreferencesResponseSenderLocalPartRegExp = new 
 
 
 export const UpdateBankVaultEmailPreferencesResponse = zod.object({
+  "transactionEmailAlertsEnabled": zod.boolean(),
   "bannerTheme": zod.enum(['navy', 'teal', 'gold']),
   "bannerHeadline": zod.string().min(1).max(updateBankVaultEmailPreferencesResponseBannerHeadlineMax),
   "bannerBackgroundColor": zod.string().regex(updateBankVaultEmailPreferencesResponseBannerBackgroundColorRegExp),
@@ -425,7 +506,9 @@ export const UpdateBankVaultPasscodeResponse = zod.object({
   "expiresAt": zod.coerce.date().nullable(),
   "planCode": zod.union([zod.literal('1m'),zod.literal('3m'),zod.literal('1y'),zod.literal(null)]).nullable(),
   "amountMinor": zod.string().regex(updateBankVaultPasscodeResponseAmountMinorRegExp).nullable(),
-  "proofUploadedAt": zod.coerce.date().nullable()
+  "proofUploadedAt": zod.coerce.date().nullable(),
+  "paymentStatus": zod.enum(['none', 'pending', 'failed', 'success']),
+  "paymentReference": zod.string().nullable()
 })
 
 
@@ -543,6 +626,15 @@ export const GetBankPushPreferencesResponse = zod.object({
 /**
  * @summary Update the authenticated customer's push alert categories
  */
+export const updateBankPushPreferencesHeaderXGlobusVaultSessionMin = 32;
+export const updateBankPushPreferencesHeaderXGlobusVaultSessionMax = 128;
+
+
+
+export const UpdateBankPushPreferencesHeader = zod.object({
+  "X-Globus-Vault-Session": zod.string().min(updateBankPushPreferencesHeaderXGlobusVaultSessionMin).max(updateBankPushPreferencesHeaderXGlobusVaultSessionMax)
+})
+
 export const UpdateBankPushPreferencesBody = zod.object({
   "transferEnabled": zod.boolean().optional(),
   "walletEnabled": zod.boolean().optional(),

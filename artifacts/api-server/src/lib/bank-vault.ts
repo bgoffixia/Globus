@@ -53,6 +53,20 @@ export function hasActiveVaultSubscription(user: {
   ) === "active";
 }
 
+export function vaultTransferEmailAlertsEnabled(
+  user: {
+    vaultEmailAlertsEnabled: boolean;
+    vaultSubscriptionStatus: string;
+    vaultSubscriptionExpiresAt: Date | null;
+  },
+  now = new Date(),
+): boolean {
+  return (
+    user.vaultEmailAlertsEnabled &&
+    hasActiveVaultSubscription(user, now)
+  );
+}
+
 export function resolveFutureTransferStatus(
   mode: string,
   memberEligibleForImmediatePosting: boolean,

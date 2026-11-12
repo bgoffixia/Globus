@@ -6,9 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { BankVaultBillingPlansItem } from './bankVaultBillingPlansItem';
+import type { BankVaultBillingProvider } from './bankVaultBillingProvider';
 
 export interface BankVaultBilling {
   configured: boolean;
+  provider: BankVaultBillingProvider;
   paymentMethod: string;
   bankName: string;
   accountName: string;

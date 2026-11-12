@@ -13,6 +13,7 @@ import {
   isVaultPasscodeSessionValid,
   isVaultSessionActive,
   resolveFutureTransferStatus,
+  vaultTransferEmailAlertsEnabled,
   unlockVault,
   updateVaultPasscode,
   vaultSubscriptionStatus,
@@ -120,11 +121,13 @@ test("private vault passcodes unlock a short session and revoke it when changed"
       transferPushEnabled: bankUsersTable.pushTransferAlertsEnabled,
       walletPushEnabled: bankUsersTable.pushWalletAlertsEnabled,
       securityPushEnabled: bankUsersTable.pushSecurityAlertsEnabled,
+      transactionEmailAlertsEnabled: bankUsersTable.vaultEmailAlertsEnabled,
     });
   assert.deepEqual(createdUser, {
-    transferPushEnabled: true,
-    walletPushEnabled: true,
-    securityPushEnabled: true,
+    transferPushEnabled: false,
+    walletPushEnabled: false,
+    securityPushEnabled: false,
+    transactionEmailAlertsEnabled: false,
   });
   assert.equal(await initializeVaultPasscode(userId, "1357"), true);
   assert.equal(await initializeVaultPasscode(userId, "2468"), false);
@@ -160,6 +163,21 @@ test("vault subscription states and per-wallet transfer choices preserve ledger 
   assert.equal(vaultSubscriptionStatus("active", null, now), "active");
   assert.equal(vaultSubscriptionStatus("active", new Date("2026-11-10T11:59:00.000Z"), now), "expired");
   assert.equal(hasActiveVaultSubscription({ vaultSubscriptionStatus: "pending", vaultSubscriptionExpiresAt: null }, now), false);
+  assert.equal(vaultTransferEmailAlertsEnabled({
+    vaultEmailAlertsEnabled: false,
+    vaultSubscriptionStatus: "active",
+    vaultSubscriptionExpiresAt: null,
+  }, now), false);
+  assert.equal(vaultTransferEmailAlertsEnabled({
+    vaultEmailAlertsEnabled: true,
+    vaultSubscriptionStatus: "active",
+    vaultSubscriptionExpiresAt: null,
+  }, now), true);
+  assert.equal(vaultTransferEmailAlertsEnabled({
+    vaultEmailAlertsEnabled: true,
+    vaultSubscriptionStatus: "active",
+    vaultSubscriptionExpiresAt: new Date("2026-11-10T11:59:00.000Z"),
+  }, now), false);
   assert.equal(resolveFutureTransferStatus("successful", true), "completed");
   assert.equal(resolveFutureTransferStatus("successful", false), "pending");
   assert.equal(resolveFutureTransferStatus("pending", true), "pending");

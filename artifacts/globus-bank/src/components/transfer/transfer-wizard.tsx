@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import {
   getGetBankDashboardQueryKey,
   getGetBankExchangeRateQuoteQueryKey,
+  getGetBankVaultTransferEmailAlertQueryKey,
   getGetBankProfileQueryKey,
   getListBankNotificationsQueryKey,
   getListBankTransactionsQueryKey,
@@ -13,6 +14,7 @@ import {
   useCreateInternationalTransferRequest,
   useGetBankExchangeRateQuote,
   useGetBankProfile,
+  useGetBankVaultTransferEmailAlert,
   useListBankWallets,
   useListInternationalTransferRequests,
 } from '@workspace/api-client-react';
@@ -45,6 +47,14 @@ function newKey() {
 export function InternationalTransferPage() {
   const queryClient = useQueryClient();
   const profile = useGetBankProfile({ query: { queryKey: getGetBankProfileQueryKey() } });
+  const emailAlertPreference = useGetBankVaultTransferEmailAlert({
+    query: {
+      queryKey: getGetBankVaultTransferEmailAlertQueryKey(),
+      retry: false,
+      staleTime: 0,
+      refetchOnMount: 'always',
+    },
+  });
   const wallets = useListBankWallets({ query: { queryKey: getListBankWalletsQueryKey() } });
   const requests = useListInternationalTransferRequests({ query: { queryKey: getListInternationalTransferRequestsQueryKey() } });
   const createRequest = useCreateInternationalTransferRequest();
@@ -84,6 +94,8 @@ export function InternationalTransferPage() {
   const pending = createRequest.isPending;
   const verified = profile.data?.verificationStatus === 'approved';
   const pinConfigured = profile.data?.transactionPinConfigured !== false;
+  const recipientEmailAlertsEnabled =
+    emailAlertPreference.data?.enabled === true;
   const walletList = (wallets.data ?? []).filter(
     (w): w is typeof w & { currency: SourceCurrency } =>
       sourceCurrencies.includes(w.currency as SourceCurrency),
@@ -107,6 +119,9 @@ export function InternationalTransferPage() {
   useEffect(() => {
     if (walletList.length && !walletList.some(w => w.currency === sourceCurrency)) setSourceCurrency(walletList[0].currency);
   }, [walletList, sourceCurrency]);
+  useEffect(() => {
+    if (!recipientEmailAlertsEnabled) setRecipientEmail('');
+  }, [recipientEmailAlertsEnabled]);
 
   const liveRate = quote.isError ? null : quote.data?.rate ?? null;
   const liveConverted = liveRate && AMOUNT_RE.test(amount) ? previewConversion(amount, liveRate, targetDigits) : null;
@@ -127,7 +142,8 @@ export function InternationalTransferPage() {
   const stepValid = [
     !!wallet && !!countryCode && !!recipientBank.trim() && !!destinationCurrency,
     recipientAccountName.trim().length > 1 &&
-      (!recipientEmail.trim() ||
+      (!recipientEmailAlertsEnabled ||
+        !recipientEmail.trim() ||
         (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail.trim()) &&
           recipientEmail.trim().length <= 254)) &&
       /^[A-Za-z0-9 ]{4,34}$/.test(recipientAccountNumber) &&
@@ -169,7 +185,7 @@ export function InternationalTransferPage() {
         recipientBank: recipientBank.trim(),
         ...(transferType === 'local_routing' ? { routingCode: routingCode.trim() } : { swiftBic: swiftBic.trim().toUpperCase() }),
         recipientAccountName: recipientAccountName.trim(),
-        ...(recipientEmail.trim()
+        ...(recipientEmailAlertsEnabled && recipientEmail.trim()
           ? { recipientEmail: recipientEmail.trim().toLowerCase() }
           : {}),
         recipientAccountNumber,
@@ -261,7 +277,7 @@ export function InternationalTransferPage() {
 
               {step === 1 && <>
                 <F label="Recipient account name"><input data-testid="input-recipient-account-name" maxLength={120} value={recipientAccountName} onChange={e => setRecipientAccountName(e.target.value)} placeholder="Name on the account" className={inputCls} /></F>
-                <F label="Recipient email (optional)" hint="A transfer-status email is sent only when you provide an address."><input type="email" data-testid="input-recipient-email" maxLength={254} autoComplete="email" value={recipientEmail} onChange={e => setRecipientEmail(e.target.value)} placeholder="name@example.com (optional)" className={inputCls} /></F>
+                {recipientEmailAlertsEnabled && <F label="Recipient email (optional)" hint="A transfer-status email is sent only when you provide an address."><input type="email" data-testid="input-recipient-email" maxLength={254} autoComplete="email" value={recipientEmail} onChange={e => setRecipientEmail(e.target.value)} placeholder="name@example.com (optional)" className={inputCls} /></F>}
                 <F label={transferType === 'local_routing' ? 'Recipient account number' : 'Recipient account number / IBAN'}><input data-testid="input-recipient-account-number" maxLength={34} autoComplete="off" value={recipientAccountNumber} onChange={e => setRecipientAccountNumber(e.target.value.replace(/[^A-Za-z0-9 ]/g, ''))} placeholder={transferType === 'local_routing' ? 'Account number' : 'Account number or IBAN'} className={`${inputCls} font-mono`} /></F>
                 {transferType === 'local_routing'
                   ? <F label="Routing / clearing code"><input data-testid="input-local-routing-code" maxLength={24} value={routingCode} onChange={e => setRoutingCode(e.target.value.replace(/[^A-Za-z0-9 -]/g, ''))} placeholder="Routing or sort code" className={`${inputCls} font-mono`} /></F>
@@ -291,7 +307,7 @@ export function InternationalTransferPage() {
                   <R k="Route" v={routeLabel} />
                   <R k="From" v={`${sourceCurrency} wallet`} />
                   <R k="Recipient" v={recipientAccountName.trim()} />
-                  {recipientEmail.trim() && <R k="Recipient email" v={recipientEmail.trim()} />}
+                  {recipientEmailAlertsEnabled && recipientEmail.trim() && <R k="Recipient email" v={recipientEmail.trim()} />}
                   <R k="Bank" v={`${recipientBank} · ${destinationCountry}`} />
                   <R k="Account" v={recipientAccountNumber} mono />
                   <R k={transferType === 'local_routing' ? 'Routing number' : 'SWIFT / BIC'} v={transferType === 'local_routing' ? routingCode : swiftBic} mono />

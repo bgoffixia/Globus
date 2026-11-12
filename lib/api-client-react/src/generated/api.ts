@@ -77,6 +77,9 @@ import type {
   BankVaultEmailPreferencesInput,
   BankVaultPasscodeInput,
   BankVaultPasscodeUpdateInput,
+  BankVaultPaystackCheckout,
+  BankVaultPaystackInitializeInput,
+  BankVaultPaystackVerifyInput,
   BankVaultProofUploadInput,
   BankVaultProofUploadResult,
   BankVaultSession,
@@ -84,6 +87,7 @@ import type {
   BankVaultTransactionNote,
   BankVaultTransactionNoteDeleteResult,
   BankVaultTransactionNoteInput,
+  BankVaultTransferEmailAlert,
   BankVaultWalletControl,
   BankVaultWalletControlInput,
   CompleteRequiredPasswordResetInput,
@@ -645,7 +649,7 @@ export const getGetBankVaultBillingUrl = () => {
 }
 
 /**
- * @summary Read private vault manual payment instructions and access plans
+ * @summary Read private vault subscription checkout options and access plans
  */
 export const getBankVaultBilling = async ( options?: Parameters<typeof customFetch>[1]): Promise<BankVaultBilling> => {
 
@@ -692,7 +696,7 @@ export type GetBankVaultBillingQueryError = ErrorType<UnauthorizedResponse | For
 
 
 /**
- * @summary Read private vault manual payment instructions and access plans
+ * @summary Read private vault subscription checkout options and access plans
  */
 
 export function useGetBankVaultBilling<TData = Awaited<ReturnType<typeof getBankVaultBilling>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>(
@@ -701,6 +705,259 @@ export function useGetBankVaultBilling<TData = Awaited<ReturnType<typeof getBank
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetBankVaultBillingQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getInitializeBankVaultPaystackPaymentUrl = () => {
+
+
+
+
+  return `/api/bank/vault/paystack/initialize`
+}
+
+/**
+ * @summary Initialize a server-verified Paystack checkout for a vault plan
+ */
+export const initializeBankVaultPaystackPayment = async (bankVaultPaystackInitializeInput: BankVaultPaystackInitializeInput, options?: Parameters<typeof customFetch>[1]): Promise<BankVaultPaystackCheckout> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<BankVaultPaystackCheckout>(getInitializeBankVaultPaystackPaymentUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(bankVaultPaystackInitializeInput)
+  }
+);}
+
+
+
+
+
+export const getInitializeBankVaultPaystackPaymentMutationKey = () => ['initializeBankVaultPaystackPayment'] as const;
+
+export const getInitializeBankVaultPaystackPaymentMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse | ServiceUnavailableResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof initializeBankVaultPaystackPayment>>, TError,InitializeBankVaultPaystackPaymentMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof initializeBankVaultPaystackPayment>>, TError,InitializeBankVaultPaystackPaymentMutationVariables, TContext> => {
+
+const mutationKey = getInitializeBankVaultPaystackPaymentMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof initializeBankVaultPaystackPayment>>, InitializeBankVaultPaystackPaymentMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  initializeBankVaultPaystackPayment(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type InitializeBankVaultPaystackPaymentMutationResult = NonNullable<Awaited<ReturnType<typeof initializeBankVaultPaystackPayment>>>
+    export type InitializeBankVaultPaystackPaymentMutationBody = BodyType<BankVaultPaystackInitializeInput>
+    export type InitializeBankVaultPaystackPaymentMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse | ServiceUnavailableResponse>
+    export type InitializeBankVaultPaystackPaymentMutationVariables = {data: BodyType<BankVaultPaystackInitializeInput>}
+
+    /**
+ * @summary Initialize a server-verified Paystack checkout for a vault plan
+ */
+export const useInitializeBankVaultPaystackPayment = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse | ServiceUnavailableResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof initializeBankVaultPaystackPayment>>, TError,InitializeBankVaultPaystackPaymentMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof initializeBankVaultPaystackPayment>>,
+        TError,
+        InitializeBankVaultPaystackPaymentMutationVariables,
+        TContext
+      > => {
+      return useMutation(getInitializeBankVaultPaystackPaymentMutationOptions(options));
+    }
+
+export const getVerifyBankVaultPaystackPaymentUrl = () => {
+
+
+
+
+  return `/api/bank/vault/paystack/verify`
+}
+
+/**
+ * @summary Verify a Paystack checkout and activate the matching vault plan
+ */
+export const verifyBankVaultPaystackPayment = async (bankVaultPaystackVerifyInput: BankVaultPaystackVerifyInput, options?: Parameters<typeof customFetch>[1]): Promise<BankVaultStatus> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<BankVaultStatus>(getVerifyBankVaultPaystackPaymentUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(bankVaultPaystackVerifyInput)
+  }
+);}
+
+
+
+
+
+export const getVerifyBankVaultPaystackPaymentMutationKey = () => ['verifyBankVaultPaystackPayment'] as const;
+
+export const getVerifyBankVaultPaystackPaymentMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse | ServiceUnavailableResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof verifyBankVaultPaystackPayment>>, TError,VerifyBankVaultPaystackPaymentMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof verifyBankVaultPaystackPayment>>, TError,VerifyBankVaultPaystackPaymentMutationVariables, TContext> => {
+
+const mutationKey = getVerifyBankVaultPaystackPaymentMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof verifyBankVaultPaystackPayment>>, VerifyBankVaultPaystackPaymentMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  verifyBankVaultPaystackPayment(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type VerifyBankVaultPaystackPaymentMutationResult = NonNullable<Awaited<ReturnType<typeof verifyBankVaultPaystackPayment>>>
+    export type VerifyBankVaultPaystackPaymentMutationBody = BodyType<BankVaultPaystackVerifyInput>
+    export type VerifyBankVaultPaystackPaymentMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse | ServiceUnavailableResponse>
+    export type VerifyBankVaultPaystackPaymentMutationVariables = {data: BodyType<BankVaultPaystackVerifyInput>}
+
+    /**
+ * @summary Verify a Paystack checkout and activate the matching vault plan
+ */
+export const useVerifyBankVaultPaystackPayment = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse | ServiceUnavailableResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof verifyBankVaultPaystackPayment>>, TError,VerifyBankVaultPaystackPaymentMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof verifyBankVaultPaystackPayment>>,
+        TError,
+        VerifyBankVaultPaystackPaymentMutationVariables,
+        TContext
+      > => {
+      return useMutation(getVerifyBankVaultPaystackPaymentMutationOptions(options));
+    }
+
+export const getGetBankVaultTransferEmailAlertUrl = () => {
+
+
+
+
+  return `/api/bank/vault/transfer-email-alert`
+}
+
+/**
+ * @summary Read whether recipient email alerts are enabled for the signed-in customer
+ */
+export const getBankVaultTransferEmailAlert = async ( options?: Parameters<typeof customFetch>[1]): Promise<BankVaultTransferEmailAlert> => {
+
+  return customFetch<BankVaultTransferEmailAlert>(getGetBankVaultTransferEmailAlertUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetBankVaultTransferEmailAlertQueryKey = () => {
+    return [
+    `/api/bank/vault/transfer-email-alert`
+    ] as const;
+    }
+
+
+export const getGetBankVaultTransferEmailAlertQueryOptions = <TData = Awaited<ReturnType<typeof getBankVaultTransferEmailAlert>>, TError = ErrorType<UnauthorizedResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBankVaultTransferEmailAlert>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetBankVaultTransferEmailAlertQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getBankVaultTransferEmailAlert>>> = ({ signal }) => getBankVaultTransferEmailAlert({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getBankVaultTransferEmailAlert>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetBankVaultTransferEmailAlertQueryResult = NonNullable<Awaited<ReturnType<typeof getBankVaultTransferEmailAlert>>>
+export type GetBankVaultTransferEmailAlertQueryError = ErrorType<UnauthorizedResponse>
+
+
+/**
+ * @summary Read whether recipient email alerts are enabled for the signed-in customer
+ */
+
+export function useGetBankVaultTransferEmailAlert<TData = Awaited<ReturnType<typeof getBankVaultTransferEmailAlert>>, TError = ErrorType<UnauthorizedResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBankVaultTransferEmailAlert>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetBankVaultTransferEmailAlertQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -1892,7 +2149,7 @@ return customFetch<BankPushPreferences>(getUpdateBankPushPreferencesUrl(),
 
 export const getUpdateBankPushPreferencesMutationKey = () => ['updateBankPushPreferences'] as const;
 
-export const getUpdateBankPushPreferencesMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | NotFoundResponse>,
+export const getUpdateBankPushPreferencesMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateBankPushPreferences>>, TError,UpdateBankPushPreferencesMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof updateBankPushPreferences>>, TError,UpdateBankPushPreferencesMutationVariables, TContext> => {
 
@@ -1921,13 +2178,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type UpdateBankPushPreferencesMutationResult = NonNullable<Awaited<ReturnType<typeof updateBankPushPreferences>>>
     export type UpdateBankPushPreferencesMutationBody = BodyType<BankPushPreferencesInput>
-    export type UpdateBankPushPreferencesMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | NotFoundResponse>
+    export type UpdateBankPushPreferencesMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
     export type UpdateBankPushPreferencesMutationVariables = {data: BodyType<BankPushPreferencesInput>}
 
     /**
  * @summary Update the authenticated customer's push alert categories
  */
-export const useUpdateBankPushPreferences = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | NotFoundResponse>,
+export const useUpdateBankPushPreferences = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateBankPushPreferences>>, TError,UpdateBankPushPreferencesMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof updateBankPushPreferences>>,

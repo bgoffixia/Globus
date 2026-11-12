@@ -20,6 +20,7 @@ import {
   useGetBankVaultBilling,
   useGetBankVaultEmailPreferences,
   useGetBankVaultStatus,
+  useInitializeBankVaultPaystackPayment,
   useInitializeBankVaultPasscode,
   useListBankTransactions,
   useListBankVaultTransactionNotes,
@@ -32,6 +33,7 @@ import {
   useUpdateBankVaultPasscode,
   useUpdateBankVaultTransactionNote,
   useUpdateBankVaultWalletControl,
+  useVerifyBankVaultPaystackPayment,
 } from '@workspace/api-client-react';
 import type { BankTransaction, BankVaultEmailPreferences, BankVaultProofUploadInputContentType, BankVaultWalletControl } from '@workspace/api-client-react';
 import { fetchWebpushrSubscriberId, loadWebpushr } from '../lib/webpushr-client';
@@ -82,6 +84,7 @@ export function PrivateVaultPanel() {
   const [supportUrl, setSupportUrl] = useState('');
   const [supportLabel, setSupportLabel] = useState('Contact support');
   const [senderLocalPart, setSenderLocalPart] = useState('');
+  const [transactionEmailAlertsEnabled, setTransactionEmailAlertsEnabled] = useState(false);
   const [browserPushMessage, setBrowserPushMessage] = useState('');
   const [browserPushError, setBrowserPushError] = useState('');
   const subscriptionStorageKey = user?.id ? `globus-push-subscription-id:${user.id}` : '';
@@ -94,6 +97,8 @@ export function PrivateVaultPanel() {
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [proofUploaded, setProofUploaded] = useState(false);
   const [isUploadingProof, setIsUploadingProof] = useState(false);
+  const [isVerifyingPayment, setIsVerifyingPayment] = useState(false);
+  const paymentCallbackHandled = useRef('');
   const lastSubscriptionStatus = useRef<string | undefined>(undefined);
   const billing = useGetBankVaultBilling({
     query: {
@@ -109,6 +114,12 @@ export function PrivateVaultPanel() {
   const requestSubscription = useRequestBankVaultSubscription({
     request: sessionToken ? { headers: { 'X-Globus-Vault-Session': sessionToken } } : undefined,
   });
+  const initializePaystackPayment = useInitializeBankVaultPaystackPayment({
+    request: sessionToken ? { headers: { 'X-Globus-Vault-Session': sessionToken } } : undefined,
+  });
+  const verifyPaystackPayment = useVerifyBankVaultPaystackPayment({
+    request: sessionToken ? { headers: { 'X-Globus-Vault-Session': sessionToken } } : undefined,
+  });
   const browserPushConfig = useGetBankPushConfig({
     query: { queryKey: getGetBankPushConfigQueryKey(), retry: false },
   });
@@ -121,7 +132,9 @@ export function PrivateVaultPanel() {
   });
   const savePushSubscription = useSaveBankPushSubscription();
   const deletePushSubscription = useDeleteBankPushSubscription();
-  const updateBrowserPushPreferences = useUpdateBankPushPreferences();
+  const updateBrowserPushPreferences = useUpdateBankPushPreferences({
+    request: sessionToken ? { headers: { 'X-Globus-Vault-Session': sessionToken } } : undefined,
+  });
   useEffect(() => () => {
     void queryClient.cancelQueries({ queryKey: getListBankVaultWalletControlsQueryKey() });
     void queryClient.cancelQueries({ queryKey: getGetBankVaultEmailPreferencesQueryKey() });
@@ -191,6 +204,7 @@ export function PrivateVaultPanel() {
   }, [subscriptionStorageKey]);
   useEffect(() => {
     if (!emailPreferences.data) return;
+    setTransactionEmailAlertsEnabled(emailPreferences.data.transactionEmailAlertsEnabled);
     setBannerTheme(emailPreferences.data.bannerTheme);
     setBannerHeadline(emailPreferences.data.bannerHeadline);
     setBannerBackgroundColor(emailPreferences.data.bannerBackgroundColor);
@@ -379,7 +393,65 @@ export function PrivateVaultPanel() {
       setError(err instanceof Error ? err.message : 'The subscription request could not be submitted.');
     }
   };
-  const billingBusy = uploadProofUrl.isPending || requestSubscription.isPending || isUploadingProof;
+  const startPaystackCheckout = async () => {
+    setError('');
+    setMessage('');
+    try {
+      const checkout = await initializePaystackPayment.mutateAsync({
+        data: { planCode: selectedPlan },
+      });
+      window.location.assign(checkout.authorizationUrl);
+    } catch (err) {
+      await queryClient.invalidateQueries({ queryKey: getGetBankVaultStatusQueryKey() });
+      setError(err instanceof Error ? err.message : 'Paystack checkout could not be started.');
+    }
+  };
+  const checkPaystackPayment = async (reference = status.data?.paymentReference) => {
+    if (!reference) {
+      setError('There is no Paystack payment to verify.');
+      return;
+    }
+    setError('');
+    setMessage('');
+    setIsVerifyingPayment(true);
+    try {
+      const updated = await verifyPaystackPayment.mutateAsync({
+        data: { reference },
+      });
+      queryClient.setQueryData(getGetBankVaultStatusQueryKey(), updated);
+      await queryClient.invalidateQueries({ queryKey: getGetBankVaultStatusQueryKey() });
+      setSubscriptionStep('closed');
+      setMessage('Paystack confirmed your payment. Private Vault access is active.');
+      if (window.location.search) {
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+    } catch (err) {
+      await queryClient.invalidateQueries({ queryKey: getGetBankVaultStatusQueryKey() });
+      setError(err instanceof Error ? err.message : 'Paystack payment could not be verified yet.');
+    } finally {
+      setIsVerifyingPayment(false);
+    }
+  };
+  const billingBusy =
+    uploadProofUrl.isPending ||
+    requestSubscription.isPending ||
+    initializePaystackPayment.isPending ||
+    isUploadingProof ||
+    isVerifyingPayment;
+  const callbackReference = typeof window !== 'undefined'
+    ? new URLSearchParams(window.location.search).get('reference') ?? ''
+    : '';
+  useEffect(() => {
+    if (
+      !sessionToken ||
+      !callbackReference ||
+      !status.data?.paymentReference ||
+      callbackReference !== status.data.paymentReference ||
+      paymentCallbackHandled.current === callbackReference
+    ) return;
+    paymentCallbackHandled.current = callbackReference;
+    void checkPaystackPayment(callbackReference);
+  }, [sessionToken, callbackReference, status.data?.paymentReference]);
   const submitEmailPreferences = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError('');
@@ -391,6 +463,7 @@ export function PrivateVaultPanel() {
     try {
       await saveEmailPreferences.mutateAsync({
         data: {
+          transactionEmailAlertsEnabled,
           bannerTheme,
           bannerHeadline: bannerHeadline.trim(),
           bannerBackgroundColor,
@@ -497,6 +570,10 @@ export function PrivateVaultPanel() {
   ) => {
     setBrowserPushError('');
     setBrowserPushMessage('');
+    if (!subscriptionActive) {
+      setBrowserPushError('An active Vault subscription is required to change alert settings.');
+      return;
+    }
     try {
       const preferences = await updateBrowserPushPreferences.mutateAsync({
         data: { [key]: enabled },
@@ -526,6 +603,7 @@ export function PrivateVaultPanel() {
   const loading = initialize.isPending || unlock.isPending || updatePasscode.isPending;
   const subscriptionActive = !!status.data?.subscriptionActive;
   const subscriptionPending = status.data?.subscriptionStatus === 'pending';
+  const checkoutPending = status.data?.paymentStatus === 'pending';
   return (
     <section className="rounded-[18px] border border-[#e1e8ee] bg-white p-4 sm:p-5" data-testid="private-vault-panel">
       <div className="flex items-start justify-between gap-3">
@@ -568,25 +646,34 @@ export function PrivateVaultPanel() {
                   <div>
                     <p className="text-[10px] font-bold uppercase tracking-[.12em] text-[#8a784c]">Vault subscription · {status.data?.subscriptionStatus || 'inactive'}</p>
                     <p className="mt-1 text-[10px] leading-5 text-[#786e55]">
-                      {subscriptionPending
+                      {checkoutPending
+                        ? 'Paystack checkout is in progress. Complete payment, then verify it here to activate your plan.'
+                        : subscriptionPending
                         ? `Your ${status.data?.planCode || ''} plan request and payment proof are awaiting administrator review.`
                         : status.data?.subscriptionStatus === 'rejected'
-                          ? 'Your previous request was declined. You can submit a new request with payment proof.'
+                          ? 'Your previous request was declined. You can choose a plan and pay securely.'
                           : status.data?.subscriptionStatus === 'expired'
-                            ? 'Your subscription has expired. Choose a plan and submit new payment proof for review.'
-                            : 'Choose a plan and submit payment proof. Vault changes are available after administrator approval.'}
+                            ? 'Your subscription has expired. Choose a plan to renew Vault access.'
+                            : 'Choose a plan and complete checkout. Vault changes unlock after payment is verified.'}
                     </p>
                     {subscriptionPending && status.data?.amountMinor && <p className="mt-1 text-[10px] font-bold text-[#6f633f]">{ngnMinor(status.data.amountMinor)} · submitted {status.data.proofUploadedAt ? new Date(status.data.proofUploadedAt).toLocaleString() : ''}</p>}
                   </div>
-                  {!subscriptionPending && subscriptionStep === 'closed' && <button type="button" onClick={() => { setError(''); setMessage(''); setSubscriptionStep('plans'); }} data-testid="button-vault-subscribe" className="inline-flex h-9 shrink-0 items-center gap-2 rounded-lg bg-[#173858] px-4 text-[10px] font-bold text-white hover:bg-[#214b70]">
+                  {!subscriptionPending && !checkoutPending && subscriptionStep === 'closed' && <button type="button" onClick={() => { setError(''); setMessage(''); setSubscriptionStep('plans'); }} data-testid="button-vault-subscribe" className="inline-flex h-9 shrink-0 items-center gap-2 rounded-lg bg-[#173858] px-4 text-[10px] font-bold text-white hover:bg-[#214b70]">
                     Subscribe <ArrowRight size={13} />
                   </button>}
                 </div>
 
-                {subscriptionPending ? null : billing.isLoading ? <div className="mt-3 h-12 animate-pulse rounded-lg bg-white/70" /> :
-                  billing.isError ? <div className="mt-3 flex items-center justify-between rounded-lg bg-white/70 px-3 py-2 text-[9px] text-[#a24940]"><span>Manual payment details could not be loaded.</span><button type="button" onClick={() => void billing.refetch()} className="font-bold underline">Retry</button></div> :
+                {checkoutPending && <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#e8dfc5] bg-white/75 p-3">
+                  <div className="min-w-0 text-[9px] leading-4 text-[#786e55]">
+                    <p className="font-bold">Payment reference</p>
+                    <p className="truncate font-mono">{status.data?.paymentReference}</p>
+                  </div>
+                  <button type="button" disabled={isVerifyingPayment} onClick={() => void checkPaystackPayment()} data-testid="button-vault-verify-payment" className="h-8 rounded-lg bg-[#173858] px-3 text-[9px] font-bold text-white disabled:opacity-50">{isVerifyingPayment ? 'Checking…' : 'Verify payment'}</button>
+                </div>}
+                {subscriptionPending || checkoutPending ? null : billing.isLoading ? <div className="mt-3 h-12 animate-pulse rounded-lg bg-white/70" /> :
+                  billing.isError ? <div className="mt-3 flex items-center justify-between rounded-lg bg-white/70 px-3 py-2 text-[9px] text-[#a24940]"><span>Subscription payment options could not be loaded.</span><button type="button" onClick={() => void billing.refetch()} className="font-bold underline">Retry</button></div> :
                     billing.data && <>
-                      {!billing.data.configured && <p className="mt-3 rounded-lg border border-[#e8dfc5] bg-white/75 p-3 text-[9px] leading-4 text-[#786e55]">Manual payment instructions are being configured by Globus administrators. You can view Vault settings, but cannot submit a request yet.</p>}
+                      {!billing.data.configured && <p className="mt-3 rounded-lg border border-[#e8dfc5] bg-white/75 p-3 text-[9px] leading-4 text-[#786e55]">Subscription checkout is being configured by Globus administrators. You can view Vault settings, but cannot submit a request yet.</p>}
 
                       {subscriptionStep === 'plans' && <div className="mt-4" data-testid="vault-subscription-plans">
                         <div className="flex items-center justify-between gap-2">
@@ -602,9 +689,20 @@ export function PrivateVaultPanel() {
                         </div>
                       </div>}
 
-                      {subscriptionStep === 'payment' && (() => {
+                       {subscriptionStep === 'payment' && (() => {
                         const plan = billing.data.plans.find(item => item.code === selectedPlan);
                         if (!plan) return null;
+                         if (billing.data.provider === 'paystack') {
+                           return <div className="mt-4 space-y-3" data-testid="vault-subscription-payment">
+                             <button type="button" onClick={() => setSubscriptionStep('plans')} className="inline-flex items-center gap-1.5 text-[9px] font-bold text-[#397b80]"><ArrowLeft size={12} /> Back to plans</button>
+                             <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#e8dfc5] bg-white/80 p-3">
+                               <div><p className="text-[9px] font-bold uppercase tracking-[.1em] text-[#8a784c]">Paystack checkout</p><p className="mt-1 text-[11px] font-bold text-[#334f5b]">{plan.label}</p></div>
+                               <strong className="text-[13px] text-[#334f5b]">{ngnMinor(plan.priceMinor)}</strong>
+                             </div>
+                             <p className="text-[9px] leading-4 text-[#786e55]">Payment is initialized and verified on the Globus server. Vault access activates only after Paystack confirms the exact plan amount and currency.</p>
+                             <button type="button" disabled={billingBusy || !billing.data.configured} onClick={() => void startPaystackCheckout()} data-testid="button-vault-paystack-checkout" className="h-9 rounded-lg bg-[#173858] px-4 text-[10px] font-bold text-white disabled:opacity-50">{initializePaystackPayment.isPending ? 'Preparing checkout…' : 'Continue to Paystack'}</button>
+                           </div>;
+                         }
                         return <div className="mt-4 space-y-3" data-testid="vault-subscription-payment">
                           <button type="button" onClick={() => { setSubscriptionStep('plans'); setProofFile(null); setProofUploaded(false); setError(''); setMessage(''); }} className="inline-flex items-center gap-1.5 text-[9px] font-bold text-[#397b80]"><ArrowLeft size={12} /> Back to plans</button>
                           <div className="rounded-lg border border-[#e8dfc5] bg-white/80 p-3">
@@ -618,7 +716,7 @@ export function PrivateVaultPanel() {
                               {billing.data.accountName && <p>Account name: {billing.data.accountName}</p>}
                               {billing.data.accountNumber && <p>Account / reference: <span className="font-mono font-bold">{billing.data.accountNumber}</span></p>}
                               <p className="mt-1 whitespace-pre-wrap">{billing.data.instructions}</p>
-                            </div>
+                           </div>
                           </div>
                           <label className="block text-[9px] font-bold text-[#6c6249]">Payment proof · PDF, JPG or PNG, up to 10 MB
                             <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" disabled={!billing.data.configured || billingBusy} onChange={event => { setProofFile(event.currentTarget.files?.[0] ?? null); setProofUploaded(false); setError(''); setMessage(''); }} className="mt-1 block w-full text-[9px] text-[#687b7e] file:mr-2 file:rounded-md file:border-0 file:bg-white file:px-3 file:py-2 file:text-[9px] file:font-bold file:text-[#3c626b]" data-testid="input-vault-payment-proof" />
@@ -674,14 +772,14 @@ export function PrivateVaultPanel() {
                 {browserPushConfig.isError && <p role="alert" className="mt-2 text-[9px] text-[#a24940]">Browser alert setup is unavailable. Try again later.</p>}
                 {browserPushPreferences.isLoading ? <div className="mt-2 h-8 animate-pulse rounded-lg bg-[#f0f4f6]" /> :
                   browserPushPreferences.isError ? <p role="alert" className="mt-2 text-[9px] text-[#a24940]">Alert choices could not be loaded.</p> :
-                    <fieldset disabled={updateBrowserPushPreferences.isPending} className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-3">
+                    <fieldset disabled={!subscriptionActive || updateBrowserPushPreferences.isPending} className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-3">
                       <legend className="sr-only">Push alert categories</legend>
                       {([
                         ['transferEnabled', 'Transfers'],
                         ['walletEnabled', 'Wallet activity'],
                         ['securityEnabled', 'Security'],
                       ] as const).map(([key, label]) => <label key={key} className="flex min-w-0 items-center gap-2 rounded-lg border border-[#e4eaee] bg-white px-3 py-2 text-[9px] font-medium text-[#62788c]">
-                        <input type="checkbox" checked={browserPushPreferences.data?.[key] ?? true} onChange={event => void updateBrowserAlertCategory(key, event.currentTarget.checked)} data-testid={`vault-toggle-push-${key}`} className="accent-[#438481]" />
+                        <input type="checkbox" checked={browserPushPreferences.data?.[key] ?? false} onChange={event => void updateBrowserAlertCategory(key, event.currentTarget.checked)} data-testid={`vault-toggle-push-${key}`} className="accent-[#438481]" />
                         <span>{label}</span>
                       </label>)}
                     </fieldset>}
@@ -689,8 +787,8 @@ export function PrivateVaultPanel() {
                   <span data-testid="status-vault-browser-push" className="text-[8px] text-[#8794a2]">
                     {browserPushConfig.isLoading ? 'Checking availability…' : !browserPushSupported ? 'Not supported on this device' : browserPushConfig.data?.configured ? savedPushSubscriptionId ? 'This device is linked' : 'Available to enable on this device' : 'Not configured'}
                   </span>
-                  {savedPushSubscriptionId ? <button type="button" disabled={deletePushSubscription.isPending} onClick={() => void disableBrowserAlerts()} data-testid="button-vault-disable-browser-push" className="h-8 rounded-lg border border-[#dfe6eb] bg-white px-3 text-[9px] font-bold text-[#52697e] disabled:opacity-50">{deletePushSubscription.isPending ? 'Disabling…' : 'Disable alerts on this device'}</button> :
-                    <button type="button" disabled={!browserPushSupported || !browserPushConfig.data?.configured || savePushSubscription.isPending} onClick={() => void enableBrowserAlerts()} data-testid="button-vault-enable-browser-push" className="h-8 rounded-lg bg-[#173858] px-3 text-[9px] font-bold text-white disabled:cursor-not-allowed disabled:opacity-45">{savePushSubscription.isPending ? 'Linking…' : 'Enable alerts on this device'}</button>}
+                  {savedPushSubscriptionId ? <button type="button" disabled={!subscriptionActive || deletePushSubscription.isPending} onClick={() => void disableBrowserAlerts()} data-testid="button-vault-disable-browser-push" className="h-8 rounded-lg border border-[#dfe6eb] bg-white px-3 text-[9px] font-bold text-[#52697e] disabled:opacity-50">{deletePushSubscription.isPending ? 'Disabling…' : 'Disable alerts on this device'}</button> :
+                    <button type="button" disabled={!subscriptionActive || !browserPushSupported || !browserPushConfig.data?.configured || savePushSubscription.isPending} onClick={() => void enableBrowserAlerts()} data-testid="button-vault-enable-browser-push" className="h-8 rounded-lg bg-[#173858] px-3 text-[9px] font-bold text-white disabled:cursor-not-allowed disabled:opacity-45">{savePushSubscription.isPending ? 'Linking…' : 'Enable alerts on this device'}</button>}
                 </div>
                 {browserPushError && <p role="alert" data-testid="status-vault-browser-push-error" className="mt-2 rounded-md bg-[#fff1ef] px-2 py-1.5 text-[8px] text-[#a24940]">{browserPushError}</p>}
                 {browserPushMessage && <p role="status" data-testid="status-vault-browser-push-message" className="mt-2 rounded-md bg-[#eef7f1] px-2 py-1.5 text-[8px] text-[#41755f]">{browserPushMessage}</p>}
@@ -724,9 +822,13 @@ export function PrivateVaultPanel() {
               </details>
               <details className="mt-3 rounded-xl border border-[#e7ecef] bg-[#fbfcfd] p-3" data-testid="vault-email-banner-settings">
                 <summary className="cursor-pointer text-[10px] font-bold text-[#344b64]">Transaction email banner</summary>
-                <p className="mt-2 text-[9px] leading-4 text-[#8190a0]">Customize the branded banner and optional support footer link for future transfer alerts.</p>
+                <p className="mt-2 text-[9px] leading-4 text-[#8190a0]">Choose whether to email recipients, then customize the banner and optional support footer link.</p>
                 {!subscriptionActive && <p className="mt-2 text-[9px] font-semibold text-[#8a784c]">Read-only until your subscription is active.</p>}
-                {emailPreferences.isLoading ? <div className="mt-2 h-8 animate-pulse rounded-lg bg-[#f0f4f6]" /> : emailPreferences.isError ? <p role="alert" className="mt-2 text-[9px] text-[#a24940]">Email banner settings could not be loaded.</p> : <form onSubmit={submitEmailPreferences} className="mt-3 grid gap-3 sm:grid-cols-2">
+                {emailPreferences.isLoading ? <div className="mt-2 h-8 animate-pulse rounded-lg bg-[#f0f4f6]" /> : emailPreferences.isError ? <p role="alert" className="mt-2 text-[9px] text-[#a24940]">Email alert settings could not be loaded.</p> : <form onSubmit={submitEmailPreferences} className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <label className="flex items-start gap-2 rounded-lg border border-[#e4eaee] bg-white px-3 py-2 text-[9px] leading-4 text-[#64798d] sm:col-span-2">
+                    <input disabled={!subscriptionActive} type="checkbox" checked={transactionEmailAlertsEnabled} onChange={event => setTransactionEmailAlertsEnabled(event.currentTarget.checked)} className="mt-0.5 accent-[#438481]" data-testid="toggle-vault-transaction-email-alerts" />
+                    <span><strong className="text-[#344b64]">Send recipient transaction email alerts.</strong> When off, the recipient email field is hidden from the transfer form and no recipient email is stored or sent.</span>
+                  </label>
                   <label className="text-[9px] font-semibold text-[#5c7085]">Banner color
                     <select disabled={!subscriptionActive} value={bannerTheme} onChange={event => setBannerTheme(event.target.value as BankVaultEmailPreferences['bannerTheme'])} className={`${fieldClass} mt-1 disabled:bg-[#f3f5f5]`} data-testid="select-vault-email-banner-theme">
                       <option value="navy">Globus navy</option><option value="teal">Globus teal</option><option value="gold">Globus gold</option>

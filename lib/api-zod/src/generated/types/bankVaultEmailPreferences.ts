@@ -10,6 +10,7 @@ import type { BankVaultEmailPreferencesSenderDisplayName } from './bankVaultEmai
 import type { BankVaultEmailPreferencesSenderDomain } from './bankVaultEmailPreferencesSenderDomain';
 
 export interface BankVaultEmailPreferences {
+  transactionEmailAlertsEnabled: boolean;
   bannerTheme: BankVaultEmailPreferencesBannerTheme;
   /**
      * @minLength 1

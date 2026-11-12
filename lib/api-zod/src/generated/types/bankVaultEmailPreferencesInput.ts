@@ -8,6 +8,7 @@
 import type { BankVaultEmailPreferencesInputBannerTheme } from './bankVaultEmailPreferencesInputBannerTheme';
 
 export interface BankVaultEmailPreferencesInput {
+  transactionEmailAlertsEnabled?: boolean;
   bannerTheme?: BankVaultEmailPreferencesInputBannerTheme;
   /**
      * @minLength 1
