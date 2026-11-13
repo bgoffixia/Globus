@@ -40,9 +40,9 @@ jobs:
           pnpm --filter @workspace/db push 2>&1 | tee /tmp/drizzle-push.log
           push_status=${PIPESTATUS[0]}
 
-          # Drizzle Kit 0.31.x can print this interactive-prompt error yet exit 0.
-          if grep -Fq "Interactive prompts require a TTY terminal" /tmp/drizzle-push.log; then
-            echo "::error::Drizzle Kit needs a schema conflict decision; refusing to report a false success."
+          # Drizzle Kit 0.31.x may report database errors while exiting with status 0.
+          if grep -Eiq "Interactive prompts require a TTY terminal|^error:|severity: 'ERROR'|SQLSTATE" /tmp/drizzle-push.log; then
+            echo "::error::Drizzle Kit reported a prompt or database error. Treating this run as failed."
             exit 1
           fi
 
