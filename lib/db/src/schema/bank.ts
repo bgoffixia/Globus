@@ -104,6 +104,14 @@ export const bankUsersTable = pgTable("bank_users", {
   vaultSubscriptionExpiresAt: timestamp("vault_subscription_expires_at", {
     withTimezone: true,
   }),
+  vaultSubscriptionExpiryReminderSentFor: timestamp(
+    "vault_subscription_expiry_reminder_sent_for",
+    { withTimezone: true },
+  ),
+  vaultSubscriptionExpiryReminderClaimedAt: timestamp(
+    "vault_subscription_expiry_reminder_claimed_at",
+    { withTimezone: true },
+  ),
   vaultSubscriptionPlan: text("vault_subscription_plan"),
   vaultSubscriptionAmountMinor: text("vault_subscription_amount_minor"),
   vaultSubscriptionPaymentReference: text(

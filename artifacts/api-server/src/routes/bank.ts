@@ -178,6 +178,7 @@ import {
   verifyTransactionPin,
   type TransactionPinResult,
 } from "../lib/transaction-pin";
+import { createVaultSubscriberTopUp } from "../lib/vault-subscriber-deposit";
 import {
   BankDetailsEncryptionUnavailableError,
   encryptBankAccountNumber,
@@ -189,6 +190,7 @@ import {
 } from "../lib/password-reset";
 import {
   initializeVaultPasscode,
+  hasActiveVaultSubscription,
   isVaultPasscodeSessionValid,
   isVaultSessionActive,
   resolveFutureTransferStatus,
@@ -2278,9 +2280,16 @@ router.post("/bank/ledger-requests", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const requiresSavedMethod =
-    parsed.data.type === "withdrawal" ||
-    (parsed.data.type === "deposit" && parsed.data.paymentMethod === "bank_card");
+  const requiresSavedMethod = parsed.data.type === "withdrawal";
+  if (
+    parsed.data.type === "deposit" &&
+    (parsed.data.savedPaymentMethodId || parsed.data.paymentMethod)
+  ) {
+    res.status(400).json({
+      error: "Wallet top-ups do not collect card or bank-account details.",
+    });
+    return;
+  }
   if (
     (requiresSavedMethod &&
       (!parsed.data.savedPaymentMethodId || !parsed.data.paymentMethod)) ||
@@ -2288,9 +2297,7 @@ router.post("/bank/ledger-requests", async (req, res): Promise<void> => {
   ) {
     res.status(400).json({
       error:
-        parsed.data.type === "withdrawal"
-          ? "Choose a saved withdrawal destination before submitting."
-          : "Choose a saved card before submitting a card deposit request.",
+        "Choose a saved withdrawal destination before submitting.",
     });
     return;
   }
@@ -2305,7 +2312,6 @@ router.post("/bank/ledger-requests", async (req, res): Promise<void> => {
     res.status(409).json({ error: "Complete account setup before continuing." });
     return;
   }
-
   let amountMinor: bigint;
   try {
     amountMinor = parseAmountToMinor(parsed.data.amount);
@@ -2349,6 +2355,16 @@ router.post("/bank/ledger-requests", async (req, res): Promise<void> => {
       existing[0].status === "approved" || existing[0].status === "rejected"
         ? existing[0].status
         : "pending_review";
+    if (
+      existing[0].type === "deposit" &&
+      existingStatus !== "approved"
+    ) {
+      res.status(409).json({
+        error:
+          "This earlier deposit was not credited. Submit a new top-up request with an active Private Vault subscription.",
+      });
+      return;
+    }
     res.status(201).json(
       CreateLedgerRequestResponse.parse({
         id: existing[0].id,
@@ -2358,12 +2374,24 @@ router.post("/bank/ledger-requests", async (req, res): Promise<void> => {
         amount: formatMinorAmount(existing[0].amountMinor),
         status: existingStatus,
         message:
-          existingStatus === "pending_review"
-            ? "Your request is waiting for an administrator to review it."
-            : `Your request was ${existingStatus}.`,
+          existing[0].type === "deposit" && existingStatus === "approved"
+            ? "Your Globus wallet was credited."
+            : existingStatus === "pending_review"
+              ? "Your withdrawal request is waiting for an administrator to review it."
+              : `Your request was ${existingStatus}.`,
         createdAt: existing[0].createdAt.toISOString(),
       }),
     );
+    return;
+  }
+
+  if (
+    parsed.data.type === "deposit" &&
+    !hasActiveVaultSubscription(user)
+  ) {
+    res.status(403).json({
+      error: "An active Private Vault subscription is required to add wallet funds.",
+    });
     return;
   }
 
@@ -2386,6 +2414,16 @@ router.post("/bank/ledger-requests", async (req, res): Promise<void> => {
       .limit(1);
 
     if (duplicate) {
+      if (
+        duplicate.userId === userId &&
+        duplicate.type === "deposit" &&
+        duplicate.status !== "approved"
+      ) {
+        return {
+          error:
+            "This earlier deposit was not credited. Submit a new top-up request with an active Private Vault subscription.",
+        };
+      }
       return duplicate.userId === userId &&
         duplicate.type === parsed.data.type &&
         duplicate.currency === parsed.data.currency &&
@@ -2393,8 +2431,23 @@ router.post("/bank/ledger-requests", async (req, res): Promise<void> => {
         duplicate.savedPaymentMethodId ===
           (parsed.data.savedPaymentMethodId ?? null) &&
         duplicate.paymentMethod === (parsed.data.paymentMethod ?? null)
-        ? { sandboxRequest: duplicate }
+        ? { sandboxRequest: duplicate, notification: null }
         : { error: "That request reference is already in use." };
+    }
+
+    if (parsed.data.type === "deposit") {
+      const topUp = await createVaultSubscriberTopUp(tx, {
+        userId,
+        currency: parsed.data.currency,
+        amountMinor,
+        idempotencyKey: parsed.data.idempotencyKey,
+        description: "Private Vault wallet top-up",
+      });
+      if ("error" in topUp) return { error: topUp.error };
+      return {
+        sandboxRequest: topUp.sandboxRequest,
+        notification: topUp.notification,
+      };
     }
 
     const reference = createReference();
@@ -2432,18 +2485,13 @@ router.post("/bank/ledger-requests", async (req, res): Promise<void> => {
           : `${destination.bankName ?? "Bank"} · ${destination.accountHolder ?? "Account holder"} · •••• ${destination.lastFour}${destination.country ? ` · ${destination.country}` : ""}`;
     }
     const wallet = await userWallet(tx, userId, parsed.data.currency);
-    if (!wallet || (parsed.data.type === "withdrawal" && wallet.status !== "active")) {
-      return {
-        error:
-          parsed.data.type === "withdrawal"
-            ? "A frozen wallet cannot be used for a withdrawal."
-            : "A wallet for the selected currency is unavailable.",
-      };
+    if (!wallet || wallet.status !== "active") {
+      return { error: "A frozen wallet cannot be used for a withdrawal." };
     }
     const restrictionError = await bankOperationRestrictionError(tx, {
       userId,
       walletId: wallet.id,
-      operation: parsed.data.type,
+      operation: "withdrawal",
     });
     if (restrictionError) return { error: restrictionError };
     const [lockedWallet] = await tx
@@ -2455,34 +2503,27 @@ router.post("/bank/ledger-requests", async (req, res): Promise<void> => {
       ))
       .for("update");
     if (!lockedWallet) return { error: "The selected wallet is unavailable." };
-    if (parsed.data.type === "withdrawal" && lockedWallet.status !== "active") {
+    if (lockedWallet.status !== "active") {
       return { error: "A frozen wallet cannot be used for a withdrawal." };
     }
-    if (
-      (parsed.data.type === "deposit" && !lockedWallet.depositsEnabled) ||
-      (parsed.data.type === "withdrawal" && !lockedWallet.withdrawalsEnabled)
-    ) {
+    if (!lockedWallet.withdrawalsEnabled) {
       return {
-        error: `New ${parsed.data.type} requests are disabled for this wallet in your private vault.`,
+        error: "New withdrawal requests are disabled for this wallet in your Private Vault settings.",
       };
     }
     const commitRestrictionError = await bankOperationRestrictionError(tx, {
       userId,
       walletId: lockedWallet.id,
-      operation: parsed.data.type,
+      operation: "withdrawal",
     });
     if (commitRestrictionError) return { error: commitRestrictionError };
-    if (parsed.data.type === "withdrawal") {
-      const balance = await balanceForWallet(tx, lockedWallet.id);
-      const reserved = await reservedForWallet(tx, lockedWallet.id);
-      if (balance - reserved < amountMinor) {
-        return {
-          error: "The available ledger balance is not enough for this withdrawal request.",
-        };
-      }
+    const balance = await balanceForWallet(tx, lockedWallet.id);
+    const reserved = await reservedForWallet(tx, lockedWallet.id);
+    if (balance - reserved < amountMinor) {
+      return {
+        error: "The available ledger balance is not enough for this withdrawal request.",
+      };
     }
-    const transactionType =
-      parsed.data.type === "deposit" ? "deposit_request" : "withdrawal_request";
     const [transaction] = await tx
       .insert(bankTransactionsTable)
       .values({
@@ -2490,17 +2531,16 @@ router.post("/bank/ledger-requests", async (req, res): Promise<void> => {
         idempotencyKey: parsed.data.idempotencyKey,
         initiatedByUserId: userId,
         fromUserId: userId,
-        fromWalletId:
-          parsed.data.type === "withdrawal" ? lockedWallet.id : null,
-        toWalletId: parsed.data.type === "deposit" ? lockedWallet.id : null,
-        type: transactionType,
+        fromWalletId: lockedWallet.id,
+        toWalletId: null,
+        type: "withdrawal_request",
         status: "pending",
         currency: parsed.data.currency,
         amountMinor,
         counterparty: null,
         description:
           parsed.data.description?.trim() ||
-          `${parsed.data.type === "deposit" ? "Deposit" : "Withdrawal"} request awaiting administrator review`,
+          "Withdrawal request awaiting administrator review",
         mode: "internal_ledger",
       })
       .returning();
@@ -2508,11 +2548,11 @@ router.post("/bank/ledger-requests", async (req, res): Promise<void> => {
     const [sandboxRequest] = await tx
       .insert(bankSandboxRequestsTable)
       .values({
-          userId: user.id,
+        userId,
         transactionId: transaction.id,
         reference,
         idempotencyKey: parsed.data.idempotencyKey,
-        type: parsed.data.type,
+        type: "withdrawal",
         currency: parsed.data.currency,
         destinationCurrency: null,
         savedPaymentMethodId,
@@ -2523,7 +2563,7 @@ router.post("/bank/ledger-requests", async (req, res): Promise<void> => {
       })
       .returning();
 
-    return { sandboxRequest, transaction };
+    return { sandboxRequest, transaction, notification: null };
   });
 
   if ("error" in request) {
@@ -2531,6 +2571,10 @@ router.post("/bank/ledger-requests", async (req, res): Promise<void> => {
     return;
   }
 
+  if (request.notification) {
+    void sendPushToUser(userId, request.notification);
+  }
+  const approved = request.sandboxRequest.status === "approved";
   res.status(201).json(
     CreateLedgerRequestResponse.parse({
       id: request.sandboxRequest.id,
@@ -2538,11 +2582,11 @@ router.post("/bank/ledger-requests", async (req, res): Promise<void> => {
       type: request.sandboxRequest.type,
       currency: request.sandboxRequest.currency,
       amount: formatMinorAmount(request.sandboxRequest.amountMinor),
-      status: "pending_review",
+      status: approved ? "approved" : "pending_review",
       message:
-        parsed.data.type === "deposit"
-          ? "Your request is waiting for admin approval. Approval posts an internal ledger credit; no outside funds are received."
-          : "Your available ledger balance is reserved while an administrator reviews this request. Approval posts a ledger debit; no outside payout is made.",
+        approved
+          ? "Your Globus wallet was credited."
+          : "Your available balance is reserved while an administrator reviews this withdrawal request.",
       createdAt: request.sandboxRequest.createdAt.toISOString(),
     }),
   );

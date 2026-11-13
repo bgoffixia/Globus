@@ -172,7 +172,7 @@ export function HomePage() {
             One Wallet.
           </h1>
           <p className="mt-7 max-w-[510px] text-[16px] leading-7 text-[#64758a] sm:text-[18px] sm:leading-8">
-            Bring your currencies together, understand every movement, and manage routed transfers and reviewed deposit requests with clear statuses.
+            Bring your currencies together, understand every movement, and manage routed transfers and eligible wallet top-ups in one focused workspace.
           </p>
           <div className="mt-8 flex flex-col items-stretch gap-2 sm:mt-9 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
             <Link href={isSignedIn ? '/dashboard' : '/sign-up'} className="inline-flex w-full items-center justify-center gap-3 rounded-xl bg-[#152f50] px-5 py-3.5 text-[13px] font-bold text-white shadow-[0_10px_24px_rgba(18,43,75,.16)] transition hover:-translate-y-0.5 hover:bg-[#1b4168] sm:w-auto sm:px-6 sm:py-4">
@@ -240,7 +240,7 @@ export function HomePage() {
         <div className="grid gap-8 sm:grid-cols-2">
           <FeatureBlock number="01" title="See the whole picture" copy="Review individual currency wallets, pending amounts and recent transactions in one focused workspace." />
           <FeatureBlock number="02" title="Route transfers with clarity" copy="Choose local routing or an international wire, review the currency conversion, and follow the recorded status in your account." />
-          <FeatureBlock number="03" title="Review deposit requests" copy="Card and bank-transfer deposit requests require administrator approval before a wallet balance changes." />
+          <FeatureBlock number="03" title="Add wallet funds" copy="Verified customers with an active Private Vault subscription can add funds to eligible wallets immediately." />
           <FeatureBlock number="04" title="Keep a clear record" copy="Every transaction has a reference, status and timestamp for straightforward review." />
         </div>
       </section>
@@ -617,7 +617,7 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
   const savedPaymentMethodsQuery = useListBankSavedPaymentMethods({
     query: {
       queryKey: getListBankSavedPaymentMethodsQueryKey(),
-      enabled: type === 'withdrawal' || type === 'deposit',
+      enabled: type === 'withdrawal',
     },
   });
   const mutation = useCreateLedgerRequest();
@@ -628,7 +628,6 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
   const [withdrawalWalletSelected, setWithdrawalWalletSelected] = useState(false);
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
-  const [depositMethod, setDepositMethod] = useState<'bank_card' | 'bank_transfer'>('bank_transfer');
   const [withdrawalMethod, setWithdrawalMethod] = useState<'bank_card' | 'bank_transfer'>('bank_transfer');
   const [savedPaymentMethodId, setSavedPaymentMethodId] = useState('');
   const [showDestinationForm, setShowDestinationForm] = useState(false);
@@ -648,21 +647,21 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
   );
   const selectedWallet = activeWallets.find(wallet => wallet.currency === currency);
   const available = Number(selectedWallet?.available ?? 0);
-  const currentPaymentMethod = type === 'deposit' ? depositMethod : withdrawalMethod;
+  const currentPaymentMethod = withdrawalMethod;
   const destinationsForMethod = (savedPaymentMethodsQuery.data ?? []).filter(
     destination => destination.method === currentPaymentMethod,
   );
   const selectedDestination = destinationsForMethod.find(
     destination => destination.id === savedPaymentMethodId,
   );
-  const requiresSavedMethod = type === 'withdrawal' || depositMethod === 'bank_card';
+  const requiresSavedMethod = type === 'withdrawal';
   const shouldShowDestinationForm =
     requiresSavedMethod &&
     (showDestinationForm ||
       (savedPaymentMethodsQuery.isSuccess && destinationsForMethod.length === 0));
-  const heading = type === 'deposit' ? 'Request a deposit' : 'Request a withdrawal';
+  const heading = type === 'deposit' ? 'Add funds' : 'Request a withdrawal';
   const sub = type === 'deposit'
-    ? 'Choose a request method and ask an administrator to review a credit to your selected wallet.'
+    ? 'Active Private Vault subscribers can add funds to an eligible wallet immediately.'
     : 'Ask an administrator to review a withdrawal from your selected wallet.';
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -672,12 +671,12 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
       setErrorMessage(
         type === 'withdrawal'
           ? 'Choose or save a withdrawal destination before continuing.'
-          : 'Choose or save a card before submitting a card deposit request.',
+          : 'An active Private Vault subscription is required to add funds.',
       );
       return;
     }
     const requestDescription = type === 'deposit'
-      ? `${depositMethod === 'bank_card' ? 'Bank card' : 'Bank transfer'} deposit request`
+      ? 'Private Vault wallet top-up'
       : description.trim();
     mutation.mutate({ data: { type, currency: currency ?? preferredCurrencyFromQuery(), amount, ...(requestDescription ? { description: requestDescription } : {}), ...(requiresSavedMethod && selectedDestination ? { savedPaymentMethodId: selectedDestination.id, paymentMethod: currentPaymentMethod } : {}), transactionPin, idempotencyKey: crypto.randomUUID() } }, {
       onSuccess: request => {
@@ -739,6 +738,7 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
     : profileQuery.data.withdrawalAllowed;
   if (!operationAllowed) {
     const needsVerification = profileQuery.data.verificationStatus !== 'approved';
+    const needsDepositAccess = type === 'deposit';
     return (
       <div className="mx-auto min-w-0 max-w-[920px]" data-testid="financial-access-gate">
         <header>
@@ -746,15 +746,20 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
           <h1 className="bank-display mt-0.5 text-[22px] font-semibold leading-tight text-[#213a55] sm:text-[26px]">{type === 'deposit' ? 'Deposit' : 'Withdrawal'}</h1>
         </header>
         <section className="mt-4 rounded-2xl border border-[#e6dfc8] bg-[#fbf8ee] p-4 sm:p-5">
-          <h2 className="text-[13px] font-bold text-[#6f5d35]">{needsVerification ? 'Identity verification required' : `${type === 'deposit' ? 'Deposit' : 'Withdrawal'} access is restricted`}</h2>
+          <h2 className="text-[13px] font-bold text-[#6f5d35]">{needsVerification ? 'Identity verification required' : needsDepositAccess ? 'Deposit eligibility required' : 'Withdrawal access is restricted'}</h2>
           <p className="mt-2 max-w-[620px] text-[10px] leading-5 text-[#827653]">
             {needsVerification
               ? 'Your identity verification must be approved before you can submit this request.'
-              : 'An account restriction currently blocks this operation. Deposit and withdrawal permissions are checked separately.'}
+              : needsDepositAccess
+                ? 'Adding funds requires approved identity, an active Private Vault subscription, and no applicable account or wallet restriction.'
+                : 'An account restriction currently blocks this operation. Deposit and withdrawal permissions are checked separately.'}
           </p>
-          <Link href="/profile" className="mt-3 inline-flex h-9 items-center justify-center rounded-lg bg-[#173653] px-4 text-[10px] font-bold text-white hover:bg-[#21496a]">
-            Review profile and verification
-          </Link>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Link href="/profile" className="inline-flex h-9 items-center justify-center rounded-lg bg-[#173653] px-4 text-[10px] font-bold text-white hover:bg-[#21496a]">
+              Review profile and verification
+            </Link>
+            {needsDepositAccess && <Link href="/private-vault" className="inline-flex h-9 items-center justify-center rounded-lg border border-[#d9cfad] bg-white px-4 text-[10px] font-bold text-[#735f38] hover:bg-[#fbf8ee]">View Private Vault</Link>}
+          </div>
         </section>
       </div>
     );
@@ -778,7 +783,8 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
         <header className="flex min-w-0 items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[9px] font-bold uppercase tracking-[.16em] text-[#4d858a]">Wallet services</p>
-            <h1 className="bank-display mt-0.5 truncate text-[22px] font-semibold leading-tight text-[#213a55] sm:text-[26px]">Deposit</h1>
+            <h1 className="bank-display mt-0.5 truncate text-[22px] font-semibold leading-tight text-[#213a55] sm:text-[26px]">Add funds</h1>
+            <p className="mt-1 text-[10px] leading-4 text-[#758596]">Active Private Vault members can add funds to an eligible wallet immediately.</p>
           </div>
           {depositWalletSelected && selectedWallet && (
             <button type="button" onClick={() => { setDepositWalletSelected(false); setResult(null); }} className="shrink-0 rounded-lg border border-[#dce6e9] bg-white px-3 py-2 text-[10px] font-bold text-[#3c7278] hover:bg-[#f3f8f8]" data-testid="button-change-deposit-wallet">
@@ -794,7 +800,7 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
         ) : !depositWalletSelected || !selectedWallet ? (
           <section className="mt-4 rounded-2xl border border-[#e1e8ee] bg-white p-4 sm:p-5">
             <div className="mb-3 flex items-center justify-between gap-3">
-              <div><h2 className="text-[12px] font-bold text-[#2c425c]">Choose a wallet</h2><p className="mt-0.5 text-[10px] text-[#8391a0]">Select the wallet for this deposit request.</p></div>
+              <div><h2 className="text-[12px] font-bold text-[#2c425c]">Choose a wallet</h2><p className="mt-0.5 text-[10px] text-[#8391a0]">Select the wallet to receive your funds.</p></div>
               <WalletCards size={18} className="shrink-0 text-[#4d858a]" />
             </div>
             {activeWallets.length ? (
@@ -838,50 +844,15 @@ export function ProviderRequestPage({ type }: { type: 'deposit' | 'withdrawal' }
             </section>
 
             <form onSubmit={submit} className="min-w-0 rounded-2xl border border-[#e1e8ee] bg-white p-3.5 sm:p-4" data-testid="deposit-request-form">
-              <div className="mb-3 flex items-center justify-between gap-3"><div><h2 className="text-[12px] font-bold text-[#2c425c]">Request a deposit</h2><p className="mt-0.5 text-[9px] text-[#8391a0]">Selected wallet · {selectedWallet.currency}</p></div><span className="rounded-lg bg-[#eef7f7] px-2.5 py-1.5 text-[9px] font-bold text-[#377b82]">{selectedWallet.currency}</span></div>
-              <div className="grid grid-cols-2 gap-2" role="group" aria-label="Deposit request method">
-                <button type="button" onClick={() => { setDepositMethod('bank_card'); setShowDestinationForm(false); setDestinationError(''); }} aria-pressed={depositMethod === 'bank_card'} data-testid="button-deposit-bank-card" className={`rounded-lg border px-3 py-2.5 text-left text-[9px] font-bold transition ${depositMethod === 'bank_card' ? 'border-[#4e8c91] bg-[#f1f8f8] text-[#315c67]' : 'border-[#e1e8ed] bg-white text-[#718195]'}`}><span className="flex items-center gap-2"><CreditCard size={13} />Credit/debit card</span></button>
-                <button type="button" onClick={() => setDepositMethod('bank_transfer')} aria-pressed={depositMethod === 'bank_transfer'} data-testid="button-deposit-bank-transfer" className={`rounded-lg border px-3 py-2.5 text-left text-[9px] font-bold transition ${depositMethod === 'bank_transfer' ? 'border-[#4e8c91] bg-[#f1f8f8] text-[#315c67]' : 'border-[#e1e8ed] bg-white text-[#718195]'}`}>Bank transfer</button>
-              </div>
-              {depositMethod === 'bank_card' && (
-                <section className="mt-3 rounded-xl border border-[#e1e8ed] bg-[#fbfcfd] p-3" aria-label="Saved card selection" data-testid="deposit-card-options">
-                  <div className="flex items-center justify-between gap-2"><h3 className="text-[9px] font-bold text-[#344b64]">Credit/debit card</h3>{destinationsForMethod.length > 0 && <button type="button" onClick={() => setShowDestinationForm(value => !value)} className="inline-flex items-center gap-1 text-[8px] font-bold text-[#397b80]"><Plus size={11} />Add card</button>}</div>
-                  {savedPaymentMethodsQuery.isLoading ? <p className="mt-2 text-[8px] text-[#8492a1]">Loading saved cards…</p> : null}
-                  <div className="mt-2 space-y-1.5">
-                    {destinationsForMethod.map(method => (
-                      <div key={method.id} className={`flex min-w-0 items-center gap-2 rounded-lg border px-2.5 py-2 ${savedPaymentMethodId === method.id ? 'border-[#4e8c91] bg-[#f1f8f8]' : 'border-[#e1e8ed] bg-white'}`}>
-                        <button type="button" onClick={() => setSavedPaymentMethodId(method.id)} aria-pressed={savedPaymentMethodId === method.id} className="flex min-w-0 flex-1 items-center gap-2 text-left" data-testid={`button-select-saved-card-${method.lastFour}`}>
-                          <CreditCard size={14} className="shrink-0 text-[#4d858a]" />
-                          <span className="min-w-0 truncate text-[9px] font-bold text-[#40576f]">{humanize(method.cardBrand ?? 'card')} ···· {method.lastFour}</span>
-                          <span className="ml-auto shrink-0 text-[8px] text-[#8492a1]">{savedPaymentMethodId === method.id ? 'Selected' : 'Select'}</span>
-                        </button>
-                        <button type="button" aria-label={`Remove card ending ${method.lastFour}`} onClick={() => void removePaymentMethod(method)} className="rounded p-1 text-[#8a98a5] hover:bg-[#f3f5f7] hover:text-[#a24940]"><Trash2 size={12} /></button>
-                      </div>
-                    ))}
-                  </div>
-                  {shouldShowDestinationForm && (
-                    <div className="mt-3 rounded-lg border border-dashed border-[#cbd9df] bg-white p-3" data-testid="deposit-card-form">
-                      <p className="text-[8px] font-bold uppercase tracking-[.1em] text-[#72859b]">{destinationsForMethod.length ? 'Add a card reference' : 'Add a card'}</p>
-                      <div className="mt-2 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2">
-                        <Field label="Card brand"><select value={cardBrand} onChange={event => setCardBrand(event.target.value as typeof cardBrand)} className={inputClass}><option value="visa">Visa</option><option value="mastercard">Mastercard</option><option value="amex">American Express</option><option value="discover">Discover</option><option value="other">Other</option></select></Field>
-                        <Field label="Last 4 digits"><input required inputMode="numeric" autoComplete="off" pattern="[0-9]{4}" maxLength={4} value={cardLastFour} onChange={event => setCardLastFour(event.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="1234" className={inputClass} data-testid="input-card-last-four" /></Field>
-                      </div>
-                      <p className="mt-2 text-[8px] leading-4 text-[#758596]">Only the card brand and last four digits are saved. No full card number or security code is collected, and this request does not charge a card.</p>
-                      {destinationError && <p role="alert" className="mt-2 text-[8px] text-[#a24940]">{destinationError}</p>}
-                      <button type="button" disabled={createSavedPaymentMethod.isPending || cardLastFour.length !== 4} onClick={() => void savePaymentMethod()} className="mt-2 inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-lg bg-[#eaf4f4] text-[8px] font-bold text-[#34747b] disabled:opacity-50" data-testid="button-save-card">{createSavedPaymentMethod.isPending ? 'Saving…' : 'Save card reference'} <ArrowRight size={11} /></button>
-                    </div>
-                  )}
-                  {!shouldShowDestinationForm && destinationsForMethod.length > 0 && <p className="mt-2 text-[8px] text-[#758596]">Select a saved card or add a new card reference.</p>}
-                </section>
-              )}
+              <div className="mb-3 flex items-center justify-between gap-3"><div><h2 className="text-[12px] font-bold text-[#2c425c]">Add funds</h2><p className="mt-0.5 text-[9px] text-[#8391a0]">Selected wallet · {selectedWallet.currency}</p></div><span className="rounded-lg bg-[#eef7f7] px-2.5 py-1.5 text-[9px] font-bold text-[#377b82]">{selectedWallet.currency}</span></div>
               <div className="mt-3">
                 <Field label="Amount"><input required inputMode="decimal" pattern="[0-9]+(\.[0-9]{1,2})?" min="0.01" max="1000000" value={amount} onChange={event => setAmount(event.target.value)} placeholder={`0.00 ${selectedWallet.currency}`} className={inputClass} data-testid="input-deposit-amount" /><span className="mt-1 block text-[8px] text-[#8492a1]">Maximum 1,000,000.00</span></Field>
               </div>
               <div className="mt-2"><Field label="6-digit transaction PIN"><input required type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="off" value={transactionPin} onChange={event => setTransactionPin(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="Enter your PIN" className={inputClass} data-testid="input-deposit-pin" /></Field></div>
               {profileQuery.data?.transactionPinConfigured === false && <p className="mt-2 rounded-lg border border-[#eadfbe] bg-[#fbf7eb] px-3 py-2 text-[9px] leading-4 text-[#806b3d]">Set up your transaction PIN in <Link href="/profile" className="font-bold underline">Profile</Link> before submitting.</p>}
               {(errorMessage || mutation.isError) && <p role="alert" className="mt-2 rounded-lg bg-[#fff1ef] px-3 py-2 text-[9px] text-[#a24940]" data-testid="status-deposit-error">{errorMessage || 'The request could not be recorded.'}</p>}
-              {result && <div role="status" className="mt-2 rounded-lg border border-[#d6e6e5] bg-[#f2f8f7] px-3 py-2 text-[9px] text-[#426e70]" data-testid="status-deposit-result"><p className="font-bold">Request recorded · {humanize(result.status)}</p><p className="mt-0.5">{result.message} · Ref {result.reference}</p></div>}
-              <button type="submit" disabled={mutation.isPending || transactionPin.length !== 6 || !amount || Number(amount) <= 0 || (requiresSavedMethod && !selectedDestination)} className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-[#142f51] text-[10px] font-bold text-white transition hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50" data-testid="button-submit-deposit">{mutation.isPending ? 'Sending…' : 'Submit deposit request'} <ArrowRight size={13} /></button>
+              {result && <div role="status" className="mt-2 rounded-lg border border-[#d6e6e5] bg-[#f2f8f7] px-3 py-2 text-[9px] text-[#426e70]" data-testid="status-deposit-result"><p className="font-bold">{result.status === 'approved' ? 'Wallet updated' : `Request recorded · ${humanize(result.status)}`}</p><p className="mt-0.5">{result.message} · Ref {result.reference}</p></div>}
+              <button type="submit" disabled={mutation.isPending || transactionPin.length !== 6 || !amount || Number(amount) <= 0} className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-[#142f51] text-[10px] font-bold text-white transition hover:bg-[#1b4269] disabled:cursor-not-allowed disabled:opacity-50" data-testid="button-submit-deposit">{mutation.isPending ? 'Adding…' : 'Add funds'} <ArrowRight size={13} /></button>
             </form>
           </div>
         )}
@@ -1304,7 +1275,7 @@ export function ProfilePage() {
           <div>
             <p className="text-[9px] font-bold uppercase tracking-[.15em] text-[#55868b]">Transaction security</p>
             <h2 className="mt-1 text-[13px] font-bold text-[#29425c]">{profile?.transactionPinConfigured ? 'Update transaction PIN' : 'Create transaction PIN'}</h2>
-            <p className="mt-1.5 max-w-2xl text-[10px] leading-4 text-[#718296]">Use a six-digit PIN to authorize every transfer, deposit request, and withdrawal request from your account. Your PIN is stored as a secure hash and cannot be viewed by administrators.</p>
+            <p className="mt-1.5 max-w-2xl text-[10px] leading-4 text-[#718296]">Use a six-digit PIN to authorize every transfer, wallet top-up, and withdrawal request. Your PIN is stored as a secure hash and cannot be viewed by administrators.</p>
           </div>
           <span className={`rounded-full px-3 py-1.5 text-[9px] font-bold ${profile?.transactionPinConfigured ? 'bg-[#eef7f3] text-[#4b826d]' : 'bg-[#fbf7eb] text-[#92773e]'}`}>{profile?.transactionPinConfigured ? 'PIN active' : 'PIN not set'}</span>
         </div>
@@ -1449,8 +1420,8 @@ function AdminLedgerRequestQueue() {
     <>
       <section className="mt-6 overflow-hidden rounded-[20px] border border-[#e1e8ee] bg-white">
         <div className="border-b border-[#edf0f3] px-5 py-4 sm:px-7">
-          <h2 className="text-[14px] font-bold text-[#28405c]">Deposit and withdrawal approvals</h2>
-          <p className="mt-1 text-[10px] leading-4 text-[#8592a1]">Approval records a Globus wallet credit or debit only. It does not receive an outside deposit or make a payout. Every decision needs an audit reason and administrator PIN.</p>
+          <h2 className="text-[14px] font-bold text-[#28405c]">Withdrawal approvals</h2>
+          <p className="mt-1 text-[10px] leading-4 text-[#8592a1]">Review and approve eligible withdrawal requests. Every decision requires an audit reason and administrator PIN.</p>
         </div>
         {error && !reviewTarget && <p role="alert" className="border-b border-[#edf0f3] bg-[#fff1ef] px-5 py-3 text-[11px] text-[#a24940]">{error}</p>}
         {requests.isLoading ? <ListSkeleton /> : requests.isError ? <InlineError text="Customer requests are unavailable." retry={() => requests.refetch()} /> : requests.data?.length ? (
@@ -1471,7 +1442,7 @@ function AdminLedgerRequestQueue() {
               </article>
             ))}
           </div>
-        ) : <EmptyState title="No requests awaiting review" text="New internal deposit and withdrawal requests will appear here." />}
+        ) : <EmptyState title="No withdrawals awaiting review" text="New withdrawal requests will appear here." />}
       </section>
       {reviewTarget && <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#14263e]/55 p-4">
         <form role="dialog" aria-modal="true" aria-labelledby="ledger-review-title" onSubmit={submitDecision} className="w-full max-w-lg rounded-[22px] border border-[#dfe7ec] bg-white p-5 shadow-2xl sm:p-7">
@@ -2118,7 +2089,7 @@ export function AdminUserManagementPage() {
 }
 
 const disclosureCopy: Record<string, { eyebrow: string; title: string; intro: string; sections: [string, string][] }> = {
-  '/help': { eyebrow: 'Support', title: 'Help with your Globus account.', intro: 'Understand how account activity and requests are handled.', sections: [['How do deposits work?', 'Choose a bank-card or bank-transfer request. An administrator must approve it before your Globus wallet balance changes. Globus does not charge a card or receive an outside deposit.'], ['How do withdrawals work?', 'A pending withdrawal reserves the requested amount. Approval records the change in Globus; rejection releases the reserve. No outside payout is made.'], ['Can I send someone money?', 'Globus does not support member-to-member transfers. Transfer requests record the details in Globus but do not contact the recipient’s bank or send outside funds.'], ['How do international requests work?', 'Frankfurter reference rates are used to show converted amounts, with Grey available as a rate-only fallback. Rate quotes do not execute transfers; Globus does not contact the destination bank or send outside funds.'], ['Where can I find my Customer ID?', 'Open your Profile page to view or copy your Customer ID. It identifies your Globus account, not a bank account or payment address.']] },
+  '/help': { eyebrow: 'Support', title: 'Help with your Globus account.', intro: 'Understand how account activity and requests are handled.', sections: [['How do deposits work?', 'Verified customers with an active Private Vault subscription can select an eligible wallet and add funds. The wallet is credited immediately after the PIN and account checks pass. Account restrictions still apply.'], ['How do withdrawals work?', 'A pending withdrawal reserves the requested amount. Approval records the change in Globus; rejection releases the reserve. No outside payout is made.'], ['Can I send someone money?', 'Globus does not support member-to-member transfers. Transfer requests record the details in Globus but do not contact the recipient’s bank or send outside funds.'], ['How do international requests work?', 'Frankfurter reference rates are used to show converted amounts, with Grey available as a rate-only fallback. Rate quotes do not execute transfers; Globus does not contact the destination bank or send outside funds.'], ['Where can I find my Customer ID?', 'Open your Profile page to view or copy your Customer ID. It identifies your Globus account, not a bank account or payment address.']] },
   '/fees': { eyebrow: 'Fees and rates', title: 'Understand transfer requests and rates.', intro: 'Globus does not process external deposits, payouts, or card payments.', sections: [['Rate quotes', 'Globus uses Frankfurter reference rates, with Grey as a fallback source. Availability depends on currency-pair support; quotes can change and are not confirmation of a payment.'], ['Fees', 'Globus records account requests and does not charge an outside transaction fee through a payment provider.'], ['Currency balances', 'Currency wallets are recorded separately. The rate and converted amount shown on a transfer receipt match the quote used when Globus recorded that request.']] },
   '/contact': { eyebrow: 'Contact', title: 'Contact information is not configured yet.', intro: 'A verified support channel has not been configured for Globus.', sections: [['Account help', 'Visit Help for guidance about the software. Do not include passwords, verification codes or sensitive payment details in support requests.'], ['Recorded activity', 'Include the transaction reference when asking about an account record.'], ['Operational disclosure', 'Globus support cannot complete, trace or reverse an external payment through this product.']] },
 };
@@ -2330,7 +2301,7 @@ function TransactionStatusDialog({
           <div><p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#55868b]">Admin transaction control</p><h2 id="transaction-status-title" className="mt-1 text-[16px] font-bold text-[#29425c]">Correct internal processing status</h2><p className="mt-1 break-all text-[10px] text-[#7e8d9c]">{transaction.reference}</p></div>
           <button type="button" aria-label="Close status override" onClick={onClose} className="rounded-lg p-2 text-[#6d8092] hover:bg-[#f1f5f7]"><X size={16} /></button>
         </div>
-        <p className="mt-4 rounded-lg border border-[#e5e9ed] bg-[#f7f9fa] px-4 py-3 text-[10px] leading-4 text-[#64798e]">This status-only correction never changes wallet balances or their underlying records. The server checks the authoritative transaction; posted operations must use a separate audited reversal. Pending deposits and withdrawals must be handled in their review queue.</p>
+        <p className="mt-4 rounded-lg border border-[#e5e9ed] bg-[#f7f9fa] px-4 py-3 text-[10px] leading-4 text-[#64798e]">This status-only correction never changes wallet balances or their underlying records. The server checks the authoritative transaction; posted operations must use a separate audited reversal. Pending withdrawals must be handled in their review queue. Deposits are not manually reviewed.</p>
         <form onSubmit={submit} className="mt-5 space-y-4">
           <Field label="New status">
             <select value={status} onChange={event => setStatus(event.target.value as BankTransaction['status'])} className={inputClass}>

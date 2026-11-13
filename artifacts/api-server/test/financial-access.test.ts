@@ -40,6 +40,18 @@ test("verification and operation-specific restrictions gate deposits and withdra
     .where(eq(bankUsersTable.id, userId));
   assert.deepEqual(
     await getBankOperationEligibility(userId, "active", "approved"),
+    { depositAllowed: false, withdrawalAllowed: true },
+  );
+
+  await db
+    .update(bankUsersTable)
+    .set({
+      vaultSubscriptionStatus: "active",
+      vaultSubscriptionExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+    })
+    .where(eq(bankUsersTable.id, userId));
+  assert.deepEqual(
+    await getBankOperationEligibility(userId, "active", "approved"),
     { depositAllowed: true, withdrawalAllowed: true },
   );
 

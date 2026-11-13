@@ -3,8 +3,10 @@ import { backfillCustomerIds } from "./lib/bank";
 import { expireVaultSubscriptions } from "./lib/bank-vault";
 import { logger } from "./lib/logger";
 import { isPrivateDataEncryptionConfigured } from "./lib/private-data";
+import { sendVaultExpiryReminders } from "./lib/vault-expiry-reminders";
 
 const VAULT_EXPIRATION_SWEEP_INTERVAL_MS = 60_000;
+const VAULT_EXPIRY_REMINDER_SWEEP_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const rawPort = process.env["PORT"];
 
 if (!rawPort) {
@@ -57,6 +59,36 @@ async function startServer() {
       VAULT_EXPIRATION_SWEEP_INTERVAL_MS,
     );
     expirationSweep.unref();
+
+    if (process.env.NODE_ENV === "production") {
+      const sendExpiringVaultReminders = async () => {
+        try {
+          const result = await sendVaultExpiryReminders();
+          if (result.sent > 0 || result.failed > 0) {
+            logger.info(
+              result,
+              "Processed Private Vault expiry reminder emails",
+            );
+          }
+        } catch (error) {
+          logger.error(
+            { err: error },
+            "Could not process Private Vault expiry reminders",
+          );
+        }
+      };
+
+      void sendExpiringVaultReminders();
+      const reminderSweep = setInterval(
+        () => void sendExpiringVaultReminders(),
+        VAULT_EXPIRY_REMINDER_SWEEP_INTERVAL_MS,
+      );
+      reminderSweep.unref();
+    } else {
+      logger.info(
+        "Private Vault expiry reminder emails are disabled outside production",
+      );
+    }
   });
 }
 

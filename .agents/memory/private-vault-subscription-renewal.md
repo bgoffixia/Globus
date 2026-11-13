@@ -20,3 +20,9 @@ The server marks elapsed subscriptions as expired and deletes their Vault passco
 **Why:** Expiry must remove access even if a customer leaves the Vault open, while an opted-in recurring payment should still be able to renew the plan.
 
 **How to apply:** Keep expiry enforcement immediate in subscription checks and persist it through the server sweep. Preserve renewal identifiers and preferences unless Paystack confirms cancellation or the customer requests it.
+
+Send one Resend reminder three days before each subscription expiry, using the configured Globus security sender. Run scheduled customer email delivery only in production; retry failed sends without duplicating successful reminders for the same expiry date.
+
+**Why:** Give customers time to renew while preventing development servers from sending real customer email.
+
+**How to apply:** Track the expiry date used for a successful reminder and protect concurrent workers with a short claim lease.

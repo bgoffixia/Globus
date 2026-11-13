@@ -11,6 +11,7 @@ import {
   bankWalletsTable,
   db,
 } from "@workspace/db";
+import { hasActiveVaultSubscription } from "./bank-vault";
 
 type RestrictionExecutor = Pick<typeof db, "select">;
 
@@ -124,29 +125,46 @@ export async function getBankOperationEligibility(
   }
 
   const now = new Date();
-  const restrictions = await db
-    .select({ type: bankRestrictionsTable.type })
-    .from(bankRestrictionsTable)
-    .where(
-      and(
-        eq(bankRestrictionsTable.userId, userId),
-        eq(bankRestrictionsTable.status, "active"),
-        isNull(bankRestrictionsTable.walletId),
-        lte(bankRestrictionsTable.effectiveAt, now),
-        or(
-          isNull(bankRestrictionsTable.expiresAt),
-          gt(bankRestrictionsTable.expiresAt, now),
+  const [subscription, restrictions] = await Promise.all([
+    db
+      .select({
+        status: bankUsersTable.vaultSubscriptionStatus,
+        expiresAt: bankUsersTable.vaultSubscriptionExpiresAt,
+      })
+      .from(bankUsersTable)
+      .where(eq(bankUsersTable.id, userId))
+      .limit(1),
+    db
+      .select({ type: bankRestrictionsTable.type })
+      .from(bankRestrictionsTable)
+      .where(
+        and(
+          eq(bankRestrictionsTable.userId, userId),
+          eq(bankRestrictionsTable.status, "active"),
+          isNull(bankRestrictionsTable.walletId),
+          lte(bankRestrictionsTable.effectiveAt, now),
+          or(
+            isNull(bankRestrictionsTable.expiresAt),
+            gt(bankRestrictionsTable.expiresAt, now),
+          ),
         ),
       ),
-    );
+  ]);
   const types = new Set(restrictions.map((restriction) => restriction.type));
+  const subscriptionActive = hasActiveVaultSubscription({
+    vaultSubscriptionStatus: subscription[0]?.status ?? "inactive",
+    vaultSubscriptionExpiresAt: subscription[0]?.expiresAt ?? null,
+  });
   const commonRestriction =
     types.has("suspend_user") ||
     types.has("under_review") ||
     types.has("read_only");
 
   return {
-    depositAllowed: !commonRestriction && !types.has("restrict_deposits"),
+    depositAllowed:
+      subscriptionActive &&
+      !commonRestriction &&
+      !types.has("restrict_deposits"),
     withdrawalAllowed:
       !commonRestriction &&
       !types.has("restrict_withdrawals") &&

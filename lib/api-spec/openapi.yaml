@@ -1091,7 +1091,8 @@ paths:
     post:
       operationId: createLedgerRequest
       tags: [bank]
-      summary: Request an internal ledger deposit or withdrawal
+      summary: Add funds with active Vault access or request a withdrawal
+      description: Deposit requests are credited immediately only for customers with an active Private Vault subscription and eligible account and wallet status. Withdrawal requests remain subject to administrator review.
       requestBody:
         required: true
         content:
@@ -1109,6 +1110,8 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "409":
           $ref: "#/components/responses/Conflict"
   /bank/admin/access:
@@ -1330,7 +1333,7 @@ paths:
     get:
       operationId: listAdminLedgerRequests
       tags: [admin]
-      summary: List pending internal ledger deposit and withdrawal requests
+      summary: List pending withdrawal requests
       parameters:
         - name: userId
           in: query
@@ -1339,7 +1342,7 @@ paths:
           schema: { type: string, minLength: 1, maxLength: 128 }
       responses:
         "200":
-          description: Pending requests for administrator review
+          description: Pending withdrawal requests for administrator review
           content:
             application/json:
               schema:
@@ -1354,7 +1357,7 @@ paths:
     patch:
       operationId: reviewAdminLedgerRequest
       tags: [admin]
-      summary: Approve or reject an internal ledger request
+      summary: Approve or reject a withdrawal request
       parameters:
         - name: requestId
           in: path

@@ -10,6 +10,7 @@
     "test:bank-identity": "tsx --test test/bank-identity.test.ts",
     "test:identity-documents": "tsx --test test/identity-document-size.test.ts",
     "test:financial-access": "tsx --test test/financial-access.test.ts",
+    "test:vault-subscriber-deposit": "tsx --test test/vault-subscriber-deposit.test.ts",
     "test:sensitive-bank-details": "tsx --test test/sensitive-bank-details.test.ts",
     "test:private-vault": "tsx --test test/private-vault.test.ts",
     "test:paystack-vault": "tsx --test test/paystack-vault.test.ts",

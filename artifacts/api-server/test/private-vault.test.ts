@@ -31,6 +31,11 @@ import {
   getVaultSubscriptionPlan,
   minorAmountToDecimal,
 } from "../src/lib/vault-subscription";
+import {
+  buildVaultExpiryReminderEmail,
+  sendVaultExpiryReminderEmail,
+  sendVaultExpiryReminders,
+} from "../src/lib/vault-expiry-reminders";
 
 const encryptionKeyEnv = "BANK_DETAILS_ENCRYPTION_KEY";
 const sessionSecretEnv = "SESSION_SECRET";
@@ -216,6 +221,117 @@ test("vault subscription states and per-wallet transfer choices preserve ledger 
   assert.equal(resolveFutureTransferStatus("reject", true), "failed");
   assert.equal(resolveFutureTransferStatus("hold", true), "pending");
   assert.equal(resolveFutureTransferStatus("normal", true), "completed");
+});
+
+test("Vault expiry reminders are branded, one-time per expiry, and retry after delivery failure", async () => {
+  const now = new Date("2026-11-13T12:00:00.000Z");
+  const expiresAt = new Date("2026-11-15T12:00:00.000Z");
+  const message = buildVaultExpiryReminderEmail({
+    recipient: email,
+    expiresAt,
+    autoRenew: true,
+    senderAddress: "security@globus.website",
+    origin: "https://globus.example",
+  });
+  assert.equal(message.subject, "Your Globus Private Vault access expires soon");
+  assert.ok(message.text.includes("Paystack confirms the renewal payment"));
+  assert.ok(message.html.includes("https://globus.example/private-vault"));
+  assert.ok(message.html.includes("GLOBUS"));
+
+  await db
+    .update(bankUsersTable)
+    .set({
+      vaultSubscriptionStatus: "active",
+      vaultSubscriptionExpiresAt: expiresAt,
+      vaultSubscriptionAutoRenew: true,
+      vaultSubscriptionExpiryReminderSentFor: null,
+      vaultSubscriptionExpiryReminderClaimedAt: null,
+    })
+    .where(eq(bankUsersTable.id, userId));
+  const delivered: Date[] = [];
+  const result = await sendVaultExpiryReminders({
+    now,
+    onlyUserId: userId,
+    sendReminder: async (input) => {
+      delivered.push(input.expiresAt);
+      return true;
+    },
+  });
+  assert.deepEqual(result, { sent: 1, failed: 0 });
+  assert.deepEqual(delivered, [expiresAt]);
+  assert.deepEqual(
+    await sendVaultExpiryReminders({
+      now,
+      onlyUserId: userId,
+      sendReminder: async () => true,
+    }),
+    { sent: 0, failed: 0 },
+  );
+
+  const nextExpiry = new Date("2026-11-16T12:00:00.000Z");
+  await db
+    .update(bankUsersTable)
+    .set({ vaultSubscriptionExpiresAt: nextExpiry })
+    .where(eq(bankUsersTable.id, userId));
+  assert.deepEqual(
+    await sendVaultExpiryReminders({
+      now,
+      onlyUserId: userId,
+      sendReminder: async () => false,
+    }),
+    { sent: 0, failed: 1 },
+  );
+  assert.deepEqual(
+    await sendVaultExpiryReminders({
+      now,
+      onlyUserId: userId,
+      sendReminder: async (input) =>
+        input.expiresAt.getTime() === nextExpiry.getTime(),
+    }),
+    { sent: 1, failed: 0 },
+  );
+});
+
+test("Vault expiry reminder sends through the configured Resend sender", async () => {
+  const variableNames = [
+    "RESEND_API_KEY",
+    "GLOBUS_SECURITY_EMAIL_FROM",
+    "REPLIT_DOMAINS",
+  ];
+  const previousValues = variableNames.map((name) => process.env[name]);
+  const originalFetch = globalThis.fetch;
+  let sentMessage: Record<string, unknown> | null = null;
+  let sentIdempotencyKey = "";
+  process.env.RESEND_API_KEY = "test-resend-key";
+  process.env.GLOBUS_SECURITY_EMAIL_FROM = "security@globus.website";
+  process.env.REPLIT_DOMAINS = "globus.example";
+  globalThis.fetch = async (_input, init) => {
+    sentMessage = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    sentIdempotencyKey = new Headers(init?.headers).get("Idempotency-Key") ?? "";
+    return new Response(null, { status: 200 });
+  };
+  try {
+    assert.equal(
+      await sendVaultExpiryReminderEmail({
+        userId,
+        recipient: email,
+        expiresAt: new Date("2026-11-15T12:00:00.000Z"),
+        autoRenew: false,
+      }),
+      true,
+    );
+    assert.equal(sentMessage?.to, email);
+    assert.equal(sentMessage?.from, "Globus Bank <security@globus.website>");
+    assert.ok(String(sentMessage?.text).includes("renew before the expiry time"));
+    assert.match(sentIdempotencyKey, /^vault-expiry-[a-f0-9]{24}-\d+$/);
+  } finally {
+    globalThis.fetch = originalFetch;
+    for (const [index, name] of variableNames.entries()) {
+      const previous = previousValues[index];
+      if (previous === undefined) delete process.env[name];
+      else process.env[name] = previous;
+    }
+  }
 });
 
 test("manual Vault plans keep their configured NGN prices and fixed calendar terms", () => {

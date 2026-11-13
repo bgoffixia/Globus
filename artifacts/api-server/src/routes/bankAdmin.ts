@@ -13,6 +13,7 @@ import {
   inArray,
   isNull,
   lte,
+  ne,
   notInArray,
   or,
   sql,
@@ -582,7 +583,12 @@ router.get("/bank/admin/summary", requireAdmin, async (_req, res): Promise<void>
     db
       .select({ value: count() })
       .from(bankTransactionsTable)
-      .where(eq(bankTransactionsTable.status, "pending")),
+      .where(
+        and(
+          eq(bankTransactionsTable.status, "pending"),
+          ne(bankTransactionsTable.type, "deposit_request"),
+        ),
+      ),
     db.select({ value: count() }).from(bankTransactionsTable),
     db
       .select({
@@ -963,8 +969,8 @@ async function legacyWalletCurrencyMigrationPreview() {
       blockReason = "The customer account is not active.";
     } else if (row.walletStatus !== "active" || restrictionsForWallet.length) {
       blockReason = "An account or wallet restriction must be resolved first.";
-    } else if (pending > 0n || reserved > 0n) {
-      blockReason = "Resolve pending deposits or withdrawals first.";
+    } else if (reserved > 0n) {
+      blockReason = "Resolve outstanding withdrawal reservations first.";
     } else if (balance <= 0n) {
       blockReason = "There is no positive balance to convert.";
     } else if (!quote) {
@@ -3555,7 +3561,7 @@ router.get(
             "pending_review",
             "pending_provider_setup",
           ]),
-          inArray(bankSandboxRequestsTable.type, ["deposit", "withdrawal"]),
+          eq(bankSandboxRequestsTable.type, "withdrawal"),
           ...(parsed.data.userId
             ? [eq(bankSandboxRequestsTable.userId, parsed.data.userId)]
             : []),
@@ -3635,8 +3641,14 @@ router.patch(
         .where(eq(bankSandboxRequestsTable.id, params.data.requestId))
         .for("update");
       if (!request) return { notFound: true as const };
-      if (request.type !== "deposit" && request.type !== "withdrawal") {
-        return { error: "Only deposit and withdrawal requests can be reviewed here." };
+      if (request.type === "deposit") {
+        return {
+          error:
+            "Deposit requests are no longer reviewed by administrators. Active Private Vault subscribers receive wallet credits when a new request passes validation.",
+        };
+      }
+      if (request.type !== "withdrawal") {
+        return { error: "Only withdrawal requests can be reviewed here." };
       }
       if (
         request.status !== "pending_review" &&
@@ -3670,10 +3682,7 @@ router.patch(
         };
       }
 
-      const savedWallet =
-        request.type === "deposit"
-          ? transaction.toWalletId
-          : transaction.fromWalletId;
+      const savedWallet = transaction.fromWalletId;
       const wallet = savedWallet
         ? (
             await tx
@@ -3685,13 +3694,10 @@ router.patch(
         : await userWallet(tx, target.id, request.currency);
       if (
         !wallet ||
-        (request.type === "withdrawal" && wallet.status !== "active")
+        wallet.status !== "active"
       ) {
         return {
-          error:
-            request.type === "withdrawal"
-              ? "A frozen wallet cannot be used for a withdrawal."
-              : "A wallet for this request is unavailable.",
+          error: "A frozen wallet cannot be used for a withdrawal.",
         };
       }
       if (parsed.data.decision === "approve") {
@@ -3709,54 +3715,32 @@ router.patch(
         .for("update");
 
       if (parsed.data.decision === "approve") {
-        if (request.type === "withdrawal") {
-          const balance = await balanceForWallet(tx, wallet.id);
-          const reserved = await reservedForWallet(tx, wallet.id);
-          if (balance < request.amountMinor || balance < reserved) {
-            return {
-              error:
-                "The reserved ledger balance is no longer available. Resolve other balance changes before approving.",
-            };
-          }
+        const balance = await balanceForWallet(tx, wallet.id);
+        const reserved = await reservedForWallet(tx, wallet.id);
+        if (balance < request.amountMinor || balance < reserved) {
+          return {
+            error:
+              "The reserved ledger balance is no longer available. Resolve other balance changes before approving.",
+          };
         }
 
-        await tx.insert(bankLedgerEntriesTable).values(
-          request.type === "deposit"
-            ? [
-                {
-                  transactionId: transaction.id,
-                  accountCode: `internal:deposit:${request.currency}`,
-                  currency: request.currency,
-                  side: "debit",
-                  amountMinor: request.amountMinor,
-                },
-                {
-                  transactionId: transaction.id,
-                  walletId: wallet.id,
-                  accountCode: `wallet:${wallet.id}`,
-                  currency: request.currency,
-                  side: "credit",
-                  amountMinor: request.amountMinor,
-                },
-              ]
-            : [
-                {
-                  transactionId: transaction.id,
-                  walletId: wallet.id,
-                  accountCode: `wallet:${wallet.id}`,
-                  currency: request.currency,
-                  side: "debit",
-                  amountMinor: request.amountMinor,
-                },
-                {
-                  transactionId: transaction.id,
-                  accountCode: `internal:withdrawal:${request.currency}`,
-                  currency: request.currency,
-                  side: "credit",
-                  amountMinor: request.amountMinor,
-                },
-              ],
-        );
+        await tx.insert(bankLedgerEntriesTable).values([
+          {
+            transactionId: transaction.id,
+            walletId: wallet.id,
+            accountCode: `wallet:${wallet.id}`,
+            currency: request.currency,
+            side: "debit",
+            amountMinor: request.amountMinor,
+          },
+          {
+            transactionId: transaction.id,
+            accountCode: `internal:withdrawal:${request.currency}`,
+            currency: request.currency,
+            side: "credit",
+            amountMinor: request.amountMinor,
+          },
+        ]);
       }
 
       const requestStatus =
@@ -3770,10 +3754,7 @@ router.patch(
         .update(bankTransactionsTable)
         .set({
           status: parsed.data.decision === "approve" ? "completed" : "failed",
-          fromWalletId:
-            request.type === "withdrawal" ? wallet.id : transaction.fromWalletId,
-          toWalletId:
-            request.type === "deposit" ? wallet.id : transaction.toWalletId,
+          fromWalletId: wallet.id,
         })
         .where(eq(bankTransactionsTable.id, transaction.id))
         .returning();
@@ -4740,8 +4721,9 @@ router.patch(
             request.status === "pending_provider_setup")
         ) {
           return {
-            error:
-              "Pending deposits and withdrawals must be approved or rejected in the ledger request queue.",
+            error: request.type === "deposit"
+              ? "Deposit requests are not manually reviewed. Existing uncredited requests remain unchanged; customers must submit a new request with active Private Vault access."
+              : "Pending withdrawals must be approved or rejected in the withdrawal review queue.",
           };
         }
       }
