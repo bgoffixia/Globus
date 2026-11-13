@@ -11,6 +11,7 @@ import { AuthFrame, ClerkSignInForm, ClerkSignUpForm, EmailRecoverySignInForm } 
 import { PasswordResetLinkPage, RequiredPasswordResetPage } from '@/components/auth-pages';
 import { PwaInstallPrompt } from '@/components/pwa-install-prompt';
 import { GlobusLoader } from '@/components/globus-loader';
+import { NeonAuthStagingApp } from '@/components/neon-auth-staging';
 import NotFound from '@/pages/not-found';
 import {
   DashboardPage,
@@ -52,7 +53,9 @@ function stripBase(path: string): string {
     : path;
 }
 
-if (!clerkPubKey) {
+const isNeonAuthStaging = import.meta.env.VITE_AUTH_PROVIDER === 'neon-staging';
+
+if (!clerkPubKey && !isNeonAuthStaging) {
   throw new Error('Missing VITE_CLERK_PUBLISHABLE_KEY in .env file');
 }
 
@@ -298,6 +301,21 @@ function RoutedErrorBoundary({ children }: { children: ReactNode }) {
 }
 
 function App() {
+  if (isNeonAuthStaging) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <WouterRouter base={basePath}>
+            <RoutedErrorBoundary>
+              <NeonAuthStagingApp />
+            </RoutedErrorBoundary>
+          </WouterRouter>
+          <Toaster />
+        </TooltipProvider>
+      </QueryClientProvider>
+    );
+  }
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
