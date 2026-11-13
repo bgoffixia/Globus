@@ -14,3 +14,9 @@ Only a server-verified Paystack payment may activate Vault access. Manual proof 
 **Why:** The user explicitly requested automatic approval only after Paystack confirms the transaction and asked to disable administrator manual review.
 
 **How to apply:** Keep customer checkout and webhook verification as the only activation paths. Treat legacy pending manual requests as inactive for customers and allow them to start Paystack checkout instead.
+
+The server marks elapsed subscriptions as expired and deletes their Vault passcode sessions. Expiration revokes access but does not cancel Paystack auto-renewal; a later confirmed renewal can reactivate access.
+
+**Why:** Expiry must remove access even if a customer leaves the Vault open, while an opted-in recurring payment should still be able to renew the plan.
+
+**How to apply:** Keep expiry enforcement immediate in subscription checks and persist it through the server sweep. Preserve renewal identifiers and preferences unless Paystack confirms cancellation or the customer requests it.

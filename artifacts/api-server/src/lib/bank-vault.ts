@@ -4,7 +4,7 @@ import {
   scrypt,
   timingSafeEqual,
 } from "node:crypto";
-import { and, eq, gt, lte } from "drizzle-orm";
+import { and, eq, gt, inArray, lte } from "drizzle-orm";
 import {
   bankUsersTable,
   bankVaultSessionsTable,
@@ -51,6 +51,35 @@ export function hasActiveVaultSubscription(user: {
     user.vaultSubscriptionExpiresAt,
     now,
   ) === "active";
+}
+
+export async function expireVaultSubscriptions(now = new Date()): Promise<number> {
+  return db.transaction(async (tx) => {
+    const expiredUsers = await tx
+      .update(bankUsersTable)
+      .set({
+        vaultSubscriptionStatus: "expired",
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(bankUsersTable.vaultSubscriptionStatus, "active"),
+          lte(bankUsersTable.vaultSubscriptionExpiresAt, now),
+        ),
+      )
+      .returning({ id: bankUsersTable.id });
+
+    if (expiredUsers.length === 0) return 0;
+
+    await tx
+      .delete(bankVaultSessionsTable)
+      .where(inArray(
+        bankVaultSessionsTable.userId,
+        expiredUsers.map((user) => user.id),
+      ));
+
+    return expiredUsers.length;
+  });
 }
 
 export function vaultTransferEmailAlertsEnabled(

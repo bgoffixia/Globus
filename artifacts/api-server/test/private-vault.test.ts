@@ -9,6 +9,7 @@ import {
 } from "@workspace/db";
 import {
   initializeVaultPasscode,
+  expireVaultSubscriptions,
   hasActiveVaultSubscription,
   isVaultPasscodeSessionValid,
   isVaultSessionActive,
@@ -158,6 +159,34 @@ test("private vault passcodes unlock a short session and revoke it when changed"
   assert.notEqual((await unlockVault(userId, "1357")).result, "valid");
   const reopened = await unlockVault(userId, "2468");
   assert.equal(reopened.result, "valid");
+  if (reopened.result !== "valid") return;
+
+  await db
+    .update(bankUsersTable)
+    .set({
+      vaultSubscriptionStatus: "active",
+      vaultSubscriptionExpiresAt: new Date("2026-11-10T11:59:00.000Z"),
+    })
+    .where(eq(bankUsersTable.id, userId));
+  assert.equal(
+    await expireVaultSubscriptions(new Date("2026-11-10T12:00:00.000Z")),
+    1,
+  );
+  const [expiredUser] = await db
+    .select({
+      status: bankUsersTable.vaultSubscriptionStatus,
+    })
+    .from(bankUsersTable)
+    .where(eq(bankUsersTable.id, userId));
+  assert.equal(expiredUser?.status, "expired");
+  assert.equal(
+    await isVaultPasscodeSessionValid(userId, reopened.sessionToken),
+    false,
+  );
+  assert.equal(
+    await expireVaultSubscriptions(new Date("2026-11-10T12:01:00.000Z")),
+    0,
+  );
 });
 
 test("vault subscription states and per-wallet transfer choices preserve ledger rules", () => {
