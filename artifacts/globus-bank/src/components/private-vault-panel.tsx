@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { ArrowLeft, ArrowRight, CheckCircle2, LockKeyhole, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, ArrowRight, LockKeyhole, ShieldCheck } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useUser } from '@clerk/react';
 import { useLocation } from 'wouter';
@@ -12,7 +12,6 @@ import {
   getListBankTransactionsQueryKey,
   getListBankVaultTransactionNotesQueryKey,
   getListBankVaultWalletControlsQueryKey,
-  useCreateBankVaultSubscriptionProofUploadUrl,
   useDeleteBankPushSubscription,
   useDeleteBankVaultTransactionNote,
   useGetBankPushConfig,
@@ -26,7 +25,6 @@ import {
   useListBankTransactions,
   useListBankVaultTransactionNotes,
   useListBankVaultWalletControls,
-  useRequestBankVaultSubscription,
   useSaveBankPushSubscription,
   useUnlockBankVault,
   useUpdateBankPushPreferences,
@@ -36,23 +34,12 @@ import {
   useUpdateBankVaultWalletControl,
   useVerifyBankVaultPaystackPayment,
 } from '@workspace/api-client-react';
-import type { BankTransaction, BankVaultEmailPreferences, BankVaultProofUploadInputContentType, BankVaultWalletControl } from '@workspace/api-client-react';
+import type { BankTransaction, BankVaultEmailPreferences, BankVaultWalletControl } from '@workspace/api-client-react';
 import { fetchWebpushrSubscriberId, loadWebpushr } from '../lib/webpushr-client';
 
 const fieldClass = 'h-9 w-full rounded-lg border border-[#dfe6eb] bg-white px-3 text-[11px] text-[#344b64] outline-none focus:border-[#77aeb0] focus:ring-2 focus:ring-[#77aeb0]/15';
 type VaultPlanCode = '1m' | '3m' | '1y';
 type SubscriptionStep = 'closed' | 'plans' | 'payment';
-const proofContentTypes: BankVaultProofUploadInputContentType[] = ['application/pdf', 'image/jpeg', 'image/png'];
-function proofTypeFor(file: File): BankVaultProofUploadInputContentType | null {
-  if (proofContentTypes.includes(file.type as BankVaultProofUploadInputContentType)) {
-    return file.type as BankVaultProofUploadInputContentType;
-  }
-  const extension = file.name.split('.').pop()?.toLowerCase();
-  if (extension === 'pdf') return 'application/pdf';
-  if (extension === 'jpg' || extension === 'jpeg') return 'image/jpeg';
-  if (extension === 'png') return 'image/png';
-  return null;
-}
 function ngnMinor(value: string) {
   return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(Number(value) / 100);
 }
@@ -96,9 +83,6 @@ export function PrivateVaultPanel() {
   const [selectedPlan, setSelectedPlan] = useState<VaultPlanCode>('1m');
   const [autoRenew, setAutoRenew] = useState(false);
   const [subscriptionStep, setSubscriptionStep] = useState<SubscriptionStep>('closed');
-  const [proofFile, setProofFile] = useState<File | null>(null);
-  const [proofUploaded, setProofUploaded] = useState(false);
-  const [isUploadingProof, setIsUploadingProof] = useState(false);
   const [isVerifyingPayment, setIsVerifyingPayment] = useState(false);
   const paymentCallbackHandled = useRef('');
   const lastSubscriptionStatus = useRef<string | undefined>(undefined);
@@ -108,12 +92,6 @@ export function PrivateVaultPanel() {
       enabled: !!sessionToken,
       retry: false,
     },
-    request: sessionToken ? { headers: { 'X-Globus-Vault-Session': sessionToken } } : undefined,
-  });
-  const uploadProofUrl = useCreateBankVaultSubscriptionProofUploadUrl({
-    request: sessionToken ? { headers: { 'X-Globus-Vault-Session': sessionToken } } : undefined,
-  });
-  const requestSubscription = useRequestBankVaultSubscription({
     request: sessionToken ? { headers: { 'X-Globus-Vault-Session': sessionToken } } : undefined,
   });
   const initializePaystackPayment = useInitializeBankVaultPaystackPayment({
@@ -245,8 +223,6 @@ export function PrivateVaultPanel() {
       queryClient.removeQueries({ queryKey: getGetBankVaultBillingQueryKey() });
       setSessionToken('');
       setExpiresAt('');
-      setProofFile(null);
-      setProofUploaded(false);
       setSubscriptionStep('closed');
       return;
     }
@@ -259,8 +235,6 @@ export function PrivateVaultPanel() {
       queryClient.removeQueries({ queryKey: getGetBankVaultBillingQueryKey() });
       setSessionToken('');
       setExpiresAt('');
-      setProofFile(null);
-      setProofUploaded(false);
       setSubscriptionStep('closed');
     }, remaining);
     return () => window.clearTimeout(timeout);
@@ -279,8 +253,6 @@ export function PrivateVaultPanel() {
       queryClient.removeQueries({ queryKey: getGetBankVaultBillingQueryKey() });
       setSessionToken('');
       setExpiresAt('');
-      setProofFile(null);
-      setProofUploaded(false);
       setSubscriptionStep('closed');
       setMessage('Vault access changed. Enter your passcode again to continue.');
     }
@@ -318,8 +290,6 @@ export function PrivateVaultPanel() {
       setNewPasscode('');
       setSessionToken('');
       setExpiresAt('');
-      setProofFile(null);
-      setProofUploaded(false);
       setSubscriptionStep('closed');
       void queryClient.cancelQueries({ queryKey: getListBankVaultWalletControlsQueryKey() });
       void queryClient.cancelQueries({ queryKey: getGetBankVaultEmailPreferencesQueryKey() });
@@ -343,60 +313,7 @@ export function PrivateVaultPanel() {
     setExpiresAt('');
     setPasscode('');
     setNewPasscode('');
-    setProofFile(null);
-    setProofUploaded(false);
     setSubscriptionStep('closed');
-  };
-  const uploadSubscriptionProof = async () => {
-    setError('');
-    setMessage('');
-    setIsUploadingProof(true);
-    try {
-      if (!proofFile) throw new Error('Choose a payment proof file before submitting.');
-      if (proofFile.size < 1 || proofFile.size > 10 * 1024 * 1024) {
-        throw new Error('Payment proof must be 10 MB or smaller.');
-      }
-      const contentType = proofTypeFor(proofFile);
-      if (!contentType) {
-        throw new Error('Choose a PDF, JPG, or PNG payment proof.');
-      }
-      const upload = await uploadProofUrl.mutateAsync({
-        data: {
-          planCode: selectedPlan,
-          contentType,
-          sizeBytes: proofFile.size,
-          fileName: proofFile.name,
-        },
-      });
-      const uploaded = await fetch(upload.uploadUrl, {
-        method: 'PUT',
-        headers: { 'Content-Type': contentType },
-        body: proofFile,
-      });
-      if (!uploaded.ok) throw new Error('Payment proof upload failed. Try again.');
-      setProofUploaded(true);
-      setMessage('Payment proof uploaded successfully. Submit it below to send your subscription request for review.');
-    } catch (err) {
-      setProofUploaded(false);
-      setError(err instanceof Error ? err.message : 'The payment proof could not be uploaded.');
-    } finally {
-      setIsUploadingProof(false);
-    }
-  };
-  const submitSubscriptionRequest = async () => {
-    setError('');
-    setMessage('');
-    try {
-      if (!proofUploaded) throw new Error('Upload your payment proof before submitting the request.');
-      await requestSubscription.mutateAsync();
-      await queryClient.invalidateQueries({ queryKey: getGetBankVaultStatusQueryKey() });
-      setProofFile(null);
-      setProofUploaded(false);
-      setSubscriptionStep('closed');
-      setMessage('Payment proof submitted. Your subscription request is awaiting administrator review.');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'The subscription request could not be submitted.');
-    }
   };
   const startPaystackCheckout = async () => {
     setError('');
@@ -448,11 +365,8 @@ export function PrivateVaultPanel() {
     }
   };
   const billingBusy =
-    uploadProofUrl.isPending ||
-    requestSubscription.isPending ||
     initializePaystackPayment.isPending ||
     emailRenewalManagementLink.isPending ||
-    isUploadingProof ||
     isVerifyingPayment;
   const callbackReference = typeof window !== 'undefined'
     ? new URLSearchParams(window.location.search).get('reference') ?? ''
@@ -618,7 +532,6 @@ export function PrivateVaultPanel() {
 
   const loading = initialize.isPending || unlock.isPending || updatePasscode.isPending;
   const subscriptionActive = !!status.data?.subscriptionActive;
-  const subscriptionPending = status.data?.subscriptionStatus === 'pending';
   const checkoutPending = status.data?.paymentStatus === 'pending';
   return (
     <section className="rounded-[18px] border border-[#e1e8ee] bg-white p-4 sm:p-5" data-testid="private-vault-panel">
@@ -670,17 +583,14 @@ export function PrivateVaultPanel() {
                     <p className="mt-1 text-[10px] leading-5 text-[#786e55]">
                       {checkoutPending
                         ? 'Paystack checkout is in progress. Complete payment, then verify it here to activate your plan.'
-                        : subscriptionPending
-                        ? `Your ${status.data?.planCode || ''} plan request and payment proof are awaiting administrator review.`
                         : status.data?.subscriptionStatus === 'rejected'
                           ? 'Your previous request was declined. You can choose a plan and pay securely.'
                           : status.data?.subscriptionStatus === 'expired'
                             ? 'Your subscription has expired. Choose a plan to renew Vault access.'
                             : 'Choose a plan and complete checkout. Vault changes unlock after payment is verified.'}
                     </p>
-                    {subscriptionPending && status.data?.amountMinor && <p className="mt-1 text-[10px] font-bold text-[#6f633f]">{ngnMinor(status.data.amountMinor)} · submitted {status.data.proofUploadedAt ? new Date(status.data.proofUploadedAt).toLocaleString() : ''}</p>}
                   </div>
-                  {!subscriptionPending && !checkoutPending && subscriptionStep === 'closed' && <button type="button" onClick={() => { setError(''); setMessage(''); setSubscriptionStep('plans'); }} data-testid="button-vault-subscribe" className="inline-flex h-9 shrink-0 items-center gap-2 rounded-lg bg-[#173858] px-4 text-[10px] font-bold text-white hover:bg-[#214b70]">
+                  {!checkoutPending && subscriptionStep === 'closed' && <button type="button" onClick={() => { setError(''); setMessage(''); setSubscriptionStep('plans'); }} data-testid="button-vault-subscribe" className="inline-flex h-9 shrink-0 items-center gap-2 rounded-lg bg-[#173858] px-4 text-[10px] font-bold text-white hover:bg-[#214b70]">
                     Subscribe <ArrowRight size={13} />
                   </button>}
                 </div>
@@ -692,10 +602,10 @@ export function PrivateVaultPanel() {
                   </div>
                   <button type="button" disabled={isVerifyingPayment} onClick={() => void checkPaystackPayment()} data-testid="button-vault-verify-payment" className="h-8 rounded-lg bg-[#173858] px-3 text-[9px] font-bold text-white disabled:opacity-50">{isVerifyingPayment ? 'Checking…' : 'Verify payment'}</button>
                 </div>}
-                {subscriptionPending || checkoutPending ? null : billing.isLoading ? <div className="mt-3 h-12 animate-pulse rounded-lg bg-white/70" /> :
+                {checkoutPending ? null : billing.isLoading ? <div className="mt-3 h-12 animate-pulse rounded-lg bg-white/70" /> :
                   billing.isError ? <div className="mt-3 flex items-center justify-between rounded-lg bg-white/70 px-3 py-2 text-[9px] text-[#a24940]"><span>Subscription payment options could not be loaded.</span><button type="button" onClick={() => void billing.refetch()} className="font-bold underline">Retry</button></div> :
                     billing.data && <>
-                      {!billing.data.configured && <p className="mt-3 rounded-lg border border-[#e8dfc5] bg-white/75 p-3 text-[9px] leading-4 text-[#786e55]">Subscription checkout is being configured by Globus administrators. You can view Vault settings, but cannot submit a request yet.</p>}
+                      {!billing.data.configured && <p className="mt-3 rounded-lg border border-[#e8dfc5] bg-white/75 p-3 text-[9px] leading-4 text-[#786e55]">Paystack checkout is currently unavailable. Try again later; Vault access can only activate after Paystack confirms payment.</p>}
 
                       {subscriptionStep === 'plans' && <div className="mt-4" data-testid="vault-subscription-plans">
                         <div className="flex items-center justify-between gap-2">
@@ -703,7 +613,7 @@ export function PrivateVaultPanel() {
                           <button type="button" onClick={() => setSubscriptionStep('closed')} className="text-[9px] font-semibold text-[#75816c]">Cancel</button>
                         </div>
                         <div className="mt-2 grid gap-2 sm:grid-cols-3">
-                          {billing.data.plans.map(plan => <button key={plan.code} type="button" disabled={!billing.data.configured} onClick={() => { setSelectedPlan(plan.code as VaultPlanCode); setAutoRenew(false); setProofFile(null); setProofUploaded(false); setMessage(''); setError(''); setSubscriptionStep('payment'); }} data-testid={`button-vault-plan-${plan.code}`} className="rounded-lg border border-[#e5dec9] bg-white/80 p-3 text-left transition hover:border-[#43888e] hover:bg-white disabled:cursor-not-allowed disabled:opacity-50">
+                          {billing.data.plans.map(plan => <button key={plan.code} type="button" disabled={!billing.data.configured} onClick={() => { setSelectedPlan(plan.code as VaultPlanCode); setAutoRenew(false); setMessage(''); setError(''); setSubscriptionStep('payment'); }} data-testid={`button-vault-plan-${plan.code}`} className="rounded-lg border border-[#e5dec9] bg-white/80 p-3 text-left transition hover:border-[#43888e] hover:bg-white disabled:cursor-not-allowed disabled:opacity-50">
                             <span className="block text-[9px] font-semibold text-[#7d7358]">{plan.label}</span>
                             <strong className="mt-1 block text-[12px] text-[#334f5b]">{ngnMinor(plan.priceMinor)}</strong>
                             <span className="mt-2 inline-flex items-center gap-1 text-[9px] font-bold text-[#397b80]">Choose plan <ArrowRight size={11} /></span>
@@ -711,11 +621,10 @@ export function PrivateVaultPanel() {
                         </div>
                       </div>}
 
-                       {subscriptionStep === 'payment' && (() => {
+                       {subscriptionStep === 'payment' && billing.data.provider === 'paystack' && (() => {
                         const plan = billing.data.plans.find(item => item.code === selectedPlan);
                         if (!plan) return null;
-                         if (billing.data.provider === 'paystack') {
-                           return <div className="mt-4 space-y-3" data-testid="vault-subscription-payment">
+                          return <div className="mt-4 space-y-3" data-testid="vault-subscription-payment">
                              <button type="button" onClick={() => setSubscriptionStep('plans')} className="inline-flex items-center gap-1.5 text-[9px] font-bold text-[#397b80]"><ArrowLeft size={12} /> Back to plans</button>
                              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#e8dfc5] bg-white/80 p-3">
                                <div><p className="text-[9px] font-bold uppercase tracking-[.1em] text-[#8a784c]">Paystack checkout</p><p className="mt-1 text-[11px] font-bold text-[#334f5b]">{plan.label}</p></div>
@@ -729,37 +638,7 @@ export function PrivateVaultPanel() {
                               {selectedPlan === '3m' && <p className="rounded-lg border border-[#e8dfc5] bg-[#fffdf8] p-3 text-[9px] leading-4 text-[#786e55]">This three-month option is one-time only; Paystack does not list a quarterly renewal interval.</p>}
                              <p className="text-[9px] leading-4 text-[#786e55]">Payment is initialized and verified on the Globus server. Vault access activates only after Paystack confirms the exact plan amount and currency.</p>
                              <button type="button" disabled={billingBusy || !billing.data.configured} onClick={() => void startPaystackCheckout()} data-testid="button-vault-paystack-checkout" className="h-9 rounded-lg bg-[#173858] px-4 text-[10px] font-bold text-white disabled:opacity-50">{initializePaystackPayment.isPending ? 'Preparing checkout…' : 'Continue to Paystack'}</button>
-                           </div>;
-                         }
-                        return <div className="mt-4 space-y-3" data-testid="vault-subscription-payment">
-                          <button type="button" onClick={() => { setSubscriptionStep('plans'); setProofFile(null); setProofUploaded(false); setError(''); setMessage(''); }} className="inline-flex items-center gap-1.5 text-[9px] font-bold text-[#397b80]"><ArrowLeft size={12} /> Back to plans</button>
-                          <div className="rounded-lg border border-[#e8dfc5] bg-white/80 p-3">
-                            <div className="flex flex-wrap items-start justify-between gap-2">
-                              <div><p className="text-[9px] font-bold uppercase tracking-[.1em] text-[#8a784c]">Selected plan</p><p className="mt-1 text-[11px] font-bold text-[#334f5b]">{plan.label}</p></div>
-                              <strong className="text-[13px] text-[#334f5b]">{ngnMinor(plan.priceMinor)}</strong>
-                            </div>
-                            <div className="mt-3 border-t border-[#eee8d9] pt-3 text-[9px] leading-4 text-[#786e55]">
-                              <p className="font-bold text-[#5d563f]">{billing.data.paymentMethod}</p>
-                              {billing.data.bankName && <p>{billing.data.bankName}</p>}
-                              {billing.data.accountName && <p>Account name: {billing.data.accountName}</p>}
-                              {billing.data.accountNumber && <p>Account / reference: <span className="font-mono font-bold">{billing.data.accountNumber}</span></p>}
-                              <p className="mt-1 whitespace-pre-wrap">{billing.data.instructions}</p>
-                           </div>
-                          </div>
-                          <label className="block text-[9px] font-bold text-[#6c6249]">Payment proof · PDF, JPG or PNG, up to 10 MB
-                            <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" disabled={!billing.data.configured || billingBusy} onChange={event => { setProofFile(event.currentTarget.files?.[0] ?? null); setProofUploaded(false); setError(''); setMessage(''); }} className="mt-1 block w-full text-[9px] text-[#687b7e] file:mr-2 file:rounded-md file:border-0 file:bg-white file:px-3 file:py-2 file:text-[9px] file:font-bold file:text-[#3c626b]" data-testid="input-vault-payment-proof" />
-                          </label>
-                          {proofFile && <p className="truncate text-[9px] text-[#6f8175]">{proofFile.name} · {(proofFile.size / 1024 / 1024).toFixed(2)} MB</p>}
-                          {proofUploaded && <p role="status" data-testid="status-vault-proof-uploaded" className="flex items-center gap-2 rounded-lg border border-[#cfe5d8] bg-[#eff8f2] px-3 py-2 text-[9px] font-semibold text-[#41755f]"><CheckCircle2 size={14} />Payment proof uploaded successfully. You can now submit your request.</p>}
-                          <div className="flex flex-wrap gap-2">
-                            <button type="button" disabled={!billing.data.configured || billingBusy || !proofFile || proofUploaded} onClick={() => void uploadSubscriptionProof()} data-testid="button-vault-upload-proof" className="h-9 rounded-lg border border-[#b9d2d0] bg-white px-4 text-[10px] font-bold text-[#397b80] disabled:opacity-50">
-                              {uploadProofUrl.isPending ? 'Preparing upload…' : isUploadingProof ? 'Uploading proof…' : proofUploaded ? 'Proof uploaded' : 'Upload payment proof'}
-                            </button>
-                            <button type="button" disabled={!proofUploaded || billingBusy} onClick={() => void submitSubscriptionRequest()} data-testid="button-vault-submit-subscription-request" className="h-9 rounded-lg bg-[#173858] px-4 text-[10px] font-bold text-white disabled:opacity-50">
-                              {requestSubscription.isPending ? 'Submitting request…' : 'Submit subscription request'}
-                            </button>
-                          </div>
-                        </div>;
+                          </div>;
                       })()}
                     </>}
               </section>}

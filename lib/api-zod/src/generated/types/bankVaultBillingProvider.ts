@@ -11,5 +11,5 @@ export type BankVaultBillingProvider = typeof BankVaultBillingProvider[keyof typ
 
 export const BankVaultBillingProvider = {
   paystack: 'paystack',
-  manual: 'manual',
+  unavailable: 'unavailable',
 } as const;

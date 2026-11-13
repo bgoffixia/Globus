@@ -16,19 +16,6 @@ export interface AdminSettingsInput {
      * @maxLength 500
      */
   unverifiedDashboardMessage: string;
-  /**
-     * @minLength 1
-     * @maxLength 80
-     */
-  vaultPaymentMethod: string;
-  /** @maxLength 120 */
-  vaultPaymentBankName: string;
-  /** @maxLength 120 */
-  vaultPaymentAccountName: string;
-  /** @maxLength 40 */
-  vaultPaymentAccountNumber: string;
-  /** @maxLength 1000 */
-  vaultPaymentInstructions: string;
   /** @pattern ^[0-9]{1,12}(\.[0-9]{1,2})?$ */
   vaultPlan1mPrice: string;
   /** @pattern ^[0-9]{1,12}(\.[0-9]{1,2})?$ */

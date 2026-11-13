@@ -48,15 +48,7 @@ export interface AdminUser {
      * @pattern ^[0-9]+$
      */
   vaultSubscriptionAmountMinor?: string | null;
-  vaultSubscriptionProofAvailable?: boolean;
-  /** @nullable */
-  vaultSubscriptionProofContentType?: string | null;
-  /** @nullable */
-  vaultSubscriptionProofSizeBytes?: number | null;
-  /** @nullable */
-  vaultSubscriptionProofFileName?: string | null;
-  /** @nullable */
-  vaultSubscriptionProofUploadedAt?: Date | null;
+  vaultSubscriptionAutoRenew?: boolean;
   walletCount: number;
   createdAt: Date;
 }

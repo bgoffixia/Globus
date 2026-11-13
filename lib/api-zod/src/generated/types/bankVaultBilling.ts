@@ -13,10 +13,5 @@ export interface BankVaultBilling {
   provider: BankVaultBillingProvider;
   /** True only after the server recurring flag and signed webhook are configured */
   recurringEnabled: boolean;
-  paymentMethod: string;
-  bankName: string;
-  accountName: string;
-  accountNumber: string;
-  instructions: string;
   plans: BankVaultBillingPlansItem[];
 }

@@ -338,8 +338,6 @@ export interface BankVaultStatus {
      * @pattern ^[0-9]+$
      */
   amountMinor: string | null;
-  /** @nullable */
-  proofUploadedAt: string | null;
   paymentStatus: BankVaultStatusPaymentStatus;
   /** @nullable */
   paymentReference: string | null;
@@ -347,14 +345,12 @@ export interface BankVaultStatus {
   renewalManagementReady: boolean;
 }
 
-export type BankVaultSubscriptionRequestResult = BankVaultStatus;
-
 export type BankVaultBillingProvider = typeof BankVaultBillingProvider[keyof typeof BankVaultBillingProvider];
 
 
 export const BankVaultBillingProvider = {
   paystack: 'paystack',
-  manual: 'manual',
+  unavailable: 'unavailable',
 } as const;
 
 export type BankVaultBillingPlansItemCode = typeof BankVaultBillingPlansItemCode[keyof typeof BankVaultBillingPlansItemCode];
@@ -387,11 +383,6 @@ export interface BankVaultBilling {
   provider: BankVaultBillingProvider;
   /** True only after the server recurring flag and signed webhook are configured */
   recurringEnabled: boolean;
-  paymentMethod: string;
-  bankName: string;
-  accountName: string;
-  accountNumber: string;
-  instructions: string;
   plans: BankVaultBillingPlansItem[];
 }
 
@@ -1266,15 +1257,7 @@ export interface AdminUser {
      * @pattern ^[0-9]+$
      */
   vaultSubscriptionAmountMinor?: string | null;
-  vaultSubscriptionProofAvailable?: boolean;
-  /** @nullable */
-  vaultSubscriptionProofContentType?: string | null;
-  /** @nullable */
-  vaultSubscriptionProofSizeBytes?: number | null;
-  /** @nullable */
-  vaultSubscriptionProofFileName?: string | null;
-  /** @nullable */
-  vaultSubscriptionProofUploadedAt?: string | null;
+  vaultSubscriptionAutoRenew?: boolean;
   walletCount: number;
   createdAt: string;
 }
@@ -1356,15 +1339,11 @@ export type AdminVaultSubscriptionInputStatus = typeof AdminVaultSubscriptionInp
 
 
 export const AdminVaultSubscriptionInputStatus = {
-  active: 'active',
-  rejected: 'rejected',
   inactive: 'inactive',
 } as const;
 
 export interface AdminVaultSubscriptionInput {
   status: AdminVaultSubscriptionInputStatus;
-  /** @nullable */
-  expiresAt?: string | null;
   /**
      * @minLength 5
      * @maxLength 500
@@ -1768,19 +1747,6 @@ export interface AdminSettings {
      * @maxLength 500
      */
   unverifiedDashboardMessage: string;
-  /**
-     * @minLength 1
-     * @maxLength 80
-     */
-  vaultPaymentMethod: string;
-  /** @maxLength 120 */
-  vaultPaymentBankName: string;
-  /** @maxLength 120 */
-  vaultPaymentAccountName: string;
-  /** @maxLength 40 */
-  vaultPaymentAccountNumber: string;
-  /** @maxLength 1000 */
-  vaultPaymentInstructions: string;
   /** @pattern ^[0-9]{1,12}(\.[0-9]{1,2})?$ */
   vaultPlan1mPrice: string;
   /** @pattern ^[0-9]{1,12}(\.[0-9]{1,2})?$ */
@@ -1800,19 +1766,6 @@ export interface AdminSettingsInput {
      * @maxLength 500
      */
   unverifiedDashboardMessage: string;
-  /**
-     * @minLength 1
-     * @maxLength 80
-     */
-  vaultPaymentMethod: string;
-  /** @maxLength 120 */
-  vaultPaymentBankName: string;
-  /** @maxLength 120 */
-  vaultPaymentAccountName: string;
-  /** @maxLength 40 */
-  vaultPaymentAccountNumber: string;
-  /** @maxLength 1000 */
-  vaultPaymentInstructions: string;
   /** @pattern ^[0-9]{1,12}(\.[0-9]{1,2})?$ */
   vaultPlan1mPrice: string;
   /** @pattern ^[0-9]{1,12}(\.[0-9]{1,2})?$ */

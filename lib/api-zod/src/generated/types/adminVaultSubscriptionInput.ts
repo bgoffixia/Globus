@@ -9,8 +9,6 @@ import type { AdminVaultSubscriptionInputStatus } from './adminVaultSubscription
 
 export interface AdminVaultSubscriptionInput {
   status: AdminVaultSubscriptionInputStatus;
-  /** @nullable */
-  expiresAt?: Date | null;
   /**
      * @minLength 5
      * @maxLength 500

@@ -286,20 +286,25 @@ async function getOrCreateAdminSettings() {
 }
 
 function bankVaultStatusPayload(user: typeof bankUsersTable.$inferSelect) {
+  const legacyManualRequest =
+    user.vaultSubscriptionStatus === "pending" &&
+    user.vaultSubscriptionPaymentStatus !== "pending" &&
+    user.vaultSubscriptionPaymentStatus !== "success";
   const subscriptionStatus = vaultSubscriptionStatus(
-    user.vaultSubscriptionStatus,
+    legacyManualRequest ? "inactive" : user.vaultSubscriptionStatus,
     user.vaultSubscriptionExpiresAt,
   );
   return {
     configured: Boolean(user.vaultPasscodeHash),
     subscriptionStatus,
     subscriptionActive: subscriptionStatus === "active",
-    requestedAt: user.vaultSubscriptionRequestedAt?.toISOString() ?? null,
+    requestedAt: legacyManualRequest
+      ? null
+      : user.vaultSubscriptionRequestedAt?.toISOString() ?? null,
     expiresAt: user.vaultSubscriptionExpiresAt?.toISOString() ?? null,
-    planCode: user.vaultSubscriptionPlan,
-    amountMinor: user.vaultSubscriptionAmountMinor,
-    proofUploadedAt:
-      user.vaultSubscriptionProofUploadedAt?.toISOString() ?? null,
+    planCode: legacyManualRequest ? null : user.vaultSubscriptionPlan,
+    amountMinor: legacyManualRequest ? null : user.vaultSubscriptionAmountMinor,
+    proofUploadedAt: null,
     paymentStatus: ["pending", "failed", "success"].includes(
       user.vaultSubscriptionPaymentStatus,
     )
@@ -2578,17 +2583,9 @@ router.get("/bank/vault/billing", async (req, res): Promise<void> => {
   const paystackConfigured = getPaystackSecretKey() !== null;
   res.json(
     GetBankVaultBillingResponse.parse({
-      configured: paystackConfigured || Boolean(
-        settings.vaultPaymentMethod.trim() &&
-          settings.vaultPaymentInstructions.trim(),
-      ),
-      provider: paystackConfigured ? "paystack" : "manual",
+      configured: paystackConfigured,
+      provider: paystackConfigured ? "paystack" : "unavailable",
       recurringEnabled: paystackConfigured && isPaystackVaultRecurringEnabled(),
-      paymentMethod: settings.vaultPaymentMethod,
-      bankName: settings.vaultPaymentBankName,
-      accountName: settings.vaultPaymentAccountName,
-      accountNumber: settings.vaultPaymentAccountNumber,
-      instructions: settings.vaultPaymentInstructions,
       plans: (["1m", "3m", "1y"] as const).map((code) => {
         const plan = getVaultSubscriptionPlan(code);
         if (!plan) throw new Error("Vault subscription plan is unavailable.");
@@ -2736,7 +2733,14 @@ router.post(
         lockedUser.vaultSubscriptionStatus,
         lockedUser.vaultSubscriptionExpiresAt,
       );
-      if (currentStatus === "active" || currentStatus === "pending") {
+      const legacyManualPending =
+        lockedUser.vaultSubscriptionStatus === "pending" &&
+        lockedUser.vaultSubscriptionPaymentStatus !== "pending" &&
+        lockedUser.vaultSubscriptionPaymentStatus !== "success";
+      if (
+        currentStatus === "active" ||
+        (currentStatus === "pending" && !legacyManualPending)
+      ) {
         return { conflict: currentStatus };
       }
       if (lockedUser.vaultSubscriptionPaymentStatus === "pending") {
@@ -2752,6 +2756,7 @@ router.post(
       const [updated] = await tx
         .update(bankUsersTable)
         .set({
+          vaultSubscriptionStatus: "inactive",
           vaultSubscriptionPlan: parsed.data.planCode,
           vaultSubscriptionAmountMinor: amountMinor,
           vaultSubscriptionAutoRenew: parsed.data.autoRenew,
@@ -2789,7 +2794,7 @@ router.post(
     if ("conflict" in prepared) {
       res.status(409).json({
         error: prepared.conflict === "pending"
-          ? "A subscription request is already awaiting administrator review."
+          ? "A subscription payment is already in progress."
           : "Private Vault access is already active.",
       });
       return;
@@ -3361,6 +3366,12 @@ router.post(
     res.json({ received: true });
   },
 );
+
+router.use("/bank/vault/subscription", (_req, res): void => {
+  res.status(410).json({
+    error: "Manual subscription requests are no longer accepted. Complete Paystack checkout for automatic approval.",
+  });
+});
 
 router.post(
   "/bank/vault/subscription/proof-upload-url",

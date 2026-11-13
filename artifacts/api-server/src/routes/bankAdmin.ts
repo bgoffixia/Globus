@@ -148,8 +148,6 @@ import {
   storeNotification,
 } from "../lib/transfer-notifications";
 import {
-  addVaultSubscriptionMonths,
-  getVaultSubscriptionPlan,
   minorAmountToDecimal,
 } from "../lib/vault-subscription";
 import {
@@ -340,11 +338,6 @@ function adminSettingsPayload(settings: Awaited<ReturnType<typeof getOrCreateAdm
     secondApprovalThreshold: settings.secondApprovalThreshold,
     frozenIncomingPolicy: "allow_frozen" as const,
     unverifiedDashboardMessage: settings.unverifiedDashboardMessage,
-    vaultPaymentMethod: settings.vaultPaymentMethod,
-    vaultPaymentBankName: settings.vaultPaymentBankName,
-    vaultPaymentAccountName: settings.vaultPaymentAccountName,
-    vaultPaymentAccountNumber: settings.vaultPaymentAccountNumber,
-    vaultPaymentInstructions: settings.vaultPaymentInstructions,
     vaultPlan1mPrice: minorAmountToDecimal(settings.vaultPlan1mPriceMinor),
     vaultPlan3mPrice: minorAmountToDecimal(settings.vaultPlan3mPriceMinor),
     vaultPlan1yPrice: minorAmountToDecimal(settings.vaultPlan1yPriceMinor),
@@ -1662,15 +1655,6 @@ router.put("/bank/admin/settings", requireAdmin, async (req, res): Promise<void>
     res.status(400).json({ error: "Enter a default message for unverified members." });
     return;
   }
-  const vaultPaymentMethod = parsed.data.vaultPaymentMethod.trim();
-  const vaultPaymentBankName = parsed.data.vaultPaymentBankName.trim();
-  const vaultPaymentAccountName = parsed.data.vaultPaymentAccountName.trim();
-  const vaultPaymentAccountNumber = parsed.data.vaultPaymentAccountNumber.trim();
-  const vaultPaymentInstructions = parsed.data.vaultPaymentInstructions.trim();
-  if (!vaultPaymentMethod) {
-    res.status(400).json({ error: "Enter the manual Vault payment method." });
-    return;
-  }
   const [settings] = await db
     .insert(bankAdminSettingsTable)
     .values({
@@ -1678,11 +1662,6 @@ router.put("/bank/admin/settings", requireAdmin, async (req, res): Promise<void>
       fundingLimit: formatMinorAmount(fundingLimitMinor),
       secondApprovalThreshold: formatMinorAmount(approvalThresholdMinor),
       unverifiedDashboardMessage,
-      vaultPaymentMethod,
-      vaultPaymentBankName,
-      vaultPaymentAccountName,
-      vaultPaymentAccountNumber,
-      vaultPaymentInstructions,
       vaultPlan1mPriceMinor: vaultPlan1mPriceMinor.toString(),
       vaultPlan3mPriceMinor: vaultPlan3mPriceMinor.toString(),
       vaultPlan1yPriceMinor: vaultPlan1yPriceMinor.toString(),
@@ -1694,11 +1673,6 @@ router.put("/bank/admin/settings", requireAdmin, async (req, res): Promise<void>
         fundingLimit: formatMinorAmount(fundingLimitMinor),
         secondApprovalThreshold: formatMinorAmount(approvalThresholdMinor),
         unverifiedDashboardMessage,
-        vaultPaymentMethod,
-        vaultPaymentBankName,
-        vaultPaymentAccountName,
-        vaultPaymentAccountNumber,
-        vaultPaymentInstructions,
         vaultPlan1mPriceMinor: vaultPlan1mPriceMinor.toString(),
         vaultPlan3mPriceMinor: vaultPlan3mPriceMinor.toString(),
         vaultPlan1yPriceMinor: vaultPlan1yPriceMinor.toString(),
@@ -1711,7 +1685,7 @@ router.put("/bank/admin/settings", requireAdmin, async (req, res): Promise<void>
     actorUserId,
     targetUserId: actorUserId,
     action: "update_admin_settings",
-    reason: `Funding cap ${settings.fundingLimit}; second approval threshold ${settings.secondApprovalThreshold}; unverified dashboard notice and Private Vault manual billing settings updated. ${reason}`,
+    reason: `Funding cap ${settings.fundingLimit}; second approval threshold ${settings.secondApprovalThreshold}; unverified dashboard notice and Paystack Vault plan pricing updated. ${reason}`,
   });
   res.json(
     UpdateAdminSettingsResponse.parse(adminSettingsPayload(settings)),
@@ -2388,17 +2362,7 @@ router.get(
           vaultSubscriptionReason: user.vaultSubscriptionReason,
           vaultSubscriptionPlan: user.vaultSubscriptionPlan,
           vaultSubscriptionAmountMinor: user.vaultSubscriptionAmountMinor,
-          vaultSubscriptionProofAvailable:
-            user.vaultSubscriptionStatus === "pending" &&
-            !!user.vaultSubscriptionProofObjectPath,
-          vaultSubscriptionProofContentType:
-            user.vaultSubscriptionProofContentType,
-          vaultSubscriptionProofSizeBytes:
-            user.vaultSubscriptionProofSizeBytes,
-          vaultSubscriptionProofFileName:
-            user.vaultSubscriptionProofFileName,
-          vaultSubscriptionProofUploadedAt:
-            user.vaultSubscriptionProofUploadedAt?.toISOString() ?? null,
+          vaultSubscriptionAutoRenew: user.vaultSubscriptionAutoRenew,
           walletCount: wallets.length,
           createdAt: user.createdAt.toISOString(),
         },
@@ -2849,12 +2813,10 @@ router.patch(
       });
       return;
     }
-    if (
-      parsed.data.status === "active" &&
-      parsed.data.expiresAt &&
-      parsed.data.expiresAt <= new Date()
-    ) {
-      res.status(400).json({ error: "The access expiration must be in the future." });
+    if (String(parsed.data.status) !== "inactive") {
+      res.status(409).json({
+        error: "Administrators cannot manually approve or reject Vault subscriptions. Only confirmed Paystack payments activate access.",
+      });
       return;
     }
     const admin = await ensureBankUser(authUserId);
@@ -2865,55 +2827,21 @@ router.patch(
         .where(eq(bankUsersTable.id, params.data.userId))
         .for("update");
       if (!user) return { notFound: true as const };
+      if (user.vaultSubscriptionAutoRenew) {
+        return { recurringActive: true as const };
+      }
       const now = new Date();
-      const isPendingPaymentRequest =
-        user.vaultSubscriptionStatus === "pending" &&
-        !!user.vaultSubscriptionRequestedAt;
-      const hasPaymentProof = !!user.vaultSubscriptionProofObjectPath;
-      if (
-        parsed.data.status === "active" &&
-        isPendingPaymentRequest &&
-        (!hasPaymentProof ||
-          !user.vaultSubscriptionPlan ||
-          !user.vaultSubscriptionAmountMinor)
-      ) {
-        return { missingProof: true as const };
-      }
-      const approvedPlan =
-        parsed.data.status === "active" && isPendingPaymentRequest
-          ? getVaultSubscriptionPlan(user.vaultSubscriptionPlan ?? "")
-          : undefined;
-      if (parsed.data.status === "active" && isPendingPaymentRequest && !approvedPlan) {
-        return { invalidPlan: true as const };
-      }
-      const expiresAt =
-        parsed.data.status !== "active"
-          ? null
-          : approvedPlan
-            ? addVaultSubscriptionMonths(now, approvedPlan.durationMonths)
-            : parsed.data.expiresAt ?? null;
-      const proofPathToDelete = hasPaymentProof ? user.vaultSubscriptionProofObjectPath : null;
-      const paymentDescription =
-        isPendingPaymentRequest &&
-        user.vaultSubscriptionPlan &&
-        user.vaultSubscriptionAmountMinor
-          ? ` Payment request: ${user.vaultSubscriptionPlan} at NGN ${minorAmountToDecimal(user.vaultSubscriptionAmountMinor)}.`
-          : "";
+      const proofPathToDelete = user.vaultSubscriptionProofObjectPath;
       const [updated] = await tx
         .update(bankUsersTable)
         .set({
-          vaultSubscriptionStatus: parsed.data.status,
+          vaultSubscriptionStatus: "inactive",
           vaultSubscriptionReviewedAt: now,
           vaultSubscriptionReviewedByUserId: admin.id,
-          vaultSubscriptionReason: `${parsed.data.reason.trim()}${paymentDescription}`,
-          vaultSubscriptionExpiresAt: expiresAt,
-          ...(parsed.data.status === "inactive" ||
-          (parsed.data.status === "active" && !approvedPlan)
-            ? {
-                vaultSubscriptionPlan: null,
-                vaultSubscriptionAmountMinor: null,
-              }
-            : {}),
+          vaultSubscriptionReason: parsed.data.reason.trim(),
+          vaultSubscriptionExpiresAt: null,
+          vaultSubscriptionPlan: null,
+          vaultSubscriptionAmountMinor: null,
           vaultSubscriptionProofObjectPath: null,
           vaultSubscriptionProofContentType: null,
           vaultSubscriptionProofSizeBytes: null,
@@ -2929,13 +2857,8 @@ router.patch(
       await tx.insert(bankAuditLogsTable).values({
         actorUserId: admin.id,
         targetUserId: user.id,
-        action:
-          parsed.data.status === "active"
-            ? "approve_private_vault_subscription"
-            : parsed.data.status === "rejected"
-              ? "reject_private_vault_subscription"
-              : "revoke_private_vault_subscription",
-        reason: `${parsed.data.reason.trim()}${paymentDescription}`,
+        action: "revoke_private_vault_subscription",
+        reason: parsed.data.reason.trim(),
       });
       return { user: updated, proofPathToDelete };
     });
@@ -2943,14 +2866,10 @@ router.patch(
       res.status(404).json({ error: "User record not found." });
       return;
     }
-    if ("missingProof" in result) {
+    if ("recurringActive" in result) {
       res.status(409).json({
-        error: "A pending payment request cannot be approved without its uploaded proof and selected plan.",
+        error: "The member must cancel Paystack renewal before an administrator can remove Vault access.",
       });
-      return;
-    }
-    if ("invalidPlan" in result) {
-      res.status(409).json({ error: "The pending Vault plan is invalid and cannot be approved." });
       return;
     }
     if (result.proofPathToDelete) {
@@ -2969,6 +2888,16 @@ router.patch(
         expiresAt: result.user.vaultSubscriptionExpiresAt?.toISOString() ?? null,
       }),
     );
+  },
+);
+
+router.get(
+  "/bank/admin/users/:userId/vault-subscription/proof",
+  requireAdmin,
+  (_req, res): void => {
+    res.status(410).json({
+      error: "Manual subscription proof review is disabled. Paystack confirmation controls Vault activation.",
+    });
   },
 );
 

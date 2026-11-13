@@ -123,7 +123,6 @@ export * from './bankVaultStatus';
 export * from './bankVaultStatusPaymentStatus';
 export * from './bankVaultStatusPlanCode';
 export * from './bankVaultStatusSubscriptionStatus';
-export * from './bankVaultSubscriptionRequestResult';
 export * from './bankVaultTransactionNote';
 export * from './bankVaultTransactionNoteDeleteResult';
 export * from './bankVaultTransactionNoteInput';

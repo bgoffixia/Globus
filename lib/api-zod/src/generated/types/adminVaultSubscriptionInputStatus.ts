@@ -10,7 +10,5 @@ export type AdminVaultSubscriptionInputStatus = typeof AdminVaultSubscriptionInp
 
 
 export const AdminVaultSubscriptionInputStatus = {
-  active: 'active',
-  rejected: 'rejected',
   inactive: 'inactive',
 } as const;

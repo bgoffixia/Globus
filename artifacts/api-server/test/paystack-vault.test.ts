@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createHmac } from "node:crypto";
 import {
+  GetBankVaultBillingResponse,
+  UpdateAdminUserVaultSubscriptionBody,
+} from "@workspace/api-zod";
+import {
   createPaystackVaultPlan,
   getPaystackSecretKey,
   initializePaystackVaultCheckout,
@@ -265,4 +269,50 @@ test("recurring checkout remains off until its Paystack webhook is configured", 
     if (previous === undefined) delete process.env.PAYSTACK_VAULT_RECURRING_ENABLED;
     else process.env.PAYSTACK_VAULT_RECURRING_ENABLED = previous;
   }
+});
+
+test("Vault access can only be revoked by admins, not manually approved", () => {
+  assert.equal(
+    UpdateAdminUserVaultSubscriptionBody.safeParse({
+      status: "inactive",
+      reason: "Member requested access removal",
+    }).success,
+    true,
+  );
+  assert.equal(
+    UpdateAdminUserVaultSubscriptionBody.safeParse({
+      status: "active",
+      reason: "Manual grant",
+    }).success,
+    false,
+  );
+  assert.equal(
+    UpdateAdminUserVaultSubscriptionBody.safeParse({
+      status: "rejected",
+      reason: "Manual rejection",
+    }).success,
+    false,
+  );
+});
+
+test("Vault billing supports Paystack or unavailable, never manual approval", () => {
+  const plans = [{ code: "1m", label: "1 month", durationMonths: 1, priceMinor: "1200000", currency: "NGN" }];
+  assert.equal(
+    GetBankVaultBillingResponse.safeParse({
+      configured: true,
+      provider: "paystack",
+      recurringEnabled: false,
+      plans,
+    }).success,
+    true,
+  );
+  assert.equal(
+    GetBankVaultBillingResponse.safeParse({
+      configured: true,
+      provider: "manual",
+      recurringEnabled: false,
+      plans,
+    }).success,
+    false,
+  );
 });

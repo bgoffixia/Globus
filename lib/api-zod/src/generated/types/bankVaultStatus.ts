@@ -24,8 +24,6 @@ export interface BankVaultStatus {
      * @pattern ^[0-9]+$
      */
   amountMinor: string | null;
-  /** @nullable */
-  proofUploadedAt: Date | null;
   paymentStatus: BankVaultStatusPaymentStatus;
   /** @nullable */
   paymentReference: string | null;

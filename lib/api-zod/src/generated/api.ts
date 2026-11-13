@@ -72,7 +72,6 @@ export const GetBankVaultStatusResponse = zod.object({
   "expiresAt": zod.coerce.date().nullable(),
   "planCode": zod.union([zod.literal('1m'),zod.literal('3m'),zod.literal('1y'),zod.literal(null)]).nullable(),
   "amountMinor": zod.string().regex(getBankVaultStatusResponseAmountMinorRegExp).nullable(),
-  "proofUploadedAt": zod.coerce.date().nullable(),
   "paymentStatus": zod.enum(['none', 'pending', 'failed', 'success']),
   "paymentReference": zod.string().nullable(),
   "autoRenew": zod.boolean(),
@@ -101,7 +100,6 @@ export const InitializeBankVaultPasscodeResponse = zod.object({
   "expiresAt": zod.coerce.date().nullable(),
   "planCode": zod.union([zod.literal('1m'),zod.literal('3m'),zod.literal('1y'),zod.literal(null)]).nullable(),
   "amountMinor": zod.string().regex(initializeBankVaultPasscodeResponseAmountMinorRegExp).nullable(),
-  "proofUploadedAt": zod.coerce.date().nullable(),
   "paymentStatus": zod.enum(['none', 'pending', 'failed', 'success']),
   "paymentReference": zod.string().nullable(),
   "autoRenew": zod.boolean(),
@@ -110,7 +108,8 @@ export const InitializeBankVaultPasscodeResponse = zod.object({
 
 
 /**
- * @summary Request private vault access after passcode confirmation
+ * @deprecated
+ * @summary Disabled legacy manual subscription request
  */
 export const requestBankVaultSubscriptionHeaderXGlobusVaultSessionMin = 32;
 export const requestBankVaultSubscriptionHeaderXGlobusVaultSessionMax = 128;
@@ -132,11 +131,41 @@ export const RequestBankVaultSubscriptionResponse = zod.object({
   "expiresAt": zod.coerce.date().nullable(),
   "planCode": zod.union([zod.literal('1m'),zod.literal('3m'),zod.literal('1y'),zod.literal(null)]).nullable(),
   "amountMinor": zod.string().regex(requestBankVaultSubscriptionResponseAmountMinorRegExp).nullable(),
-  "proofUploadedAt": zod.coerce.date().nullable(),
   "paymentStatus": zod.enum(['none', 'pending', 'failed', 'success']),
   "paymentReference": zod.string().nullable(),
   "autoRenew": zod.boolean(),
   "renewalManagementReady": zod.boolean()
+})
+
+
+/**
+ * @deprecated
+ * @summary Disabled legacy subscription proof upload
+ */
+export const createBankVaultSubscriptionProofUploadUrlHeaderXGlobusVaultSessionMin = 32;
+export const createBankVaultSubscriptionProofUploadUrlHeaderXGlobusVaultSessionMax = 128;
+
+
+
+export const CreateBankVaultSubscriptionProofUploadUrlHeader = zod.object({
+  "X-Globus-Vault-Session": zod.string().min(createBankVaultSubscriptionProofUploadUrlHeaderXGlobusVaultSessionMin).max(createBankVaultSubscriptionProofUploadUrlHeaderXGlobusVaultSessionMax)
+})
+
+export const createBankVaultSubscriptionProofUploadUrlBodySizeBytesMax = 10485760;
+
+export const createBankVaultSubscriptionProofUploadUrlBodyFileNameMax = 120;
+
+
+
+export const CreateBankVaultSubscriptionProofUploadUrlBody = zod.object({
+  "planCode": zod.enum(['1m', '3m', '1y']),
+  "contentType": zod.enum(['application/pdf', 'image/jpeg', 'image/png']),
+  "sizeBytes": zod.number().int().min(1).max(createBankVaultSubscriptionProofUploadUrlBodySizeBytesMax),
+  "fileName": zod.string().min(1).max(createBankVaultSubscriptionProofUploadUrlBodyFileNameMax)
+})
+
+export const CreateBankVaultSubscriptionProofUploadUrlResponse = zod.object({
+  "uploadUrl": zod.string().url()
 })
 
 
@@ -157,13 +186,8 @@ export const getBankVaultBillingResponsePlansItemPriceMinorRegExp = new RegExp('
 
 export const GetBankVaultBillingResponse = zod.object({
   "configured": zod.boolean(),
-  "provider": zod.enum(['paystack', 'manual']),
+  "provider": zod.enum(['paystack', 'unavailable']),
   "recurringEnabled": zod.boolean().describe('True only after the server recurring flag and signed webhook are configured'),
-  "paymentMethod": zod.string(),
-  "bankName": zod.string(),
-  "accountName": zod.string(),
-  "accountNumber": zod.string(),
-  "instructions": zod.string(),
   "plans": zod.array(zod.object({
   "code": zod.enum(['1m', '3m', '1y']),
   "label": zod.string(),
@@ -232,7 +256,6 @@ export const VerifyBankVaultPaystackPaymentResponse = zod.object({
   "expiresAt": zod.coerce.date().nullable(),
   "planCode": zod.union([zod.literal('1m'),zod.literal('3m'),zod.literal('1y'),zod.literal(null)]).nullable(),
   "amountMinor": zod.string().regex(verifyBankVaultPaystackPaymentResponseAmountMinorRegExp).nullable(),
-  "proofUploadedAt": zod.coerce.date().nullable(),
   "paymentStatus": zod.enum(['none', 'pending', 'failed', 'success']),
   "paymentReference": zod.string().nullable(),
   "autoRenew": zod.boolean(),
@@ -279,36 +302,6 @@ export const ReceiveBankVaultPaystackWebhookResponse = zod.object({
  */
 export const GetBankVaultTransferEmailAlertResponse = zod.object({
   "enabled": zod.boolean()
-})
-
-
-/**
- * @summary Create a private upload URL for subscription payment proof
- */
-export const createBankVaultSubscriptionProofUploadUrlHeaderXGlobusVaultSessionMin = 32;
-export const createBankVaultSubscriptionProofUploadUrlHeaderXGlobusVaultSessionMax = 128;
-
-
-
-export const CreateBankVaultSubscriptionProofUploadUrlHeader = zod.object({
-  "X-Globus-Vault-Session": zod.string().min(createBankVaultSubscriptionProofUploadUrlHeaderXGlobusVaultSessionMin).max(createBankVaultSubscriptionProofUploadUrlHeaderXGlobusVaultSessionMax)
-})
-
-export const createBankVaultSubscriptionProofUploadUrlBodySizeBytesMax = 10485760;
-
-export const createBankVaultSubscriptionProofUploadUrlBodyFileNameMax = 120;
-
-
-
-export const CreateBankVaultSubscriptionProofUploadUrlBody = zod.object({
-  "planCode": zod.enum(['1m', '3m', '1y']),
-  "contentType": zod.enum(['application/pdf', 'image/jpeg', 'image/png']),
-  "sizeBytes": zod.number().int().min(1).max(createBankVaultSubscriptionProofUploadUrlBodySizeBytesMax),
-  "fileName": zod.string().min(1).max(createBankVaultSubscriptionProofUploadUrlBodyFileNameMax)
-})
-
-export const CreateBankVaultSubscriptionProofUploadUrlResponse = zod.object({
-  "uploadUrl": zod.string().url()
 })
 
 
@@ -550,7 +543,6 @@ export const UpdateBankVaultPasscodeResponse = zod.object({
   "expiresAt": zod.coerce.date().nullable(),
   "planCode": zod.union([zod.literal('1m'),zod.literal('3m'),zod.literal('1y'),zod.literal(null)]).nullable(),
   "amountMinor": zod.string().regex(updateBankVaultPasscodeResponseAmountMinorRegExp).nullable(),
-  "proofUploadedAt": zod.coerce.date().nullable(),
   "paymentStatus": zod.enum(['none', 'pending', 'failed', 'success']),
   "paymentReference": zod.string().nullable(),
   "autoRenew": zod.boolean(),
@@ -1785,16 +1777,6 @@ export const ListAdminAuditLogsResponse = zod.object({
  */
 export const getAdminSettingsResponseUnverifiedDashboardMessageMax = 500;
 
-export const getAdminSettingsResponseVaultPaymentMethodMax = 80;
-
-export const getAdminSettingsResponseVaultPaymentBankNameMax = 120;
-
-export const getAdminSettingsResponseVaultPaymentAccountNameMax = 120;
-
-export const getAdminSettingsResponseVaultPaymentAccountNumberMax = 40;
-
-export const getAdminSettingsResponseVaultPaymentInstructionsMax = 1000;
-
 export const getAdminSettingsResponseVaultPlan1mPriceRegExp = new RegExp('^[0-9]{1,12}(\\.[0-9]{1,2})?$');
 export const getAdminSettingsResponseVaultPlan3mPriceRegExp = new RegExp('^[0-9]{1,12}(\\.[0-9]{1,2})?$');
 export const getAdminSettingsResponseVaultPlan1yPriceRegExp = new RegExp('^[0-9]{1,12}(\\.[0-9]{1,2})?$');
@@ -1807,11 +1789,6 @@ export const GetAdminSettingsResponse = zod.object({
   "secondApprovalThreshold": zod.string(),
   "frozenIncomingPolicy": zod.enum(['allow_frozen']),
   "unverifiedDashboardMessage": zod.string().min(1).max(getAdminSettingsResponseUnverifiedDashboardMessageMax),
-  "vaultPaymentMethod": zod.string().min(1).max(getAdminSettingsResponseVaultPaymentMethodMax),
-  "vaultPaymentBankName": zod.string().max(getAdminSettingsResponseVaultPaymentBankNameMax),
-  "vaultPaymentAccountName": zod.string().max(getAdminSettingsResponseVaultPaymentAccountNameMax),
-  "vaultPaymentAccountNumber": zod.string().max(getAdminSettingsResponseVaultPaymentAccountNumberMax),
-  "vaultPaymentInstructions": zod.string().max(getAdminSettingsResponseVaultPaymentInstructionsMax),
   "vaultPlan1mPrice": zod.string().regex(getAdminSettingsResponseVaultPlan1mPriceRegExp),
   "vaultPlan3mPrice": zod.string().regex(getAdminSettingsResponseVaultPlan3mPriceRegExp),
   "vaultPlan1yPrice": zod.string().regex(getAdminSettingsResponseVaultPlan1yPriceRegExp),
@@ -1826,16 +1803,6 @@ export const updateAdminSettingsBodyFundingLimitRegExp = new RegExp('^[0-9]{1,12
 export const updateAdminSettingsBodySecondApprovalThresholdRegExp = new RegExp('^[0-9]{1,12}(\\.[0-9]{1,2})?$');
 export const updateAdminSettingsBodyUnverifiedDashboardMessageMax = 500;
 
-export const updateAdminSettingsBodyVaultPaymentMethodMax = 80;
-
-export const updateAdminSettingsBodyVaultPaymentBankNameMax = 120;
-
-export const updateAdminSettingsBodyVaultPaymentAccountNameMax = 120;
-
-export const updateAdminSettingsBodyVaultPaymentAccountNumberMax = 40;
-
-export const updateAdminSettingsBodyVaultPaymentInstructionsMax = 1000;
-
 export const updateAdminSettingsBodyVaultPlan1mPriceRegExp = new RegExp('^[0-9]{1,12}(\\.[0-9]{1,2})?$');
 export const updateAdminSettingsBodyVaultPlan3mPriceRegExp = new RegExp('^[0-9]{1,12}(\\.[0-9]{1,2})?$');
 export const updateAdminSettingsBodyVaultPlan1yPriceRegExp = new RegExp('^[0-9]{1,12}(\\.[0-9]{1,2})?$');
@@ -1849,11 +1816,6 @@ export const UpdateAdminSettingsBody = zod.object({
   "fundingLimit": zod.string().regex(updateAdminSettingsBodyFundingLimitRegExp),
   "secondApprovalThreshold": zod.string().regex(updateAdminSettingsBodySecondApprovalThresholdRegExp),
   "unverifiedDashboardMessage": zod.string().min(1).max(updateAdminSettingsBodyUnverifiedDashboardMessageMax),
-  "vaultPaymentMethod": zod.string().min(1).max(updateAdminSettingsBodyVaultPaymentMethodMax),
-  "vaultPaymentBankName": zod.string().max(updateAdminSettingsBodyVaultPaymentBankNameMax),
-  "vaultPaymentAccountName": zod.string().max(updateAdminSettingsBodyVaultPaymentAccountNameMax),
-  "vaultPaymentAccountNumber": zod.string().max(updateAdminSettingsBodyVaultPaymentAccountNumberMax),
-  "vaultPaymentInstructions": zod.string().max(updateAdminSettingsBodyVaultPaymentInstructionsMax),
   "vaultPlan1mPrice": zod.string().regex(updateAdminSettingsBodyVaultPlan1mPriceRegExp),
   "vaultPlan3mPrice": zod.string().regex(updateAdminSettingsBodyVaultPlan3mPriceRegExp),
   "vaultPlan1yPrice": zod.string().regex(updateAdminSettingsBodyVaultPlan1yPriceRegExp),
@@ -1862,16 +1824,6 @@ export const UpdateAdminSettingsBody = zod.object({
 })
 
 export const updateAdminSettingsResponseUnverifiedDashboardMessageMax = 500;
-
-export const updateAdminSettingsResponseVaultPaymentMethodMax = 80;
-
-export const updateAdminSettingsResponseVaultPaymentBankNameMax = 120;
-
-export const updateAdminSettingsResponseVaultPaymentAccountNameMax = 120;
-
-export const updateAdminSettingsResponseVaultPaymentAccountNumberMax = 40;
-
-export const updateAdminSettingsResponseVaultPaymentInstructionsMax = 1000;
 
 export const updateAdminSettingsResponseVaultPlan1mPriceRegExp = new RegExp('^[0-9]{1,12}(\\.[0-9]{1,2})?$');
 export const updateAdminSettingsResponseVaultPlan3mPriceRegExp = new RegExp('^[0-9]{1,12}(\\.[0-9]{1,2})?$');
@@ -1885,11 +1837,6 @@ export const UpdateAdminSettingsResponse = zod.object({
   "secondApprovalThreshold": zod.string(),
   "frozenIncomingPolicy": zod.enum(['allow_frozen']),
   "unverifiedDashboardMessage": zod.string().min(1).max(updateAdminSettingsResponseUnverifiedDashboardMessageMax),
-  "vaultPaymentMethod": zod.string().min(1).max(updateAdminSettingsResponseVaultPaymentMethodMax),
-  "vaultPaymentBankName": zod.string().max(updateAdminSettingsResponseVaultPaymentBankNameMax),
-  "vaultPaymentAccountName": zod.string().max(updateAdminSettingsResponseVaultPaymentAccountNameMax),
-  "vaultPaymentAccountNumber": zod.string().max(updateAdminSettingsResponseVaultPaymentAccountNumberMax),
-  "vaultPaymentInstructions": zod.string().max(updateAdminSettingsResponseVaultPaymentInstructionsMax),
   "vaultPlan1mPrice": zod.string().regex(updateAdminSettingsResponseVaultPlan1mPriceRegExp),
   "vaultPlan3mPrice": zod.string().regex(updateAdminSettingsResponseVaultPlan3mPriceRegExp),
   "vaultPlan1yPrice": zod.string().regex(updateAdminSettingsResponseVaultPlan1yPriceRegExp),
@@ -2012,11 +1959,7 @@ export const ListAdminUsersResponse = zod.object({
   "vaultSubscriptionReason": zod.string().nullish(),
   "vaultSubscriptionPlan": zod.union([zod.literal('1m'),zod.literal('3m'),zod.literal('1y'),zod.literal(null)]).nullish(),
   "vaultSubscriptionAmountMinor": zod.string().regex(listAdminUsersResponseItemsItemVaultSubscriptionAmountMinorRegExp).nullish(),
-  "vaultSubscriptionProofAvailable": zod.boolean().optional(),
-  "vaultSubscriptionProofContentType": zod.string().nullish(),
-  "vaultSubscriptionProofSizeBytes": zod.number().int().nullish(),
-  "vaultSubscriptionProofFileName": zod.string().nullish(),
-  "vaultSubscriptionProofUploadedAt": zod.coerce.date().nullish(),
+  "vaultSubscriptionAutoRenew": zod.boolean().optional(),
   "walletCount": zod.number().int(),
   "createdAt": zod.coerce.date()
 })),
@@ -2061,11 +2004,7 @@ export const GetAdminUserDetailResponse = zod.object({
   "vaultSubscriptionReason": zod.string().nullish(),
   "vaultSubscriptionPlan": zod.union([zod.literal('1m'),zod.literal('3m'),zod.literal('1y'),zod.literal(null)]).nullish(),
   "vaultSubscriptionAmountMinor": zod.string().regex(getAdminUserDetailResponseUserVaultSubscriptionAmountMinorRegExp).nullish(),
-  "vaultSubscriptionProofAvailable": zod.boolean().optional(),
-  "vaultSubscriptionProofContentType": zod.string().nullish(),
-  "vaultSubscriptionProofSizeBytes": zod.number().int().nullish(),
-  "vaultSubscriptionProofFileName": zod.string().nullish(),
-  "vaultSubscriptionProofUploadedAt": zod.coerce.date().nullish(),
+  "vaultSubscriptionAutoRenew": zod.boolean().optional(),
   "walletCount": zod.number().int(),
   "createdAt": zod.coerce.date()
 }),
@@ -2209,11 +2148,7 @@ export const UpdateAdminUserStatusResponse = zod.object({
   "vaultSubscriptionReason": zod.string().nullish(),
   "vaultSubscriptionPlan": zod.union([zod.literal('1m'),zod.literal('3m'),zod.literal('1y'),zod.literal(null)]).nullish(),
   "vaultSubscriptionAmountMinor": zod.string().regex(updateAdminUserStatusResponseVaultSubscriptionAmountMinorRegExp).nullish(),
-  "vaultSubscriptionProofAvailable": zod.boolean().optional(),
-  "vaultSubscriptionProofContentType": zod.string().nullish(),
-  "vaultSubscriptionProofSizeBytes": zod.number().int().nullish(),
-  "vaultSubscriptionProofFileName": zod.string().nullish(),
-  "vaultSubscriptionProofUploadedAt": zod.coerce.date().nullish(),
+  "vaultSubscriptionAutoRenew": zod.boolean().optional(),
   "walletCount": zod.number().int(),
   "createdAt": zod.coerce.date()
 })
@@ -2275,11 +2210,7 @@ export const UpdateAdminUserProfileResponse = zod.object({
   "vaultSubscriptionReason": zod.string().nullish(),
   "vaultSubscriptionPlan": zod.union([zod.literal('1m'),zod.literal('3m'),zod.literal('1y'),zod.literal(null)]).nullish(),
   "vaultSubscriptionAmountMinor": zod.string().regex(updateAdminUserProfileResponseVaultSubscriptionAmountMinorRegExp).nullish(),
-  "vaultSubscriptionProofAvailable": zod.boolean().optional(),
-  "vaultSubscriptionProofContentType": zod.string().nullish(),
-  "vaultSubscriptionProofSizeBytes": zod.number().int().nullish(),
-  "vaultSubscriptionProofFileName": zod.string().nullish(),
-  "vaultSubscriptionProofUploadedAt": zod.coerce.date().nullish(),
+  "vaultSubscriptionAutoRenew": zod.boolean().optional(),
   "walletCount": zod.number().int(),
   "createdAt": zod.coerce.date()
 })
@@ -2311,7 +2242,7 @@ export const ListAdminIdentityDocumentsResponse = zod.array(ListAdminIdentityDoc
 
 
 /**
- * @summary Approve or decline a member's private vault subscription request
+ * @summary Revoke a member's private vault subscription access
  */
 
 
@@ -2326,8 +2257,7 @@ export const updateAdminUserVaultSubscriptionBodyReasonMax = 500;
 
 
 export const UpdateAdminUserVaultSubscriptionBody = zod.object({
-  "status": zod.enum(['active', 'rejected', 'inactive']),
-  "expiresAt": zod.coerce.date().nullish(),
+  "status": zod.enum(['inactive']),
   "reason": zod.string().min(updateAdminUserVaultSubscriptionBodyReasonMin).max(updateAdminUserVaultSubscriptionBodyReasonMax)
 })
 
@@ -2336,19 +2266,6 @@ export const UpdateAdminUserVaultSubscriptionResponse = zod.object({
   "status": zod.enum(['inactive', 'pending', 'active', 'rejected', 'expired']),
   "expiresAt": zod.coerce.date().nullable()
 })
-
-
-/**
- * @summary Download a pending private vault subscription payment proof
- */
-
-
-
-export const GetAdminVaultSubscriptionProofParams = zod.object({
-  "userId": zod.coerce.string().min(1)
-})
-
-export const GetAdminVaultSubscriptionProofResponse = zod.unknown()
 
 
 /**
@@ -2407,11 +2324,7 @@ export const UpdateAdminUserVerificationResponse = zod.object({
   "vaultSubscriptionReason": zod.string().nullish(),
   "vaultSubscriptionPlan": zod.union([zod.literal('1m'),zod.literal('3m'),zod.literal('1y'),zod.literal(null)]).nullish(),
   "vaultSubscriptionAmountMinor": zod.string().regex(updateAdminUserVerificationResponseVaultSubscriptionAmountMinorRegExp).nullish(),
-  "vaultSubscriptionProofAvailable": zod.boolean().optional(),
-  "vaultSubscriptionProofContentType": zod.string().nullish(),
-  "vaultSubscriptionProofSizeBytes": zod.number().int().nullish(),
-  "vaultSubscriptionProofFileName": zod.string().nullish(),
-  "vaultSubscriptionProofUploadedAt": zod.coerce.date().nullish(),
+  "vaultSubscriptionAutoRenew": zod.boolean().optional(),
   "walletCount": zod.number().int(),
   "createdAt": zod.coerce.date()
 })

@@ -99,7 +99,8 @@ paths:
     post:
       operationId: requestBankVaultSubscription
       tags: [bank]
-      summary: Request private vault access after passcode confirmation
+      deprecated: true
+      summary: Disabled legacy manual subscription request
       parameters:
         - name: X-Globus-Vault-Session
           in: header
@@ -107,15 +108,42 @@ paths:
           schema: { type: string, minLength: 32, maxLength: 128 }
       responses:
         "200":
-          description: Current private vault subscription request state
+          description: Legacy request result (route returns 410)
           content:
             application/json:
               schema: { $ref: "#/components/schemas/BankVaultStatus" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "409": { $ref: "#/components/responses/Conflict" }
-        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "410":
+          description: Manual review is disabled; complete Paystack checkout instead
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+  /bank/vault/subscription/proof-upload-url:
+    post:
+      operationId: createBankVaultSubscriptionProofUploadUrl
+      tags: [bank]
+      deprecated: true
+      summary: Disabled legacy subscription proof upload
+      parameters:
+        - name: X-Globus-Vault-Session
+          in: header
+          required: true
+          schema: { type: string, minLength: 32, maxLength: 128 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BankVaultProofUploadInput" }
+      responses:
+        "200":
+          description: Legacy upload result (route returns 410)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankVaultProofUploadResult" }
+        "410":
+          description: Manual review is disabled; complete Paystack checkout instead
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
   /bank/vault/billing:
     get:
       operationId: getBankVaultBilling
@@ -245,32 +273,6 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/BankVaultTransferEmailAlert" }
         "401": { $ref: "#/components/responses/Unauthorized" }
-  /bank/vault/subscription/proof-upload-url:
-    post:
-      operationId: createBankVaultSubscriptionProofUploadUrl
-      tags: [bank]
-      summary: Create a private upload URL for subscription payment proof
-      parameters:
-        - name: X-Globus-Vault-Session
-          in: header
-          required: true
-          schema: { type: string, minLength: 32, maxLength: 128 }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/BankVaultProofUploadInput" }
-      responses:
-        "200":
-          description: Short-lived private upload URL
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/BankVaultProofUploadResult" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "409": { $ref: "#/components/responses/Conflict" }
-        "429": { $ref: "#/components/responses/TooManyRequests" }
   /bank/vault/transaction-notes:
     get:
       operationId: listBankVaultTransactionNotes
@@ -1609,7 +1611,7 @@ paths:
     patch:
       operationId: updateAdminUserVaultSubscription
       tags: [admin]
-      summary: Approve or decline a member's private vault subscription request
+      summary: Revoke a member's private vault subscription access
       parameters:
         - name: userId
           in: path
@@ -1631,25 +1633,6 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
-  /bank/admin/users/{userId}/vault-subscription/proof:
-    get:
-      operationId: getAdminVaultSubscriptionProof
-      tags: [admin]
-      summary: Download a pending private vault subscription payment proof
-      parameters:
-        - name: userId
-          in: path
-          required: true
-          schema: { type: string, minLength: 1 }
-      responses:
-        "200":
-          description: Private payment proof document
-          content:
-            application/octet-stream:
-              schema: { type: string, format: binary }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/NotFound" }
   /bank/admin/identity-documents/{documentId}/content:
     get:
       operationId: getAdminIdentityDocumentContent
@@ -2123,27 +2106,19 @@ components:
         expiresAt: { type: ["string", "null"], format: date-time }
         planCode: { type: ["string", "null"], enum: [1m, 3m, 1y, null] }
         amountMinor: { type: ["string", "null"], pattern: "^[0-9]+$" }
-        proofUploadedAt: { type: ["string", "null"], format: date-time }
         paymentStatus: { type: string, enum: [none, pending, failed, success] }
         paymentReference: { type: ["string", "null"] }
         autoRenew: { type: boolean }
         renewalManagementReady: { type: boolean }
-      required: [configured, subscriptionStatus, subscriptionActive, requestedAt, expiresAt, planCode, amountMinor, proofUploadedAt, paymentStatus, paymentReference, autoRenew, renewalManagementReady]
-    BankVaultSubscriptionRequestResult:
-      $ref: "#/components/schemas/BankVaultStatus"
+      required: [configured, subscriptionStatus, subscriptionActive, requestedAt, expiresAt, planCode, amountMinor, paymentStatus, paymentReference, autoRenew, renewalManagementReady]
     BankVaultBilling:
       type: object
       properties:
         configured: { type: boolean }
-        provider: { type: string, enum: [paystack, manual] }
+        provider: { type: string, enum: [paystack, unavailable] }
         recurringEnabled:
           type: boolean
           description: True only after the server recurring flag and signed webhook are configured
-        paymentMethod: { type: string }
-        bankName: { type: string }
-        accountName: { type: string }
-        accountNumber: { type: string }
-        instructions: { type: string }
         plans:
           type: array
           items:
@@ -2155,7 +2130,7 @@ components:
               priceMinor: { type: string, pattern: "^[0-9]+$" }
               currency: { type: string, enum: [NGN] }
             required: [code, label, durationMonths, priceMinor, currency]
-      required: [configured, provider, recurringEnabled, paymentMethod, bankName, accountName, accountNumber, instructions, plans]
+      required: [configured, provider, recurringEnabled, plans]
     BankVaultPaystackInitializeInput:
       type: object
       properties:
@@ -2610,11 +2585,7 @@ components:
         vaultSubscriptionReason: { type: ["string", "null"] }
         vaultSubscriptionPlan: { type: ["string", "null"], enum: [1m, 3m, 1y, null] }
         vaultSubscriptionAmountMinor: { type: ["string", "null"], pattern: "^[0-9]+$" }
-        vaultSubscriptionProofAvailable: { type: boolean }
-        vaultSubscriptionProofContentType: { type: ["string", "null"] }
-        vaultSubscriptionProofSizeBytes: { type: ["integer", "null"] }
-        vaultSubscriptionProofFileName: { type: ["string", "null"] }
-        vaultSubscriptionProofUploadedAt: { type: ["string", "null"], format: date-time }
+        vaultSubscriptionAutoRenew: { type: boolean }
         walletCount: { type: integer }
         createdAt: { type: string, format: date-time }
       required: [id, email, customerId, firstName, lastName, country, verificationStatus, verificationNote, accountStatus, accountRestrictionReason, accountRestrictionNotes, accountRestrictedAt, walletCount, createdAt]
@@ -2666,8 +2637,7 @@ components:
     AdminVaultSubscriptionInput:
       type: object
       properties:
-        status: { type: string, enum: [active, rejected, inactive] }
-        expiresAt: { type: ["string", "null"], format: date-time }
+        status: { type: string, enum: [inactive] }
         reason: { type: string, minLength: 5, maxLength: 500 }
       required: [status, reason]
     AdminVaultSubscriptionResult:
@@ -2908,33 +2878,23 @@ components:
         secondApprovalThreshold: { type: string }
         frozenIncomingPolicy: { type: string, enum: [allow_frozen] }
         unverifiedDashboardMessage: { type: string, minLength: 1, maxLength: 500 }
-        vaultPaymentMethod: { type: string, minLength: 1, maxLength: 80 }
-        vaultPaymentBankName: { type: string, maxLength: 120 }
-        vaultPaymentAccountName: { type: string, maxLength: 120 }
-        vaultPaymentAccountNumber: { type: string, maxLength: 40 }
-        vaultPaymentInstructions: { type: string, maxLength: 1000 }
         vaultPlan1mPrice: { type: string, pattern: "^[0-9]{1,12}(\\.[0-9]{1,2})?$" }
         vaultPlan3mPrice: { type: string, pattern: "^[0-9]{1,12}(\\.[0-9]{1,2})?$" }
         vaultPlan1yPrice: { type: string, pattern: "^[0-9]{1,12}(\\.[0-9]{1,2})?$" }
         updatedAt: { type: string, format: date-time }
-      required: [customerEmailSenderDomain, customerEmailSenderDisplayName, fundingLimit, secondApprovalThreshold, frozenIncomingPolicy, unverifiedDashboardMessage, vaultPaymentMethod, vaultPaymentBankName, vaultPaymentAccountName, vaultPaymentAccountNumber, vaultPaymentInstructions, vaultPlan1mPrice, vaultPlan3mPrice, vaultPlan1yPrice, updatedAt]
+      required: [customerEmailSenderDomain, customerEmailSenderDisplayName, fundingLimit, secondApprovalThreshold, frozenIncomingPolicy, unverifiedDashboardMessage, vaultPlan1mPrice, vaultPlan3mPrice, vaultPlan1yPrice, updatedAt]
     AdminSettingsInput:
       type: object
       properties:
         fundingLimit: { type: string, pattern: "^[0-9]{1,12}(\\.[0-9]{1,2})?$" }
         secondApprovalThreshold: { type: string, pattern: "^[0-9]{1,12}(\\.[0-9]{1,2})?$" }
         unverifiedDashboardMessage: { type: string, minLength: 1, maxLength: 500 }
-        vaultPaymentMethod: { type: string, minLength: 1, maxLength: 80 }
-        vaultPaymentBankName: { type: string, maxLength: 120 }
-        vaultPaymentAccountName: { type: string, maxLength: 120 }
-        vaultPaymentAccountNumber: { type: string, maxLength: 40 }
-        vaultPaymentInstructions: { type: string, maxLength: 1000 }
         vaultPlan1mPrice: { type: string, pattern: "^[0-9]{1,12}(\\.[0-9]{1,2})?$" }
         vaultPlan3mPrice: { type: string, pattern: "^[0-9]{1,12}(\\.[0-9]{1,2})?$" }
         vaultPlan1yPrice: { type: string, pattern: "^[0-9]{1,12}(\\.[0-9]{1,2})?$" }
         reason: { type: string, minLength: 5, maxLength: 500 }
         transactionPin: { type: string, pattern: "^[0-9]{6}$" }
-      required: [fundingLimit, secondApprovalThreshold, unverifiedDashboardMessage, vaultPaymentMethod, vaultPaymentBankName, vaultPaymentAccountName, vaultPaymentAccountNumber, vaultPaymentInstructions, vaultPlan1mPrice, vaultPlan3mPrice, vaultPlan1yPrice, reason, transactionPin]
+      required: [fundingLimit, secondApprovalThreshold, unverifiedDashboardMessage, vaultPlan1mPrice, vaultPlan3mPrice, vaultPlan1yPrice, reason, transactionPin]
     AdminTransactionPage:
       type: object
       properties:
