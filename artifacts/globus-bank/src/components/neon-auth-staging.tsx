@@ -5,7 +5,7 @@ type Stage = 'sign-in' | 'sign-up' | 'verify' | 'signed-in';
 
 async function authRequest(path: string, body?: Record<string, string>) {
   if (!authUrl) throw new Error('Neon Auth staging URL is not configured.');
-  const response = await fetch(`${authUrl.replace(/\\/$/, '')}/${path}`, {
+  const response = await fetch(`${authUrl.replace(/\/+$/, '')}/${path}`, {
     method: body ? 'POST' : 'GET',
     credentials: 'include',
     headers: body ? { 'content-type': 'application/json' } : undefined,
