@@ -34,6 +34,18 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Initialize database schema
-        run: pnpm --filter @workspace/db push
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm --filter @workspace/db push 2>&1 | tee /tmp/drizzle-push.log
+          push_status=${PIPESTATUS[0]}
+
+          # Drizzle Kit 0.31.x can print this interactive-prompt error yet exit 0.
+          if grep -Fq "Interactive prompts require a TTY terminal" /tmp/drizzle-push.log; then
+            echo "::error::Drizzle Kit needs a schema conflict decision; refusing to report a false success."
+            exit 1
+          fi
+
+          exit "$push_status"
         env:
           DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
