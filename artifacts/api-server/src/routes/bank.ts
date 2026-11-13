@@ -112,6 +112,8 @@ import {
   bankTransactionsTable,
   bankUsersTable,
   bankSavedPaymentMethodsTable,
+  bankVaultPaystackEventsTable,
+  bankVaultPaystackPlansTable,
   bankWalletsTable,
   db,
 } from "@workspace/db";
@@ -163,8 +165,12 @@ import {
   minorAmountToDecimal,
 } from "../lib/vault-subscription";
 import {
+  createPaystackVaultPlan,
   getPaystackSecretKey,
+  isPaystackVaultRecurringEnabled,
   initializePaystackVaultCheckout,
+  isValidPaystackWebhookSignature,
+  sendPaystackSubscriptionManagementEmail,
   verifyPaystackVaultCheckout,
 } from "../lib/paystack-vault";
 import {
@@ -300,6 +306,99 @@ function bankVaultStatusPayload(user: typeof bankUsersTable.$inferSelect) {
       ? user.vaultSubscriptionPaymentStatus
       : "none",
     paymentReference: user.vaultSubscriptionPaymentReference,
+    autoRenew:
+      user.vaultSubscriptionPaymentStatus === "success" &&
+      user.vaultSubscriptionAutoRenew,
+    renewalManagementReady: Boolean(
+      user.vaultSubscriptionPaymentStatus === "success" &&
+      user.vaultSubscriptionAutoRenew &&
+      user.vaultPaystackSubscriptionCode,
+    ),
+  };
+}
+
+function asObject(value: unknown): Record<string, unknown> | null {
+  return typeof value === "object" && value !== null
+    ? value as Record<string, unknown>
+    : null;
+}
+
+async function getOrCreatePaystackVaultPlan(
+  secretKey: string,
+  planCode: "1m" | "1y",
+  amountMinor: string,
+): Promise<string> {
+  const [existing] = await db
+    .select()
+    .from(bankVaultPaystackPlansTable)
+    .where(and(
+      eq(bankVaultPaystackPlansTable.planCode, planCode),
+      eq(bankVaultPaystackPlansTable.amountMinor, amountMinor),
+    ))
+    .limit(1);
+  if (existing) return existing.providerPlanCode;
+  const plan = getVaultSubscriptionPlan(planCode);
+  if (!plan) throw new Error("The recurring Vault plan is unavailable.");
+  const providerPlan = await createPaystackVaultPlan({
+    secretKey,
+    name: `Globus Private Vault ${plan.label}`,
+    amountMinor,
+    interval: planCode === "1m" ? "monthly" : "annually",
+  });
+  await db
+    .insert(bankVaultPaystackPlansTable)
+    .values({
+      planCode,
+      amountMinor,
+      providerPlanCode: providerPlan.planCode,
+    })
+    .onConflictDoNothing();
+  const [stored] = await db
+    .select()
+    .from(bankVaultPaystackPlansTable)
+    .where(and(
+      eq(bankVaultPaystackPlansTable.planCode, planCode),
+      eq(bankVaultPaystackPlansTable.amountMinor, amountMinor),
+    ))
+    .limit(1);
+  if (!stored) throw new Error("The recurring Vault plan could not be stored.");
+  return stored.providerPlanCode;
+}
+
+function paystackPlanCodeFromEvent(data: Record<string, unknown>): string | null {
+  const plan = asObject(data.plan);
+  const planObject = asObject(data.plan_object);
+  const candidate =
+    (typeof data.plan === "string" ? data.plan : null) ??
+    (typeof data.plan_code === "string" ? data.plan_code : null) ??
+    (typeof plan?.plan_code === "string" ? plan.plan_code : null) ??
+    (typeof planObject?.plan_code === "string" ? planObject.plan_code : null);
+  return candidate && /^PLN_[A-Za-z0-9]+$/.test(candidate) ? candidate : null;
+}
+
+function paystackSubscriptionCodeFromEvent(
+  data: Record<string, unknown>,
+): string | null {
+  const subscription = asObject(data.subscription);
+  const candidate =
+    (typeof data.subscription_code === "string" ? data.subscription_code : null) ??
+    (typeof subscription?.subscription_code === "string"
+      ? subscription.subscription_code
+      : null);
+  return candidate && /^SUB_[A-Za-z0-9]+$/.test(candidate) ? candidate : null;
+}
+
+function paystackCustomerFromEvent(data: Record<string, unknown>) {
+  const customer = asObject(data.customer);
+  return {
+    code:
+      typeof customer?.customer_code === "string"
+        ? customer.customer_code
+        : null,
+    email:
+      typeof customer?.email === "string"
+        ? customer.email.trim().toLowerCase()
+        : null,
   };
 }
 
@@ -382,6 +481,13 @@ function respondWithTransactionPinError(
 }
 
 const requireSignedIn: RequestHandler = async (req, res, next) => {
+  const normalizedPath = req.originalUrl
+    .split("?")[0]
+    .replace(/^\/api(?=\/)/, "");
+  if (normalizedPath === "/bank/vault/paystack/webhook") {
+    next();
+    return;
+  }
   const userId = getAuth(req).userId;
   if (!userId) {
     res.status(401).json({ error: "Sign in to access your Globus account." });
@@ -2477,6 +2583,7 @@ router.get("/bank/vault/billing", async (req, res): Promise<void> => {
           settings.vaultPaymentInstructions.trim(),
       ),
       provider: paystackConfigured ? "paystack" : "manual",
+      recurringEnabled: paystackConfigured && isPaystackVaultRecurringEnabled(),
       paymentMethod: settings.vaultPaymentMethod,
       bankName: settings.vaultPaymentBankName,
       accountName: settings.vaultPaymentAccountName,
@@ -2548,11 +2655,58 @@ router.post(
       res.status(400).json({ error: "A valid account email and subscription plan are required." });
       return;
     }
+    if (
+      parsed.data.autoRenew &&
+      parsed.data.planCode !== "1m" &&
+      parsed.data.planCode !== "1y"
+    ) {
+      res.status(400).json({
+        error: "Paystack automatic renewal is available for monthly and annual plans only.",
+      });
+      return;
+    }
+    if (parsed.data.autoRenew && !isPaystackVaultRecurringEnabled()) {
+      res.status(503).json({
+        error: "Automatic renewal is unavailable until the Paystack webhook is configured.",
+      });
+      return;
+    }
+    if (user.vaultSubscriptionAutoRenew) {
+      res.status(409).json({
+        error: "Manage or cancel your existing Paystack renewal before starting another plan.",
+      });
+      return;
+    }
+    if (user.vaultSubscriptionPaymentStatus === "pending") {
+      res.status(409).json({
+        error: "A Paystack payment is already in progress. Verify it before starting another checkout.",
+      });
+      return;
+    }
     const settings = await getOrCreateAdminSettings();
     const amountMinor = getVaultPlanPriceMinor(settings, parsed.data.planCode);
     if (!/^[0-9]+$/.test(amountMinor) || BigInt(amountMinor) <= 0n) {
       res.status(409).json({ error: "This access plan is temporarily unavailable." });
       return;
+    }
+    let recurringPlanCode: string | null = null;
+    if (parsed.data.autoRenew) {
+      try {
+        recurringPlanCode = await getOrCreatePaystackVaultPlan(
+          secretKey,
+          parsed.data.planCode as "1m" | "1y",
+          amountMinor,
+        );
+      } catch (error) {
+        req.log.error(
+          { error, planCode: parsed.data.planCode },
+          "Could not prepare a Paystack recurring plan",
+        );
+        res.status(503).json({
+          error: "Automatic renewal could not be prepared. Choose one-time access or try again.",
+        });
+        return;
+      }
     }
     const forwardedHost = req.get("x-forwarded-host")?.split(",")[0]?.trim();
     const requestHost = forwardedHost || req.get("host");
@@ -2600,6 +2754,10 @@ router.post(
         .set({
           vaultSubscriptionPlan: parsed.data.planCode,
           vaultSubscriptionAmountMinor: amountMinor,
+          vaultSubscriptionAutoRenew: parsed.data.autoRenew,
+          vaultPaystackPlanCode: recurringPlanCode,
+          vaultPaystackSubscriptionCode: null,
+          vaultPaystackCustomerCode: null,
           vaultSubscriptionPaymentReference: reference,
           vaultSubscriptionPaymentStatus: "pending",
           vaultSubscriptionPaymentInitializedAt: now,
@@ -2661,6 +2819,7 @@ router.post(
         callbackUrl,
         userId: user.id,
         planCode: parsed.data.planCode,
+        recurringPlanCode,
       });
       await db.insert(bankAuditLogsTable).values({
         actorUserId: user.id,
@@ -2675,6 +2834,10 @@ router.post(
         .update(bankUsersTable)
         .set({
           vaultSubscriptionPaymentStatus: "failed",
+          vaultSubscriptionAutoRenew: false,
+          vaultPaystackPlanCode: null,
+          vaultPaystackSubscriptionCode: null,
+          vaultPaystackCustomerCode: null,
           updatedAt: new Date(),
         })
         .where(
@@ -2752,7 +2915,9 @@ router.post(
       payment.amount !== Number(user.vaultSubscriptionAmountMinor) ||
       payment.currency !== "NGN" ||
       payment.metadata?.userId !== user.id ||
-      payment.metadata?.planCode !== user.vaultSubscriptionPlan
+      payment.metadata?.planCode !== user.vaultSubscriptionPlan ||
+      String(payment.metadata?.autoRenew) !==
+        String(user.vaultSubscriptionAutoRenew)
     ) {
       req.log.warn(
         { reference: parsed.data.reference },
@@ -2778,6 +2943,10 @@ router.post(
             .update(bankUsersTable)
             .set({
               vaultSubscriptionPaymentStatus: "failed",
+              vaultSubscriptionAutoRenew: false,
+              vaultPaystackPlanCode: null,
+              vaultPaystackSubscriptionCode: null,
+              vaultPaystackCustomerCode: null,
               updatedAt: new Date(),
             })
             .where(eq(bankUsersTable.id, user.id));
@@ -2830,6 +2999,10 @@ router.post(
           vaultSubscriptionExpiresAt: expiresAt,
           vaultSubscriptionPaymentStatus: "success",
           vaultSubscriptionPaymentVerifiedAt: now,
+          vaultSubscriptionAutoRenew: lockedUser.vaultSubscriptionAutoRenew,
+          vaultPaystackCustomerCode: payment.customerCode,
+          vaultPaystackSubscriptionCode:
+            payment.subscriptionCode ?? lockedUser.vaultPaystackSubscriptionCode,
           vaultSubscriptionReason: `Paystack verified payment ${parsed.data.reference} for the ${plan.label} Private Vault plan.`,
           vaultSubscriptionReviewedAt: null,
           vaultSubscriptionReviewedByUserId: null,
@@ -2862,6 +3035,330 @@ router.post(
         bankVaultStatusPayload(result.user),
       ),
     );
+  },
+);
+
+router.post(
+  "/bank/vault/paystack/manage-renewal",
+  vaultSubscriptionRequestLimiter,
+  async (req, res): Promise<void> => {
+    const authUserId = getAuth(req).userId;
+    if (!authUserId) {
+      res.status(401).json({ error: "Sign in to manage your Private Vault renewal." });
+      return;
+    }
+    const sessionToken = req.get("X-Globus-Vault-Session") ?? "";
+    if (!sessionToken || !(await isVaultPasscodeSessionValid(authUserId, sessionToken))) {
+      res.status(403).json({ error: "Unlock your Private Vault before managing renewal." });
+      return;
+    }
+    const secretKey = getPaystackSecretKey();
+    if (!secretKey) {
+      res.status(503).json({ error: "Paystack subscription management is unavailable." });
+      return;
+    }
+    const user = await getOrCreateBankUser(authUserId);
+    if (
+      user.vaultSubscriptionPaymentStatus !== "success" ||
+      !user.vaultSubscriptionAutoRenew ||
+      !user.vaultPaystackSubscriptionCode
+    ) {
+      res.status(409).json({ error: "No active Paystack renewal is linked to this account." });
+      return;
+    }
+    try {
+      await sendPaystackSubscriptionManagementEmail({
+        secretKey,
+        subscriptionCode: user.vaultPaystackSubscriptionCode,
+      });
+      await db.insert(bankAuditLogsTable).values({
+        actorUserId: user.id,
+        targetUserId: user.id,
+        action: "email_private_vault_renewal_management_link",
+        reason: "Member requested a Paystack subscription management link.",
+      });
+      res.json({ sent: true });
+    } catch (error) {
+      req.log.error({ error }, "Could not email Paystack subscription management link");
+      res.status(503).json({ error: "Paystack could not send the management link. Try again." });
+    }
+  },
+);
+
+router.post(
+  "/bank/vault/paystack/webhook",
+  async (req, res): Promise<void> => {
+    const secretKey = getPaystackSecretKey();
+    const rawBody = (req as typeof req & { rawBody?: Buffer }).rawBody;
+    const signature = req.get("x-paystack-signature") ?? "";
+    if (
+      !secretKey ||
+      !rawBody ||
+      !isValidPaystackWebhookSignature(rawBody, signature, secretKey)
+    ) {
+      res.status(secretKey ? 401 : 503).json({
+        error: secretKey
+          ? "Paystack webhook signature is invalid."
+          : "Paystack webhook verification is unavailable.",
+      });
+      return;
+    }
+
+    const eventPayload = asObject(req.body);
+    const eventType = typeof eventPayload?.event === "string"
+      ? eventPayload.event
+      : "";
+    const data = asObject(eventPayload?.data);
+    if (!data) {
+      res.status(400).json({ error: "The Paystack event payload is invalid." });
+      return;
+    }
+
+    const customer = paystackCustomerFromEvent(data);
+    const providerPlanCode = paystackPlanCodeFromEvent(data);
+    const subscriptionCode = paystackSubscriptionCodeFromEvent(data);
+
+    if (eventType === "subscription.create") {
+      if (!subscriptionCode || !customer.email) {
+        res.json({ received: true });
+        return;
+      }
+      const [user] = await db
+        .select()
+        .from(bankUsersTable)
+        .where(and(
+          sql`lower(${bankUsersTable.email}) = ${customer.email}`,
+          eq(bankUsersTable.vaultSubscriptionAutoRenew, true),
+        ))
+        .limit(1);
+      if (!user || !providerPlanCode || user.vaultPaystackPlanCode !== providerPlanCode) {
+        req.log.warn(
+          { eventType, subscriptionCode },
+          "Paystack subscription event did not match a pending Globus renewal",
+        );
+        res.json({ received: true });
+        return;
+      }
+      await db.transaction(async (tx) => {
+        const [lockedUser] = await tx
+          .select()
+          .from(bankUsersTable)
+          .where(eq(bankUsersTable.id, user.id))
+          .for("update");
+        if (
+          !lockedUser ||
+          !lockedUser.vaultSubscriptionAutoRenew ||
+          lockedUser.vaultPaystackPlanCode !== providerPlanCode
+        ) return;
+        const [inserted] = await tx
+          .insert(bankVaultPaystackEventsTable)
+          .values({
+            eventKey: `subscription.create:${subscriptionCode}`,
+            eventType,
+            userId: user.id,
+          })
+          .onConflictDoNothing()
+          .returning({ id: bankVaultPaystackEventsTable.id });
+        if (!inserted) return;
+        await tx
+          .update(bankUsersTable)
+          .set({
+            vaultPaystackSubscriptionCode: subscriptionCode,
+            vaultPaystackCustomerCode: customer.code ?? lockedUser.vaultPaystackCustomerCode,
+            updatedAt: new Date(),
+          })
+          .where(eq(bankUsersTable.id, user.id));
+      });
+      res.json({ received: true });
+      return;
+    }
+
+    if (eventType === "subscription.disable" || eventType === "subscription.enable") {
+      if (!subscriptionCode) {
+        res.json({ received: true });
+        return;
+      }
+      const [user] = await db
+        .select()
+        .from(bankUsersTable)
+        .where(eq(bankUsersTable.vaultPaystackSubscriptionCode, subscriptionCode))
+        .limit(1);
+      if (!user) {
+        res.json({ received: true });
+        return;
+      }
+      await db.transaction(async (tx) => {
+        const [lockedUser] = await tx
+          .select()
+          .from(bankUsersTable)
+          .where(eq(bankUsersTable.id, user.id))
+          .for("update");
+        if (!lockedUser) return;
+        const [inserted] = await tx
+          .insert(bankVaultPaystackEventsTable)
+          .values({
+          eventKey: `${eventType}:${subscriptionCode}`,
+            eventType,
+            userId: user.id,
+          })
+          .onConflictDoNothing()
+          .returning({ id: bankVaultPaystackEventsTable.id });
+        if (!inserted) return;
+        await tx
+          .update(bankUsersTable)
+          .set({
+            vaultSubscriptionAutoRenew: eventType === "subscription.enable",
+            updatedAt: new Date(),
+          })
+          .where(eq(bankUsersTable.id, user.id));
+      });
+      res.json({ received: true });
+      return;
+    }
+
+    if (eventType !== "charge.success") {
+      res.json({ received: true });
+      return;
+    }
+
+    const reference = typeof data.reference === "string" ? data.reference : "";
+    const amount = typeof data.amount === "number" ? data.amount : NaN;
+    const currency = typeof data.currency === "string" ? data.currency : "";
+    if (!/^[A-Za-z0-9=._-]{1,100}$/.test(reference) ||
+        !Number.isSafeInteger(amount) ||
+        !customer.email) {
+      res.json({ received: true });
+      return;
+    }
+    const [user] = await db
+      .select()
+      .from(bankUsersTable)
+      .where(sql`lower(${bankUsersTable.email}) = ${customer.email}`)
+      .limit(1);
+    if (!user) {
+      res.json({ received: true });
+      return;
+    }
+    await db.transaction(async (tx) => {
+      const [lockedUser] = await tx
+        .select()
+        .from(bankUsersTable)
+        .where(eq(bankUsersTable.id, user.id))
+        .for("update");
+      if (!lockedUser) return;
+      const initialPayment =
+        reference === lockedUser.vaultSubscriptionPaymentReference;
+      const renewalPayment =
+        !initialPayment &&
+        lockedUser.vaultSubscriptionAutoRenew &&
+        Boolean(lockedUser.vaultPaystackPlanCode) &&
+        Boolean(lockedUser.vaultPaystackSubscriptionCode) &&
+        lockedUser.vaultPaystackSubscriptionCode === subscriptionCode &&
+        lockedUser.vaultPaystackCustomerCode === customer.code &&
+        lockedUser.vaultPaystackPlanCode === providerPlanCode;
+      if (!initialPayment && !renewalPayment) return;
+      if (
+        currency !== "NGN" ||
+        String(amount) !== lockedUser.vaultSubscriptionAmountMinor ||
+        !lockedUser.vaultSubscriptionPlan ||
+        !isVaultSubscriptionPlanCode(lockedUser.vaultSubscriptionPlan)
+      ) return;
+      if (
+        lockedUser.vaultSubscriptionAutoRenew &&
+        (!providerPlanCode || lockedUser.vaultPaystackPlanCode !== providerPlanCode)
+      ) return;
+      const now = new Date();
+      const plan = getVaultSubscriptionPlan(lockedUser.vaultSubscriptionPlan ?? "");
+      if (!plan) return;
+      const currentStatus = vaultSubscriptionStatus(
+        lockedUser.vaultSubscriptionStatus,
+        lockedUser.vaultSubscriptionExpiresAt,
+        now,
+      );
+      if (
+        initialPayment &&
+        !["pending", "success"].includes(lockedUser.vaultSubscriptionPaymentStatus)
+      ) return;
+      if (
+        renewalPayment &&
+        !["active", "expired"].includes(currentStatus)
+      ) return;
+      const [inserted] = await tx
+        .insert(bankVaultPaystackEventsTable)
+        .values({
+          eventKey: `charge.success:${reference}`,
+          eventType,
+          paymentReference: reference,
+          userId: user.id,
+        })
+        .onConflictDoNothing()
+        .returning({ id: bankVaultPaystackEventsTable.id });
+      if (!inserted) return;
+
+      if (initialPayment) {
+        if (lockedUser.vaultSubscriptionPaymentStatus === "pending") {
+          const expiresAt = addVaultSubscriptionMonths(now, plan.durationMonths);
+          await tx
+            .update(bankUsersTable)
+            .set({
+              vaultSubscriptionStatus: "active",
+              vaultSubscriptionExpiresAt: expiresAt,
+              vaultSubscriptionPaymentStatus: "success",
+              vaultSubscriptionPaymentVerifiedAt: now,
+              vaultPaystackCustomerCode:
+                customer.code ?? lockedUser.vaultPaystackCustomerCode,
+              vaultPaystackSubscriptionCode:
+                subscriptionCode ?? lockedUser.vaultPaystackSubscriptionCode,
+              updatedAt: now,
+            })
+            .where(eq(bankUsersTable.id, user.id));
+          await tx.insert(bankAuditLogsTable).values({
+            actorUserId: user.id,
+            targetUserId: user.id,
+            action: "activate_private_vault_paystack_webhook",
+            reason: `Paystack confirmed initial checkout ${reference} for ${plan.label}; access expires ${expiresAt.toISOString()}.`,
+          });
+        } else if (
+          lockedUser.vaultSubscriptionPaymentStatus === "success" &&
+          (customer.code || subscriptionCode)
+        ) {
+          await tx
+            .update(bankUsersTable)
+            .set({
+              vaultPaystackCustomerCode:
+                customer.code ?? lockedUser.vaultPaystackCustomerCode,
+              vaultPaystackSubscriptionCode:
+                subscriptionCode ?? lockedUser.vaultPaystackSubscriptionCode,
+              updatedAt: now,
+            })
+            .where(eq(bankUsersTable.id, user.id));
+        }
+        return;
+      }
+      const baseDate =
+        lockedUser.vaultSubscriptionExpiresAt &&
+        lockedUser.vaultSubscriptionExpiresAt > now
+          ? lockedUser.vaultSubscriptionExpiresAt
+          : now;
+      const expiresAt = addVaultSubscriptionMonths(baseDate, plan.durationMonths);
+      await tx
+        .update(bankUsersTable)
+        .set({
+          vaultSubscriptionStatus: "active",
+          vaultSubscriptionExpiresAt: expiresAt,
+          vaultPaystackCustomerCode:
+            customer.code ?? lockedUser.vaultPaystackCustomerCode,
+          updatedAt: now,
+        })
+        .where(eq(bankUsersTable.id, user.id));
+      await tx.insert(bankAuditLogsTable).values({
+        actorUserId: user.id,
+        targetUserId: user.id,
+        action: "renew_private_vault_paystack_subscription",
+        reason: `Paystack confirmed renewal ${reference} for ${plan.label}; access now expires ${expiresAt.toISOString()}.`,
+      });
+    });
+    res.json({ received: true });
   },
 );
 
@@ -3024,6 +3521,12 @@ router.post("/bank/vault/subscription", vaultSubscriptionRequestLimiter, async (
     });
     return;
   }
+  if (user.vaultSubscriptionAutoRenew) {
+    res.status(409).json({
+      error: "Manage or cancel your existing Paystack renewal before requesting another plan.",
+    });
+    return;
+  }
   const requestedPlan = user.vaultSubscriptionPlan;
   const requestedAmountMinor = user.vaultSubscriptionAmountMinor;
   if (
@@ -3074,6 +3577,9 @@ router.post("/bank/vault/subscription", vaultSubscriptionRequestLimiter, async (
     if (currentStatus === "active" || currentStatus === "pending") {
       return { conflict: true as const, status: currentStatus };
     }
+    if (lockedUser.vaultSubscriptionAutoRenew) {
+      return { renewal: true as const };
+    }
     if (
       lockedUser.vaultSubscriptionProofObjectPath !== user.vaultSubscriptionProofObjectPath ||
       lockedUser.vaultSubscriptionPlan !== user.vaultSubscriptionPlan
@@ -3122,6 +3628,12 @@ router.post("/bank/vault/subscription", vaultSubscriptionRequestLimiter, async (
   }
   if ("expired" in result) {
     res.status(403).json({ error: "Your Private Vault session expired. Unlock it again." });
+    return;
+  }
+  if ("renewal" in result) {
+    res.status(409).json({
+      error: "Manage or cancel your existing Paystack renewal before requesting another plan.",
+    });
     return;
   }
   res.json(RequestBankVaultSubscriptionResponse.parse(bankVaultStatusPayload(result.user)));

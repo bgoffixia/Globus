@@ -44,7 +44,13 @@ app.use(
   }),
 );
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
-app.use(express.json());
+app.use(express.json({
+  verify(req, _res, buffer) {
+    if (req.url?.split("?")[0] === "/api/bank/vault/paystack/webhook") {
+      (req as typeof req & { rawBody?: Buffer }).rawBody = Buffer.from(buffer);
+    }
+  },
+}));
 app.use(express.urlencoded({ extended: true }));
 app.use(
   clerkMiddleware((req) => ({

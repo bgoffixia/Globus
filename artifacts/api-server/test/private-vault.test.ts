@@ -122,12 +122,14 @@ test("private vault passcodes unlock a short session and revoke it when changed"
       walletPushEnabled: bankUsersTable.pushWalletAlertsEnabled,
       securityPushEnabled: bankUsersTable.pushSecurityAlertsEnabled,
       transactionEmailAlertsEnabled: bankUsersTable.vaultEmailAlertsEnabled,
+      autoRenewEnabled: bankUsersTable.vaultSubscriptionAutoRenew,
     });
   assert.deepEqual(createdUser, {
     transferPushEnabled: false,
     walletPushEnabled: false,
     securityPushEnabled: false,
     transactionEmailAlertsEnabled: false,
+    autoRenewEnabled: false,
   });
   assert.equal(await initializeVaultPasscode(userId, "1357"), true);
   assert.equal(await initializeVaultPasscode(userId, "2468"), false);

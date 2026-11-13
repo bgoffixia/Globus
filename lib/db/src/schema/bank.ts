@@ -120,6 +120,12 @@ export const bankUsersTable = pgTable("bank_users", {
     "vault_subscription_payment_verified_at",
     { withTimezone: true },
   ),
+  vaultSubscriptionAutoRenew: boolean("vault_subscription_auto_renew")
+    .notNull()
+    .default(false),
+  vaultPaystackPlanCode: text("vault_paystack_plan_code"),
+  vaultPaystackSubscriptionCode: text("vault_paystack_subscription_code"),
+  vaultPaystackCustomerCode: text("vault_paystack_customer_code"),
   vaultSubscriptionProofObjectPath: text(
     "vault_subscription_proof_object_path",
   ),
@@ -483,6 +489,44 @@ export const bankAdminSettingsTable = pgTable("bank_admin_settings", {
     .defaultNow()
     .$onUpdate(() => new Date()),
 });
+
+export const bankVaultPaystackPlansTable = pgTable(
+  "bank_vault_paystack_plans",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    planCode: text("plan_code").notNull(),
+    amountMinor: text("amount_minor").notNull(),
+    providerPlanCode: text("provider_plan_code").notNull().unique(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("bank_vault_paystack_term_amount_unique").on(
+      table.planCode,
+      table.amountMinor,
+    ),
+  ],
+);
+
+export const bankVaultPaystackEventsTable = pgTable(
+  "bank_vault_paystack_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    eventKey: text("event_key").notNull().unique(),
+    eventType: text("event_type").notNull(),
+    paymentReference: text("payment_reference"),
+    userId: text("user_id").references(() => bankUsersTable.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("bank_vault_paystack_event_user_idx").on(table.userId, table.createdAt),
+  ],
+);
 
 export const bankVaultSessionsTable = pgTable(
   "bank_vault_sessions",

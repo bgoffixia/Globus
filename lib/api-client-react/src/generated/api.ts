@@ -98,6 +98,7 @@ import type {
   CustomerIdLookupInput,
   CustomerIdLookupResult,
   DeleteSavedPaymentMethodResponse,
+  EmailBankVaultPaystackRenewalManagementLink200,
   ExternalTransferInput,
   ForbiddenResponse,
   GetBankExchangeRateQuoteParams,
@@ -120,6 +121,7 @@ import type {
   ListAdminUsersParams,
   ListBankTransactionsParams,
   NotFoundResponse,
+  ReceiveBankVaultPaystackWebhook200,
   SavedPaymentMethod,
   SavedPaymentMethodInput,
   ServiceUnavailableResponse,
@@ -891,6 +893,154 @@ export const useVerifyBankVaultPaystackPayment = <TError = ErrorType<BadRequestR
         TContext
       > => {
       return useMutation(getVerifyBankVaultPaystackPaymentMutationOptions(options));
+    }
+
+export const getEmailBankVaultPaystackRenewalManagementLinkUrl = () => {
+
+
+
+
+  return `/api/bank/vault/paystack/manage-renewal`
+}
+
+/**
+ * @summary Email the customer a Paystack link to manage renewal
+ */
+export const emailBankVaultPaystackRenewalManagementLink = async ( options?: Parameters<typeof customFetch>[1]): Promise<EmailBankVaultPaystackRenewalManagementLink200> => {
+
+  return customFetch<EmailBankVaultPaystackRenewalManagementLink200>(getEmailBankVaultPaystackRenewalManagementLinkUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getEmailBankVaultPaystackRenewalManagementLinkMutationKey = () => ['emailBankVaultPaystackRenewalManagementLink'] as const;
+
+export const getEmailBankVaultPaystackRenewalManagementLinkMutationOptions = <TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | ConflictResponse | ServiceUnavailableResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof emailBankVaultPaystackRenewalManagementLink>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof emailBankVaultPaystackRenewalManagementLink>>, TError,void, TContext> => {
+
+const mutationKey = getEmailBankVaultPaystackRenewalManagementLinkMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof emailBankVaultPaystackRenewalManagementLink>>, void> = () => {
+
+
+          return  emailBankVaultPaystackRenewalManagementLink(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type EmailBankVaultPaystackRenewalManagementLinkMutationResult = NonNullable<Awaited<ReturnType<typeof emailBankVaultPaystackRenewalManagementLink>>>
+
+    export type EmailBankVaultPaystackRenewalManagementLinkMutationError = ErrorType<UnauthorizedResponse | ForbiddenResponse | ConflictResponse | ServiceUnavailableResponse>
+
+
+    /**
+ * @summary Email the customer a Paystack link to manage renewal
+ */
+export const useEmailBankVaultPaystackRenewalManagementLink = <TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | ConflictResponse | ServiceUnavailableResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof emailBankVaultPaystackRenewalManagementLink>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof emailBankVaultPaystackRenewalManagementLink>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getEmailBankVaultPaystackRenewalManagementLinkMutationOptions(options));
+    }
+
+export const getReceiveBankVaultPaystackWebhookUrl = () => {
+
+
+
+
+  return `/api/bank/vault/paystack/webhook`
+}
+
+/**
+ * @summary Receive signed Paystack subscription events
+ */
+export const receiveBankVaultPaystackWebhook = async ( options?: Parameters<typeof customFetch>[1]): Promise<ReceiveBankVaultPaystackWebhook200> => {
+
+  return customFetch<ReceiveBankVaultPaystackWebhook200>(getReceiveBankVaultPaystackWebhookUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getReceiveBankVaultPaystackWebhookMutationKey = () => ['receiveBankVaultPaystackWebhook'] as const;
+
+export const getReceiveBankVaultPaystackWebhookMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ServiceUnavailableResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof receiveBankVaultPaystackWebhook>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof receiveBankVaultPaystackWebhook>>, TError,void, TContext> => {
+
+const mutationKey = getReceiveBankVaultPaystackWebhookMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof receiveBankVaultPaystackWebhook>>, void> = () => {
+
+
+          return  receiveBankVaultPaystackWebhook(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReceiveBankVaultPaystackWebhookMutationResult = NonNullable<Awaited<ReturnType<typeof receiveBankVaultPaystackWebhook>>>
+
+    export type ReceiveBankVaultPaystackWebhookMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ServiceUnavailableResponse>
+
+
+    /**
+ * @summary Receive signed Paystack subscription events
+ */
+export const useReceiveBankVaultPaystackWebhook = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ServiceUnavailableResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof receiveBankVaultPaystackWebhook>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof receiveBankVaultPaystackWebhook>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getReceiveBankVaultPaystackWebhookMutationOptions(options));
     }
 
 export const getGetBankVaultTransferEmailAlertUrl = () => {

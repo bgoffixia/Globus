@@ -74,7 +74,9 @@ export const GetBankVaultStatusResponse = zod.object({
   "amountMinor": zod.string().regex(getBankVaultStatusResponseAmountMinorRegExp).nullable(),
   "proofUploadedAt": zod.coerce.date().nullable(),
   "paymentStatus": zod.enum(['none', 'pending', 'failed', 'success']),
-  "paymentReference": zod.string().nullable()
+  "paymentReference": zod.string().nullable(),
+  "autoRenew": zod.boolean(),
+  "renewalManagementReady": zod.boolean()
 })
 
 
@@ -101,7 +103,9 @@ export const InitializeBankVaultPasscodeResponse = zod.object({
   "amountMinor": zod.string().regex(initializeBankVaultPasscodeResponseAmountMinorRegExp).nullable(),
   "proofUploadedAt": zod.coerce.date().nullable(),
   "paymentStatus": zod.enum(['none', 'pending', 'failed', 'success']),
-  "paymentReference": zod.string().nullable()
+  "paymentReference": zod.string().nullable(),
+  "autoRenew": zod.boolean(),
+  "renewalManagementReady": zod.boolean()
 })
 
 
@@ -130,7 +134,9 @@ export const RequestBankVaultSubscriptionResponse = zod.object({
   "amountMinor": zod.string().regex(requestBankVaultSubscriptionResponseAmountMinorRegExp).nullable(),
   "proofUploadedAt": zod.coerce.date().nullable(),
   "paymentStatus": zod.enum(['none', 'pending', 'failed', 'success']),
-  "paymentReference": zod.string().nullable()
+  "paymentReference": zod.string().nullable(),
+  "autoRenew": zod.boolean(),
+  "renewalManagementReady": zod.boolean()
 })
 
 
@@ -152,6 +158,7 @@ export const getBankVaultBillingResponsePlansItemPriceMinorRegExp = new RegExp('
 export const GetBankVaultBillingResponse = zod.object({
   "configured": zod.boolean(),
   "provider": zod.enum(['paystack', 'manual']),
+  "recurringEnabled": zod.boolean().describe('True only after the server recurring flag and signed webhook are configured'),
   "paymentMethod": zod.string(),
   "bankName": zod.string(),
   "accountName": zod.string(),
@@ -180,7 +187,8 @@ export const InitializeBankVaultPaystackPaymentHeader = zod.object({
 })
 
 export const InitializeBankVaultPaystackPaymentBody = zod.object({
-  "planCode": zod.enum(['1m', '3m', '1y'])
+  "planCode": zod.enum(['1m', '3m', '1y']),
+  "autoRenew": zod.boolean().describe('Explicit customer opt-in; only 1m and 1y are supported')
 })
 
 export const initializeBankVaultPaystackPaymentResponseReferenceMax = 100;
@@ -226,7 +234,43 @@ export const VerifyBankVaultPaystackPaymentResponse = zod.object({
   "amountMinor": zod.string().regex(verifyBankVaultPaystackPaymentResponseAmountMinorRegExp).nullable(),
   "proofUploadedAt": zod.coerce.date().nullable(),
   "paymentStatus": zod.enum(['none', 'pending', 'failed', 'success']),
-  "paymentReference": zod.string().nullable()
+  "paymentReference": zod.string().nullable(),
+  "autoRenew": zod.boolean(),
+  "renewalManagementReady": zod.boolean()
+})
+
+
+/**
+ * @summary Email the customer a Paystack link to manage renewal
+ */
+export const emailBankVaultPaystackRenewalManagementLinkHeaderXGlobusVaultSessionMin = 32;
+export const emailBankVaultPaystackRenewalManagementLinkHeaderXGlobusVaultSessionMax = 128;
+
+
+
+export const EmailBankVaultPaystackRenewalManagementLinkHeader = zod.object({
+  "X-Globus-Vault-Session": zod.string().min(emailBankVaultPaystackRenewalManagementLinkHeaderXGlobusVaultSessionMin).max(emailBankVaultPaystackRenewalManagementLinkHeaderXGlobusVaultSessionMax)
+})
+
+export const EmailBankVaultPaystackRenewalManagementLinkResponse = zod.object({
+  "sent": zod.boolean()
+})
+
+
+/**
+ * @summary Receive signed Paystack subscription events
+ */
+export const receiveBankVaultPaystackWebhookHeaderXPaystackSignatureMin = 128;
+export const receiveBankVaultPaystackWebhookHeaderXPaystackSignatureMax = 128;
+
+
+
+export const ReceiveBankVaultPaystackWebhookHeader = zod.object({
+  "x-paystack-signature": zod.string().min(receiveBankVaultPaystackWebhookHeaderXPaystackSignatureMin).max(receiveBankVaultPaystackWebhookHeaderXPaystackSignatureMax)
+})
+
+export const ReceiveBankVaultPaystackWebhookResponse = zod.object({
+  "received": zod.boolean()
 })
 
 
@@ -508,7 +552,9 @@ export const UpdateBankVaultPasscodeResponse = zod.object({
   "amountMinor": zod.string().regex(updateBankVaultPasscodeResponseAmountMinorRegExp).nullable(),
   "proofUploadedAt": zod.coerce.date().nullable(),
   "paymentStatus": zod.enum(['none', 'pending', 'failed', 'success']),
-  "paymentReference": zod.string().nullable()
+  "paymentReference": zod.string().nullable(),
+  "autoRenew": zod.boolean(),
+  "renewalManagementReady": zod.boolean()
 })
 
 

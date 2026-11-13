@@ -29,4 +29,6 @@ export interface BankVaultStatus {
   paymentStatus: BankVaultStatusPaymentStatus;
   /** @nullable */
   paymentReference: string | null;
+  autoRenew: boolean;
+  renewalManagementReady: boolean;
 }

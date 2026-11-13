@@ -20,6 +20,7 @@ import {
   useGetBankVaultBilling,
   useGetBankVaultEmailPreferences,
   useGetBankVaultStatus,
+  useEmailBankVaultPaystackRenewalManagementLink,
   useInitializeBankVaultPaystackPayment,
   useInitializeBankVaultPasscode,
   useListBankTransactions,
@@ -93,6 +94,7 @@ export function PrivateVaultPanel() {
   const [selectedTransactionId, setSelectedTransactionId] = useState('');
   const [privateNoteDraft, setPrivateNoteDraft] = useState('');
   const [selectedPlan, setSelectedPlan] = useState<VaultPlanCode>('1m');
+  const [autoRenew, setAutoRenew] = useState(false);
   const [subscriptionStep, setSubscriptionStep] = useState<SubscriptionStep>('closed');
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [proofUploaded, setProofUploaded] = useState(false);
@@ -118,6 +120,9 @@ export function PrivateVaultPanel() {
     request: sessionToken ? { headers: { 'X-Globus-Vault-Session': sessionToken } } : undefined,
   });
   const verifyPaystackPayment = useVerifyBankVaultPaystackPayment({
+    request: sessionToken ? { headers: { 'X-Globus-Vault-Session': sessionToken } } : undefined,
+  });
+  const emailRenewalManagementLink = useEmailBankVaultPaystackRenewalManagementLink({
     request: sessionToken ? { headers: { 'X-Globus-Vault-Session': sessionToken } } : undefined,
   });
   const browserPushConfig = useGetBankPushConfig({
@@ -398,12 +403,22 @@ export function PrivateVaultPanel() {
     setMessage('');
     try {
       const checkout = await initializePaystackPayment.mutateAsync({
-        data: { planCode: selectedPlan },
+        data: { planCode: selectedPlan, autoRenew },
       });
       window.location.assign(checkout.authorizationUrl);
     } catch (err) {
       await queryClient.invalidateQueries({ queryKey: getGetBankVaultStatusQueryKey() });
       setError(err instanceof Error ? err.message : 'Paystack checkout could not be started.');
+    }
+  };
+  const requestRenewalManagementLink = async () => {
+    setError('');
+    setMessage('');
+    try {
+      await emailRenewalManagementLink.mutateAsync();
+      setMessage('Paystack sent a subscription management link to your account email.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'The renewal management link could not be sent.');
     }
   };
   const checkPaystackPayment = async (reference = status.data?.paymentReference) => {
@@ -436,6 +451,7 @@ export function PrivateVaultPanel() {
     uploadProofUrl.isPending ||
     requestSubscription.isPending ||
     initializePaystackPayment.isPending ||
+    emailRenewalManagementLink.isPending ||
     isUploadingProof ||
     isVerifyingPayment;
   const callbackReference = typeof window !== 'undefined'
@@ -640,6 +656,12 @@ export function PrivateVaultPanel() {
                 </p>
                 <button type="button" disabled={updatePasscode.isPending || updateControl.isPending || billingBusy} data-testid="button-vault-lock" onClick={lockVault} className="rounded-md border border-[#d4e1e4] bg-white px-3 py-1.5 text-[9px] font-bold text-[#466577] disabled:opacity-50">Lock vault</button>
               </div>
+              {status.data?.autoRenew && <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#d9e8e9] bg-white px-3 py-2" data-testid="vault-auto-renew-status">
+                <p className="text-[9px] leading-4 text-[#426e70]">Paystack automatic renewal is on. You can request a management link to update or cancel it.</p>
+                <button type="button" disabled={!status.data.renewalManagementReady || billingBusy} onClick={() => void requestRenewalManagementLink()} className="h-8 rounded-lg border border-[#b9d2d0] px-3 text-[9px] font-bold text-[#397b80] disabled:opacity-50">
+                  {emailRenewalManagementLink.isPending ? 'Sending…' : 'Email management link'}
+                </button>
+              </div>}
 
               {!subscriptionActive && <section className="mt-3 rounded-xl border border-[#e8e1cc] bg-[#fbf8ef] p-4" data-testid="vault-subscription-access">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -681,7 +703,7 @@ export function PrivateVaultPanel() {
                           <button type="button" onClick={() => setSubscriptionStep('closed')} className="text-[9px] font-semibold text-[#75816c]">Cancel</button>
                         </div>
                         <div className="mt-2 grid gap-2 sm:grid-cols-3">
-                          {billing.data.plans.map(plan => <button key={plan.code} type="button" disabled={!billing.data.configured} onClick={() => { setSelectedPlan(plan.code as VaultPlanCode); setProofFile(null); setProofUploaded(false); setMessage(''); setError(''); setSubscriptionStep('payment'); }} data-testid={`button-vault-plan-${plan.code}`} className="rounded-lg border border-[#e5dec9] bg-white/80 p-3 text-left transition hover:border-[#43888e] hover:bg-white disabled:cursor-not-allowed disabled:opacity-50">
+                          {billing.data.plans.map(plan => <button key={plan.code} type="button" disabled={!billing.data.configured} onClick={() => { setSelectedPlan(plan.code as VaultPlanCode); setAutoRenew(false); setProofFile(null); setProofUploaded(false); setMessage(''); setError(''); setSubscriptionStep('payment'); }} data-testid={`button-vault-plan-${plan.code}`} className="rounded-lg border border-[#e5dec9] bg-white/80 p-3 text-left transition hover:border-[#43888e] hover:bg-white disabled:cursor-not-allowed disabled:opacity-50">
                             <span className="block text-[9px] font-semibold text-[#7d7358]">{plan.label}</span>
                             <strong className="mt-1 block text-[12px] text-[#334f5b]">{ngnMinor(plan.priceMinor)}</strong>
                             <span className="mt-2 inline-flex items-center gap-1 text-[9px] font-bold text-[#397b80]">Choose plan <ArrowRight size={11} /></span>
@@ -699,6 +721,12 @@ export function PrivateVaultPanel() {
                                <div><p className="text-[9px] font-bold uppercase tracking-[.1em] text-[#8a784c]">Paystack checkout</p><p className="mt-1 text-[11px] font-bold text-[#334f5b]">{plan.label}</p></div>
                                <strong className="text-[13px] text-[#334f5b]">{ngnMinor(plan.priceMinor)}</strong>
                              </div>
+                              {(selectedPlan === '1m' || selectedPlan === '1y') && billing.data.recurringEnabled && <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-[#dbe7e8] bg-[#f4f9f8] p-3 text-[9px] leading-4 text-[#476a70]" data-testid="vault-auto-renew-choice">
+                                <input type="checkbox" checked={autoRenew} onChange={event => setAutoRenew(event.currentTarget.checked)} className="mt-0.5 accent-[#367b7b]" />
+                                <span><strong className="block text-[#315d63]">Automatically renew this plan</strong>{selectedPlan === '1m' ? 'Paystack will charge the same amount monthly until you cancel.' : 'Paystack will charge the same amount annually until you cancel.'} You can request a management link from this page.</span>
+                              </label>}
+                              {(selectedPlan === '1m' || selectedPlan === '1y') && !billing.data.recurringEnabled && <p className="rounded-lg border border-[#e8dfc5] bg-[#fffdf8] p-3 text-[9px] leading-4 text-[#786e55]">Automatic renewal will appear here after Globus configures the Paystack webhook. This checkout is currently one-time.</p>}
+                              {selectedPlan === '3m' && <p className="rounded-lg border border-[#e8dfc5] bg-[#fffdf8] p-3 text-[9px] leading-4 text-[#786e55]">This three-month option is one-time only; Paystack does not list a quarterly renewal interval.</p>}
                              <p className="text-[9px] leading-4 text-[#786e55]">Payment is initialized and verified on the Globus server. Vault access activates only after Paystack confirms the exact plan amount and currency.</p>
                              <button type="button" disabled={billingBusy || !billing.data.configured} onClick={() => void startPaystackCheckout()} data-testid="button-vault-paystack-checkout" className="h-9 rounded-lg bg-[#173858] px-4 text-[10px] font-bold text-white disabled:opacity-50">{initializePaystackPayment.isPending ? 'Preparing checkout…' : 'Continue to Paystack'}</button>
                            </div>;

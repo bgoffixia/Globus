@@ -186,6 +186,53 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /bank/vault/paystack/manage-renewal:
+    post:
+      operationId: emailBankVaultPaystackRenewalManagementLink
+      tags: [bank]
+      summary: Email the customer a Paystack link to manage renewal
+      parameters:
+        - name: X-Globus-Vault-Session
+          in: header
+          required: true
+          schema: { type: string, minLength: 32, maxLength: 128 }
+      responses:
+        "200":
+          description: Management link request status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sent: { type: boolean }
+                required: [sent]
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /bank/vault/paystack/webhook:
+    post:
+      operationId: receiveBankVaultPaystackWebhook
+      tags: [bank]
+      summary: Receive signed Paystack subscription events
+      parameters:
+        - name: x-paystack-signature
+          in: header
+          required: true
+          schema: { type: string, minLength: 128, maxLength: 128 }
+      responses:
+        "200":
+          description: Event accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  received: { type: boolean }
+                required: [received]
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /bank/vault/transfer-email-alert:
     get:
       operationId: getBankVaultTransferEmailAlert
@@ -2079,7 +2126,9 @@ components:
         proofUploadedAt: { type: ["string", "null"], format: date-time }
         paymentStatus: { type: string, enum: [none, pending, failed, success] }
         paymentReference: { type: ["string", "null"] }
-      required: [configured, subscriptionStatus, subscriptionActive, requestedAt, expiresAt, planCode, amountMinor, proofUploadedAt, paymentStatus, paymentReference]
+        autoRenew: { type: boolean }
+        renewalManagementReady: { type: boolean }
+      required: [configured, subscriptionStatus, subscriptionActive, requestedAt, expiresAt, planCode, amountMinor, proofUploadedAt, paymentStatus, paymentReference, autoRenew, renewalManagementReady]
     BankVaultSubscriptionRequestResult:
       $ref: "#/components/schemas/BankVaultStatus"
     BankVaultBilling:
@@ -2087,6 +2136,9 @@ components:
       properties:
         configured: { type: boolean }
         provider: { type: string, enum: [paystack, manual] }
+        recurringEnabled:
+          type: boolean
+          description: True only after the server recurring flag and signed webhook are configured
         paymentMethod: { type: string }
         bankName: { type: string }
         accountName: { type: string }
@@ -2103,12 +2155,15 @@ components:
               priceMinor: { type: string, pattern: "^[0-9]+$" }
               currency: { type: string, enum: [NGN] }
             required: [code, label, durationMonths, priceMinor, currency]
-      required: [configured, provider, paymentMethod, bankName, accountName, accountNumber, instructions, plans]
+      required: [configured, provider, recurringEnabled, paymentMethod, bankName, accountName, accountNumber, instructions, plans]
     BankVaultPaystackInitializeInput:
       type: object
       properties:
         planCode: { type: string, enum: [1m, 3m, 1y] }
-      required: [planCode]
+        autoRenew:
+          type: boolean
+          description: Explicit customer opt-in; only 1m and 1y are supported
+      required: [planCode, autoRenew]
     BankVaultPaystackCheckout:
       type: object
       properties:

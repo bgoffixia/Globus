@@ -9,4 +9,6 @@ import type { BankVaultPaystackInitializeInputPlanCode } from './bankVaultPaysta
 
 export interface BankVaultPaystackInitializeInput {
   planCode: BankVaultPaystackInitializeInputPlanCode;
+  /** Explicit customer opt-in; only 1m and 1y are supported */
+  autoRenew: boolean;
 }

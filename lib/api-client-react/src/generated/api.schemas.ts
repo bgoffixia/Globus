@@ -343,6 +343,8 @@ export interface BankVaultStatus {
   paymentStatus: BankVaultStatusPaymentStatus;
   /** @nullable */
   paymentReference: string | null;
+  autoRenew: boolean;
+  renewalManagementReady: boolean;
 }
 
 export type BankVaultSubscriptionRequestResult = BankVaultStatus;
@@ -383,6 +385,8 @@ export type BankVaultBillingPlansItem = {
 export interface BankVaultBilling {
   configured: boolean;
   provider: BankVaultBillingProvider;
+  /** True only after the server recurring flag and signed webhook are configured */
+  recurringEnabled: boolean;
   paymentMethod: string;
   bankName: string;
   accountName: string;
@@ -402,6 +406,8 @@ export const BankVaultPaystackInitializeInputPlanCode = {
 
 export interface BankVaultPaystackInitializeInput {
   planCode: BankVaultPaystackInitializeInputPlanCode;
+  /** Explicit customer opt-in; only 1m and 1y are supported */
+  autoRenew: boolean;
 }
 
 export interface BankVaultPaystackCheckout {
@@ -1965,6 +1971,14 @@ export type TooManyRequestsResponse = ErrorResponse;
  * A required external service is temporarily unavailable
  */
 export type ServiceUnavailableResponse = ErrorResponse;
+
+export type EmailBankVaultPaystackRenewalManagementLink200 = {
+  sent: boolean;
+};
+
+export type ReceiveBankVaultPaystackWebhook200 = {
+  received: boolean;
+};
 
 export type ListBankTransactionsParams = {
 currency?: CurrencyCode;
