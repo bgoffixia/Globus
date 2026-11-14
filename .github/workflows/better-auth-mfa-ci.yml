@@ -28,5 +28,7 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Type-check isolated Better Auth MFA configuration
+        run: pnpm --filter @workspace/api-server exec tsc -p tsconfig.better-auth-staging.json
       - name: Build workspace
         run: PORT=24083 BASE_PATH=/ NODE_ENV=production pnpm run build
