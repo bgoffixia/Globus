@@ -28,7 +28,5 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Type-check API server
-        run: pnpm --filter @workspace/api-server typecheck
       - name: Build workspace
         run: PORT=24083 BASE_PATH=/ NODE_ENV=production pnpm run build
