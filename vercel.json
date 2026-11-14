@@ -9,7 +9,8 @@
     "globus-bank": {
       "root": "artifacts/globus-bank",
       "framework": "vite",
-      "buildCommand": "PORT=24083 BASE_PATH=/ NODE_ENV=production pnpm run build"
+      "buildCommand": "PORT=24083 BASE_PATH=/ NODE_ENV=production pnpm run build",
+      "outputDirectory": "dist/public"
     }
   },
   "rewrites": [

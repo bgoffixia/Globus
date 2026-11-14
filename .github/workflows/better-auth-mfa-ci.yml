@@ -1,0 +1,49 @@
+name: Better Auth MFA staging CI
+
+on:
+  push:
+    branches:
+      - staging/better-auth-mfa
+  pull_request:
+    branches:
+      - staging/better-auth-mfa
+
+permissions:
+  contents: read
+
+concurrency:
+  group: better-auth-mfa-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Type-check isolated Better Auth MFA configuration
+        run: pnpm --filter @workspace/api-server exec tsc -p tsconfig.better-auth-staging.json
+      - name: Build workspace
+        run: PORT=24083 BASE_PATH=/ NODE_ENV=production pnpm run build
+      - name: Generate Better Auth 1.7.22 Drizzle schema (no database writes)
+        working-directory: artifacts/api-server
+        env:
+          BETTER_AUTH_DATABASE_URL: postgresql://schema-check:unused@127.0.0.1:5432/schema_check
+          BETTER_AUTH_SECRET: schema-check-only-secret-at-least-32-characters-long
+          BETTER_AUTH_URL: http://localhost:3000
+          RESEND_API_KEY: schema-check-placeholder
+          AUTH_EMAIL_FROM: schema-check@example.invalid
+        run: pnpm dlx auth@1.7.22 generate --config ./src/auth/better-auth-staging.ts --adapter drizzle --dialect postgresql --output /tmp/better-auth-mfa-schema.ts --yes
+      - name: Upload generated schema for review
+        uses: actions/upload-artifact@v4
+        with:
+          name: better-auth-mfa-drizzle-schema
+          path: /tmp/better-auth-mfa-schema.ts
+          if-no-files-found: error

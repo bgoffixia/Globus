@@ -1,0 +1,53 @@
+name: Prepare Better Auth MFA staging dependency
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: better-auth-mfa-dependency-{{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  add-dependency:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out isolated staging branch
+        uses: actions/checkout@v4
+        with:
+          ref: staging/better-auth-mfa
+          persist-credentials: true
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Add self-managed Better Auth to API server
+        run: |
+          pnpm --filter @workspace/api-server add better-auth@latest pg@^8.23.0 --lockfile-only
+          pnpm --filter @workspace/api-server add -D @types/pg@^8.23.1 --lockfile-only
+
+      - name: Verify frozen lockfile install
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Commit dependency manifest and lockfile
+        run: |
+          if git diff --quiet -- artifacts/api-server/package.json pnpm-lock.yaml; then
+            echo "Better Auth dependency and lockfile are already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add artifacts/api-server/package.json pnpm-lock.yaml
+          git commit -m "chore(staging): add self-managed Better Auth dependency"
+          git push origin HEAD:staging/better-auth-mfa
