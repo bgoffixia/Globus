@@ -12,6 +12,7 @@ import { PasswordResetLinkPage, RequiredPasswordResetPage } from '@/components/a
 import { PwaInstallPrompt } from '@/components/pwa-install-prompt';
 import { GlobusLoader } from '@/components/globus-loader';
 import { NeonAuthStagingApp } from '@/components/neon-auth-staging';
+import { BetterAuthMfaStagingApp } from '@/components/better-auth-mfa-staging';
 import NotFound from '@/pages/not-found';
 import {
   DashboardPage,
@@ -54,8 +55,9 @@ function stripBase(path: string): string {
 }
 
 const isNeonAuthStaging = import.meta.env.VITE_AUTH_PROVIDER === 'neon-staging';
+const isBetterAuthMfaStaging = import.meta.env.VITE_AUTH_PROVIDER === 'better-auth-mfa-staging';
 
-if (!clerkPubKey && !isNeonAuthStaging) {
+if (!clerkPubKey && !isNeonAuthStaging && !isBetterAuthMfaStaging) {
   throw new Error('Missing VITE_CLERK_PUBLISHABLE_KEY in .env file');
 }
 
@@ -308,6 +310,21 @@ function App() {
           <WouterRouter base={basePath}>
             <RoutedErrorBoundary>
               <NeonAuthStagingApp />
+            </RoutedErrorBoundary>
+          </WouterRouter>
+          <Toaster />
+        </TooltipProvider>
+      </QueryClientProvider>
+    );
+  }
+
+  if (isBetterAuthMfaStaging) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <WouterRouter base={basePath}>
+            <RoutedErrorBoundary>
+              <BetterAuthMfaStagingApp />
             </RoutedErrorBoundary>
           </WouterRouter>
           <Toaster />
