@@ -21,8 +21,12 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
+const isMfaOnlyStaging = process.env.BETTER_AUTH_STAGING_ENABLED === "true";
+
 async function startServer() {
-  await backfillCustomerIds();
+  if (!isMfaOnlyStaging) {
+    await backfillCustomerIds();
+  }
 
   app.listen(port, (err) => {
     if (err) {
@@ -35,6 +39,12 @@ async function startServer() {
       "Private data encryption readiness",
     );
     logger.info({ port }, "Server listening");
+
+    // In MFA-only staging, do not run banking maintenance jobs against the empty auth database.
+    if (isMfaOnlyStaging) {
+      logger.info("MFA-only staging mode: banking maintenance jobs are disabled");
+      return;
+    }
 
     const sweepExpiredVaultSubscriptions = async () => {
       try {
