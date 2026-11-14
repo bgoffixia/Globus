@@ -162,6 +162,9 @@ app.use("/api/bank/transfers", financialActionLimiter);
 app.use("/api/bank/external-transfers", financialActionLimiter);
 app.use("/api/bank/international-transfer-requests", financialActionLimiter);
 app.use("/api/bank/ledger-requests", financialActionLimiter);
-app.use("/api", router);
+// The MFA-only staging deployment must never expose banking/customer API routes.
+if (process.env.BETTER_AUTH_STAGING_ENABLED !== "true") {
+  app.use("/api", router);
+}
 
 export default app;
