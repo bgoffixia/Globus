@@ -97,10 +97,11 @@ if (isMfaOnlyStaging) {
   app.all("/api/better-auth/*splat", async (req, res, next) => {
     try {
       const { toNodeHandler, betterAuthStaging } = await loadBetterAuthRuntime();
-      return toNodeHandler(betterAuthStaging)(req, res, next);
+      toNodeHandler(betterAuthStaging)(req, res, next);
+      return;
     } catch (error) {
       logger.error({ err: error }, "Could not initialize isolated Better Auth MFA staging");
-      next(error);
+      return next(error);
     }
   });
 
