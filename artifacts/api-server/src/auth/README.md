@@ -7,7 +7,7 @@ This module is deliberately isolated from production Clerk authentication.
 Configure these only in the separate MFA staging API deployment:
 
 - `BETTER_AUTH_STAGING_ENABLED=true`
-- `BETTER_AUTH_DATABASE_URL`: connection string for Neon branch `globus-better-auth-mfa-staging` (branch ID `br-floral-salad-b9lk3aae`), database `neondb`.
+- `BETTER_AUTH_DATABASE_URL`: connection string for Neon branch `globus-better-auth-mfa-staging` (branch ID `br-floral-salad-b9lk3aae`), database `globus_auth_mfa` on the isolated branch `globus-better-auth-mfa-staging` (`br-floral-salad-b9lk3aae`). This is a newly created empty database within that branch; it does not contain the inherited Globus banking tables.
 - `BETTER_AUTH_SECRET`: independently generated random secret with at least 32 characters.
 - `BETTER_AUTH_URL`: origin of the staging API, without the `/api/better-auth` path.
 - `BETTER_AUTH_TRUSTED_ORIGINS`: comma-separated exact staging frontend origins.
