@@ -29,13 +29,10 @@ app.use(
 );
 
 if (isMfaOnlyStaging) {
-  // This branch deliberately imports no Clerk middleware or banking route modules.
-  const [{ toNodeHandler, fromNodeHeaders }, { betterAuthStaging }] =
-    await Promise.all([
-      import("better-auth/node"),
-      import("./auth/better-auth-staging"),
-    ]);
-
+  // Keep the health endpoint independent of Better Auth, the database, and email
+  // configuration. Vercel can then report a healthy Express function even when
+  // an auth dependency is misconfigured; auth initialization is deferred until
+  // an auth endpoint is actually called.
   const betterAuthOrigins = (
     process.env.BETTER_AUTH_TRUSTED_ORIGINS ?? process.env.BETTER_AUTH_URL ?? ""
   )
@@ -63,14 +60,53 @@ if (isMfaOnlyStaging) {
     }),
   );
 
-  app.all("/api/better-auth/*splat", toNodeHandler(betterAuthStaging));
-
   app.get("/api/mfa-staging/health", (_req, res) => {
-    res.json({ ok: true, mode: "mfa-only-staging" });
+    res.json({
+      ok: true,
+      mode: "mfa-only-staging",
+      authInitialization: "deferred",
+    });
+  });
+
+  type BetterAuthRuntime = {
+    toNodeHandler: (auth: unknown) => express.RequestHandler;
+    fromNodeHeaders: (headers: express.Request["headers"]) => Headers;
+    betterAuthStaging: {
+      handler: unknown;
+      api: {
+        getSession: (input: { headers: Headers }) => Promise<{
+          user: { twoFactorEnabled?: boolean };
+        } | null>;
+      };
+    };
+  };
+
+  let betterAuthRuntimePromise: Promise<BetterAuthRuntime> | undefined;
+  const loadBetterAuthRuntime = () => {
+    betterAuthRuntimePromise ??= Promise.all([
+      import("better-auth/node"),
+      import("./auth/better-auth-staging"),
+    ]).then(([node, auth]) => ({
+      toNodeHandler: node.toNodeHandler as BetterAuthRuntime["toNodeHandler"],
+      fromNodeHeaders: node.fromNodeHeaders as BetterAuthRuntime["fromNodeHeaders"],
+      betterAuthStaging: auth.betterAuthStaging as BetterAuthRuntime["betterAuthStaging"],
+    }));
+    return betterAuthRuntimePromise;
+  };
+
+  app.all("/api/better-auth/*splat", async (req, res, next) => {
+    try {
+      const { toNodeHandler, betterAuthStaging } = await loadBetterAuthRuntime();
+      return toNodeHandler(betterAuthStaging)(req, res, next);
+    } catch (error) {
+      logger.error({ err: error }, "Could not initialize isolated Better Auth MFA staging");
+      next(error);
+    }
   });
 
   app.get("/api/mfa-staging/access-check", async (req, res, next) => {
     try {
+      const { fromNodeHeaders, betterAuthStaging } = await loadBetterAuthRuntime();
       const session = await betterAuthStaging.api.getSession({
         headers: fromNodeHeaders(req.headers),
       });
@@ -90,6 +126,7 @@ if (isMfaOnlyStaging) {
 
       res.json({ allowed: true, mfaRequired: true, mfaEnabled: true });
     } catch (error) {
+      logger.error({ err: error }, "Could not run isolated MFA staging access check");
       next(error);
     }
   });
