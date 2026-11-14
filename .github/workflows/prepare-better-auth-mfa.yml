@@ -1,9 +1,7 @@
 name: Prepare Better Auth MFA staging dependency
 
 on:
-  push:
-    branches:
-      - staging/better-auth-mfa
+  workflow_dispatch:
 
 permissions:
   contents: write
