@@ -1,4 +1,5 @@
 import express, { type Express } from "express";
+import cors from "cors";
 import { clerkMiddleware } from "@clerk/express";
 import { publishableKeyFromHost } from "@clerk/shared/keys";
 import { rateLimit } from "express-rate-limit";
@@ -53,6 +54,23 @@ if (process.env.BETTER_AUTH_STAGING_ENABLED === "true") {
       import("better-auth/node"),
       import("./auth/better-auth-staging"),
     ]);
+
+  const betterAuthOrigins = (
+    process.env.BETTER_AUTH_TRUSTED_ORIGINS ?? process.env.BETTER_AUTH_URL ?? ""
+  )
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  app.use(
+    "/api/better-auth",
+    cors({
+      origin: betterAuthOrigins,
+      credentials: true,
+      methods: ["GET", "POST", "OPTIONS"],
+      allowedHeaders: ["Content-Type", "Authorization"],
+    }),
+  );
 
   app.all("/api/better-auth/*splat", toNodeHandler(betterAuthStaging));
 
