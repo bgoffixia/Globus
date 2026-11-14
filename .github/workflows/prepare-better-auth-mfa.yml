@@ -35,7 +35,9 @@ jobs:
           cache: pnpm
 
       - name: Add self-managed Better Auth to API server
-        run: pnpm --filter @workspace/api-server add better-auth@latest --lockfile-only
+        run: |
+          pnpm --filter @workspace/api-server add better-auth@latest pg@^8.23.0 --lockfile-only
+          pnpm --filter @workspace/api-server add -D @types/pg@^8.23.1 --lockfile-only
 
       - name: Verify frozen lockfile install
         run: pnpm install --frozen-lockfile --ignore-scripts
