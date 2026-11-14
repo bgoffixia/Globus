@@ -72,6 +72,16 @@ if (process.env.BETTER_AUTH_STAGING_ENABLED === "true") {
     }),
   );
 
+  app.use(
+    "/api/mfa-staging",
+    cors({
+      origin: betterAuthOrigins,
+      credentials: true,
+      methods: ["GET", "OPTIONS"],
+      allowedHeaders: ["Content-Type", "Authorization"],
+    }),
+  );
+
   app.all("/api/better-auth/*splat", toNodeHandler(betterAuthStaging));
 
   // The first-factor session is intentionally limited until TOTP enrollment is complete.
