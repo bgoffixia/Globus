@@ -99,6 +99,13 @@ export const betterAuthStaging = betterAuth({
       },
     }),
   ],
+  advanced: {
+    defaultCookieAttributes: {
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",
+    },
+  },
   rateLimit: {
     enabled: true,
     window: 60,
