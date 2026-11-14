@@ -11,6 +11,11 @@ Configure these only in the separate MFA staging API deployment:
 - `BETTER_AUTH_SECRET`: independently generated random secret with at least 32 characters.
 - `BETTER_AUTH_URL`: origin of the staging API, without the `/api/better-auth` path.
 - `BETTER_AUTH_TRUSTED_ORIGINS`: comma-separated exact staging frontend origins.
+
+Set these variables only on the separate staging frontend deployment:
+
+- `VITE_AUTH_PROVIDER=better-auth-mfa-staging`
+- `VITE_BETTER_AUTH_BASE_URL`: the staging API origin, without a trailing slash or path.
 - `RESEND_API_KEY` and `AUTH_EMAIL_FROM`: staging-only email verification delivery.
 
 Never reuse the production Clerk secret, production database URL, or production mail credentials.
