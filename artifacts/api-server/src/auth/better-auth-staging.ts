@@ -112,3 +112,7 @@ export const betterAuthStaging = betterAuth({
     max: 10,
   },
 });
+
+// Expose the instance under the names expected by the Better Auth CLI.
+export const auth = betterAuthStaging;
+export default auth;
