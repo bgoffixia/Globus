@@ -44,6 +44,49 @@ app.use(
   }),
 );
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
+
+// Self-managed Better Auth is mounted only in the isolated MFA staging deployment.
+// Keep this before express.json(): Better Auth must receive the untouched request stream.
+if (process.env.BETTER_AUTH_STAGING_ENABLED === "true") {
+  const [{ toNodeHandler, fromNodeHeaders }, { betterAuthStaging }] =
+    await Promise.all([
+      import("better-auth/node"),
+      import("./auth/better-auth-staging"),
+    ]);
+
+  app.all("/api/better-auth/*splat", toNodeHandler(betterAuthStaging));
+
+  // The first-factor session is intentionally limited until TOTP enrollment is complete.
+  // This endpoint is a staging policy probe; it does not expose banking/customer data.
+  app.get("/api/mfa-staging/access-check", async (req, res, next) => {
+    try {
+      const session = await betterAuthStaging.api.getSession({
+        headers: fromNodeHeaders(req.headers),
+      });
+
+      if (!session) {
+        res.status(401).json({ error: "Sign in to the MFA staging environment." });
+        return;
+      }
+
+      if (!session.user.twoFactorEnabled) {
+        res.status(403).json({
+          code: "MFA_ENROLLMENT_REQUIRED",
+          error: "Complete authenticator-app enrollment before accessing the protected staging area.",
+        });
+        return;
+      }
+
+      res.json({
+        allowed: true,
+        mfaRequired: true,
+        mfaEnabled: true,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+}
 app.use(express.json({
   verify(req, _res, buffer) {
     if (req.url?.split("?")[0] === "/api/bank/vault/paystack/webhook") {
