@@ -86,6 +86,10 @@ if (process.env.BETTER_AUTH_STAGING_ENABLED === "true") {
 
   // The first-factor session is intentionally limited until TOTP enrollment is complete.
   // This endpoint is a staging policy probe; it does not expose banking/customer data.
+  app.get("/api/mfa-staging/health", (_req, res) => {
+    res.json({ ok: true, mode: "mfa-only-staging" });
+  });
+
   app.get("/api/mfa-staging/access-check", async (req, res, next) => {
     try {
       const session = await betterAuthStaging.api.getSession({
