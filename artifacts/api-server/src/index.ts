@@ -7,14 +7,9 @@ import { sendVaultExpiryReminders } from "./lib/vault-expiry-reminders";
 
 const VAULT_EXPIRATION_SWEEP_INTERVAL_MS = 60_000;
 const VAULT_EXPIRY_REMINDER_SWEEP_INTERVAL_MS = 6 * 60 * 60 * 1000;
-const rawPort = process.env["PORT"];
-
-if (!rawPort) {
-  throw new Error(
-    "PORT environment variable is required but was not provided.",
-  );
-}
-
+// Vercel services route HTTP traffic to port 80 by default. Keep PORT configurable
+// for local/custom deployments, but do not crash when the platform uses its default.
+const rawPort = process.env["PORT"] ?? "80";
 const port = Number(rawPort);
 
 if (Number.isNaN(port) || port <= 0) {
