@@ -58,13 +58,15 @@ async function isAllowlistedAdmin(userId: string): Promise<boolean> {
 }
 
 const requireAdmin: RequestHandler = async (req, res, next) => {
-  const userId = getAuth(req).userId;
-  if (!userId) {
-    res.status(401).json({ error: "Sign in to access administrator tools." });
-    return;
-  }
-
   try {
+    // getAuth can throw when Clerk middleware has not initialized the request.
+    // Convert that condition into a controlled response instead of a function crash.
+    const userId = getAuth(req).userId;
+    if (!userId) {
+      res.status(401).json({ error: "Sign in to access administrator tools." });
+      return;
+    }
+
     if (await isPasswordResetRequired(userId)) {
       res.status(423).json({ error: "Update your password before accessing administrator tools." });
       return;
@@ -73,12 +75,15 @@ const requireAdmin: RequestHandler = async (req, res, next) => {
       res.status(403).json({ error: "Administrator access is not enabled for this account." });
       return;
     }
-  } catch {
-    res.status(503).json({ error: "Administrator access could not be verified right now." });
-    return;
-  }
 
-  next();
+    next();
+  } catch (error) {
+    // Never expose Clerk, database, or identity-provider details to the caller.
+    console.error("[encryption-diagnostics] Administrator authentication failed", {
+      error: error instanceof Error ? error.message : "Unknown authentication error",
+    });
+    res.status(503).json({ error: "Administrator access could not be verified right now. Check the Clerk middleware and database connection." });
+  }
 };
 
 // Temporary, read-only diagnostic. Never returns the key, ciphertext, or plaintext.
